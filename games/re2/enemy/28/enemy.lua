@@ -19,8 +19,8 @@
 -- state 1 and `Type` 0 (the room's other adult, with `Routine_3`'s 1 set), and
 -- a `Type` 0 `Type`'s `0x4000` and the birth (state 8).
 --
--- Not ported: the other `Type`s of `FUN_00477870`, `Routine_0` 4, the heavy
--- flinch (`0x47b360`) and the blood of the weapons from 9 on, and the part
+-- Not ported: the other `Type`s of `FUN_00477870`, `Routine_0` 4, the hit
+-- effects of the weapons from 9 on but the acid round's (0xB), and the part
 -- colours, which only draw. The part sizes are kept only where they decide
 -- the birth's draws. The move's effects
 -- keep their `Rnd` draws but are not made. The neck's turn is a third of
@@ -861,11 +861,22 @@ local function hit_blood(e, weapon)
 end
 
 -- The two draws that end a hit's and a death's steps on every sixteenth frame
--- (`DWORD_00689558`'s pad shake).
-local function shake(e)
-    if e:move_cnt() & 0xF == 0 then
+-- (`DWORD_00689558`'s pad shake), or every fourth with `mask` 3.
+local function shake(e, mask)
+    if e:move_cnt() & (mask or 0xF) == 0 then
         e:rnd()
         e:rnd()
+    end
+end
+
+-- `FUN_00479f50`: an acid round's hit smokes on parts 2, 0, 5 and 16 (kind 4,
+-- row 0xF, on each part's `Workm` with no offset), each sized `Rnd * 4` over
+-- its base, turned as the adult faces.
+local ACID_PARTS <const> = { { 2, 0x17D0 }, { 0, 0x1FA0 }, { 5, 0x1000 }, { 16, 0x1000 } }
+
+local function acid(e)
+    for _, part in ipairs(ACID_PARTS) do
+        e:effect(4, 0xF, e:rnd() * 4 + part[2], i16(e:angle()), part[1], 0, 0, 0)
     end
 end
 
@@ -894,6 +905,52 @@ local function flinch(e)
     end
     e:add_speed_xz()
     shake(e)
+end
+
+-- `0x47b360`: the heavy flinch, which `funcs_479E5B` gives the acid round
+-- (0xB), the spark shot (0xE) and the rocket launcher (0x11). It flinches on
+-- clip 6 as `FUN_0047b240` does (a rocket's hit smoking as an acid round's,
+-- `FUN_00479f50`), then on clip 0xA with smoke on parts 9, 13, 3 and 1 (kind
+-- 4, row 0xF, sized `Rnd * 4` over 0x17D0, 0x1FA0, 0x1000 and 0x1000), and
+-- walks again; it shakes every fourth frame. The spark shot's sparks
+-- (`FUN_0047a3c0`) aren't ported.
+local HEAVY_PARTS <const> = { { 9, 0x17D0 }, { 13, 0x1FA0 }, { 3, 0x1000 }, { 1, 0x1000 } }
+
+local function heavy_flinch(e)
+    local sub = e:routine(2)
+    e:set_var(HURT, e:var(HURT) | 0x82)
+    if sub == 0 then
+        e:clip(6, 0, 7)
+        e:set_neck_flags(e:neck_flags() & ~2)
+        e:set_routine(2, 1)
+        local _, root_turn = e:part_rot(0)
+        e:set_angle((e:angle() + root_turn) & 0xFFFF)
+        if e:routine(1) == 0x11 then
+            acid(e)
+        end
+        e:set_var(B21F, e:var(B21F) | 0x10)
+        sub = 1
+    end
+    if sub == 1 then
+        e:spd()
+        if e:joint(0x200) then
+            e:set_neck_flags(e:neck_flags() & ~2)
+            e:clip(0xA, 0, 0x3F)
+            e:set_routine(2, 2)
+            for _, part in ipairs(HEAVY_PARTS) do
+                e:effect(4, 0xF, e:rnd() * 4 + part[2], i16(e:angle()), part[1], 0, 0, 0)
+            end
+        end
+        e:add_speed_xz()
+    elseif sub == 2 then
+        e:spd()
+        if e:joint(0x40) then
+            e:routines(1, 1, 0, 0)
+            e:set_var(HURT, e:var(HURT) & 0x7F)
+        end
+        e:add_speed_xz()
+    end
+    shake(e, 3)
 end
 
 -- `FUN_0047a790`: the hit of a hurt adult (`Id` 0): it reels (clip 2), shakes
@@ -991,8 +1048,8 @@ end
 -- `FUN_0047b5b0`, `Routine_0` 3: the death. It falls (clip 7, then 0xe), its
 -- boxes shrink and part 1 swells, then it lays the room's young (`Em_27`
 -- `Type` 3, up to four bodies in the room) and throbs for 500 ticks. Not
--- ported: the weapons that start their own effects (`Routine_1` 9, 10, 11,
--- 14, 16 and 17), and what only draws (the parts' sizes and colours, the
+-- ported: the weapons that start their own effects (`Routine_1` 9, 10, 14,
+-- 16 and 17; the acid round's, 11, is), and what only draws (the parts' sizes and colours, the
 -- shadow's fade).
 local function death(e)
     if e:var(B21F) & 0x20 ~= 0 then
@@ -1018,6 +1075,9 @@ local function death(e)
         if e:var(B21E) & 2 ~= 0 then
             e:set_timer(3, 1)
             e:set_var(B21E, e:var(B21E) & ~2)
+        end
+        if weapon == 0xB then
+            acid(e)
         end
         if (weapon == 5 or weapon == 6) and e:var(FLAG223) == 0 then
             e:set_var(FLAG223, 1)
@@ -1130,6 +1190,9 @@ local function hit(e)
                 e:set_var(MARK, 0)
             end
         end
+        if weapon == 0xB then
+            acid(e)
+        end
         if (weapon == 5 or weapon == 6) and e:var(FLAG223) == 0 then
             e:set_var(FLAG223, 1)
         end
@@ -1145,8 +1208,13 @@ local function hit(e)
             end
         end
     end
+    -- `funcs_479E5B` is indexed by `Routine_1` as it stands now: a hit
+    -- during a flinch has put back the flinch's own (`+0x1fc`).
+    local flinching = e:routine(1)
     if e:var(MARK) == 0 then
         reel(e)
+    elseif flinching == 0xB or flinching == 0xE or flinching == 0x11 then
+        heavy_flinch(e)
     else
         flinch(e)
     end

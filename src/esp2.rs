@@ -1207,6 +1207,7 @@ impl Effects {
                 self.call(3, 0x0B, size, 0, slot.pos, true);
             }
             0x2f => self.grenade_burst(index),
+            0x31 => self.acid_burst(index),
             0x13 => self.smoke_fade(index),
             // `Esp_1E`: on from a random first frame, with `+0x1b` and a count
             // by the row: 2 and 2 to 9 for row 4, 3 and 700 to 950 otherwise.
@@ -2380,6 +2381,95 @@ impl Effects {
             this.velocity[0] = 0;
             this.accel[0] = 0;
             this.next_flags &= !2;
+        }
+    }
+
+    /// `Esp_31`: an acid round's burst. The first tick it sounds, hurts the
+    /// first body in its box at the round and the first 1800 below it (the
+    /// acid round's row in its second band, by the height), and sets off the
+    /// splash and smoke; over the four ticks after it splashes again, the
+    /// last time going. A round that burst in the water (`+0xb` of 0xFF)
+    /// draws its splashes higher.
+    fn acid_burst(&mut self, index: usize) {
+        const IN_WATER: u8 = 0xFF;
+        let slot = self.slots[index];
+        let in_water = slot.step == IN_WATER;
+        let lift = |this: &mut Slot, by: i16| {
+            if in_water {
+                this.pos[1] = this.pos[1].wrapping_add(by);
+            }
+        };
+        let splash = |this: &mut Self, word: u32| {
+            let pos = this.slots[index].pos;
+            this.call(
+                (word >> 24) as u8,
+                (word >> 16) as u8,
+                word as u16,
+                slot.dir,
+                pos,
+                true,
+            );
+        };
+        match slot.next_flags {
+            0 => {
+                let this = &mut self.slots[index];
+                this.next_flags = 1;
+                this.flags = 0x8403;
+                this.anim = 0;
+                this.update = 0x31;
+                self.sounds.push((0x113_0001, slot.pos));
+                // `+0x18`'s low byte is read again after it's set, so the
+                // smaller box (-600, 0, 300, 150) is never the one taken.
+                let mut rect = [-1200, 0, 600, 300];
+                let at = slot.pos.map(i32::from);
+                for y in [at[1], at[1] + 0x708] {
+                    let blast = crate::weapon2::Blast {
+                        at: [at[0], y, at[2]],
+                        dir: slot.dir,
+                        word: 0x1002_000B,
+                    };
+                    let effects = crate::weapon2::blast_ck(&blast, &mut rect, &mut self.bodies);
+                    self.blasts.extend(effects);
+                }
+                let this = &mut self.slots[index];
+                lift(this, -0x1D6);
+                this.velocity[0] = 0;
+                this.velocity[1] = 0xF0;
+                this.accel[0] = if in_water { 0 } else { -0x17 };
+                this.accel[1] = 0;
+                for word in [0x30F_2000, 0x40C_2000, 0x41D_1800] {
+                    splash(self, word);
+                }
+            }
+            1 => {
+                let this = &mut self.slots[index];
+                this.next_flags = 2;
+                lift(this, -600);
+                splash(self, 0x31F_2000);
+                lift(&mut self.slots[index], -0x1D6);
+            }
+            2 | 3 => {
+                let this = &mut self.slots[index];
+                this.next_flags = slot.next_flags + 1;
+                lift(this, -600);
+                splash(
+                    self,
+                    if slot.next_flags == 2 {
+                        0x314_2000
+                    } else {
+                        0x40D_2800
+                    },
+                );
+            }
+            4 => {
+                lift(&mut self.slots[index], -600);
+                splash(self, 0x30F_2000);
+                let this = &mut self.slots[index];
+                this.update = 0;
+                this.anim = 0;
+                this.flags = 0;
+            }
+            _ => {}
         }
     }
 
@@ -3951,6 +4041,120 @@ pub(crate) mod tests {
             effects.behave(0, 0x18, None);
             let slot = effects.slots[0];
             assert_eq!((slot.flags, slot.anim, slot.update), (0, 0, 0x18));
+        }
+    }
+
+    /// An acid round (kind 2 row 0xC, `+0x1b` 2) at `pos`, flying on
+    /// `Esp_0F` with ten ticks left, to burst on `Esp_31` (`Esp_2F` + 2).
+    fn acid_round_at(pos: [i16; 3]) -> Effects {
+        let mut effects = Effects::default();
+        effects.enter_room(bank_rows(3, &[(2, &[fire_block()])]));
+        effects.slots[0] = Slot {
+            flags: 0xB403,
+            kind: 2,
+            row: 0x0C,
+            anim: 0x16,
+            update: 0x0F,
+            start: 0x2F,
+            count: 0x0D,
+            step: 10,
+            generation: 2,
+            pos,
+            ..Slot::default()
+        };
+        effects
+    }
+
+    /// A G embryo (`Em_27`, life 1) in `slot` at `pos`.
+    fn embryo(slot: usize, pos: [i32; 3]) -> crate::weapon2::Target {
+        crate::weapon2::Target {
+            slot,
+            id: 0x27,
+            life: 1,
+            ..spark_body(pos)
+        }
+    }
+
+    /// `Esp_0F`'s hit hands the round to `Esp_31` the same tick, which
+    /// takes the slot (`+1` 0x31), so the next tick it doesn't fly on: a body
+    /// that comes into the flight's box then isn't hurt by it. Before
+    /// `Esp_31` was ported, the round flew on and its every-body search hit
+    /// room 309's G embryos a tick after the G adult.
+    #[test]
+    fn an_acid_round_that_hits_bursts_and_flies_no_further() {
+        let mut effects = acid_round_at([0, -1000, 0]);
+        let mut adult = spark_body([0, 0, 0]);
+        adult.id = 0x28;
+        adult.life = 600;
+        effects.bodies = vec![adult, embryo(5, [6000, 0, 6000])];
+        effects.behave(0, 0x0F, None);
+        let flight = hits(&effects);
+        assert_eq!(
+            flight
+                .iter()
+                .map(|hit| (hit.slot, hit.weapon, hit.damage))
+                .collect::<Vec<_>>(),
+            [(2, 0x0B, 121)]
+        );
+        let slot = effects.slots[0];
+        assert_eq!((slot.update, slot.anim, slot.flags), (0x31, 0, 0x8403));
+        assert_eq!(slot.next_flags, 1);
+        assert_eq!(effects.sounds, [(0x113_0001, [0, -1000, 0])]);
+
+        effects.blasts.clear();
+        effects.bodies[1].pos = [0, 0, 0];
+        effects.bodies[1].at = [0, 0];
+        effects.behave(0, effects.slots[0].update, None);
+        assert!(effects.blasts.is_empty(), "{:?}", effects.blasts);
+        assert_eq!(effects.bodies[1].life, 1, "the embryo lives on");
+        assert_eq!(effects.slots[0].next_flags, 2);
+    }
+
+    /// `Esp_31`'s first tick hurts only the first body in its box at the
+    /// round, by the acid round's second field (`0x1002000B`), with
+    /// `Damage_no` by the height; with nobody there, the first 1800 below.
+    #[test]
+    fn an_acid_burst_hurts_the_first_body_at_it_or_below_it() {
+        let mut effects = acid_round_at([0, -1000, 0]);
+        effects.slots[0].update = 0x31;
+        effects.bodies = vec![embryo(2, [0, 0, 0]), embryo(5, [300, 0, -300])];
+        effects.behave(0, 0x31, None);
+        let hits_at = hits(&effects);
+        assert_eq!(hits_at.len(), 1, "{hits_at:?}");
+        let hit = hits_at[0];
+        assert_eq!((hit.slot, hit.weapon, hit.damage), (2, 0x0B, 121));
+        assert_eq!(hit.damage_no, 4, "above the body's middle, second band");
+        let slot = effects.slots[0];
+        assert_eq!((slot.velocity[0], slot.velocity[1]), (0, 0xF0));
+        assert_eq!((slot.accel[0], slot.accel[1]), (-0x17, 0));
+        assert_eq!(slot.pos, [0, -1000, 0]);
+
+        let mut effects = acid_round_at([0, -1000, 0]);
+        effects.bodies = vec![embryo(2, [0, 1800, 0])];
+        effects.behave(0, 0x31, None);
+        assert_eq!(hits(&effects).len(), 1, "the search 1800 below");
+    }
+
+    /// `Esp_31` splashes over four more ticks and goes; burst in the water
+    /// (`+0xb` 0xFF) it starts 470 higher and rises 600 a tick, and 470 more
+    /// on its second.
+    #[test]
+    fn an_acid_burst_splashes_four_ticks_and_goes() {
+        for (step, ys) in [
+            (10, [-1000, -1000, -1000, -1000, -1000]),
+            (0xFF, [-1470, -2540, -3140, -3740, -4340]),
+        ] {
+            let mut effects = acid_round_at([0, -1000, 0]);
+            effects.slots[0].step = step;
+            let mut seen = Vec::new();
+            for _ in 0..5 {
+                assert!(effects.slots[0].live());
+                effects.behave(0, 0x31, None);
+                seen.push(effects.slots[0].pos[1]);
+            }
+            assert_eq!(seen, ys, "step {step:#x}");
+            let slot = effects.slots[0];
+            assert_eq!((slot.update, slot.anim, slot.flags), (0, 0, 0));
         }
     }
 

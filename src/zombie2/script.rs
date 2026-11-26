@@ -7947,6 +7947,27 @@ mod tests {
             assert_eq!((sub, flags & 0x40), (1, 0x40));
         }
 
+        /// A death by an acid round (`Routine_1` 0xB) smokes on parts 2, 0,
+        /// 5 and 16 on its first tick (`FUN_00479f50`), as its hit does,
+        /// before the eye's two draws.
+        #[test]
+        fn an_acid_death_smokes_on_four_parts() {
+            let setup = "w.r = { [0] = 3, 11, 0, 0 } function e:angle() return 0x40 end
+                         w.draws = { 1, 2, 3, 4 }";
+            let (lua, log) = run(&adult(), setup, 1, &["effect"]);
+            assert_eq!(
+                log,
+                [
+                    "effect(4,15,6100,64,2,0,0,0)",
+                    "effect(4,15,8104,64,0,0,0,0)",
+                    "effect(4,15,4108,64,5,0,0,0)",
+                    "effect(4,15,4112,64,16,0,0,0)",
+                ]
+            );
+            let drawn: i64 = eval(&lua, "return w.drawn");
+            assert_eq!(drawn, 6);
+        }
+
         /// Sub 2: the boxes shrink by 6, part 1's second weight swells by 10,
         /// and past 0x1000 it is held there and the young come next (sub 3).
         #[test]
@@ -8202,6 +8223,101 @@ mod tests {
                 assert_eq!(called, rows, "{weapon:#x}: {log:?}");
                 let mark: i64 = eval(&lua, "return w.vars[6]");
                 assert_eq!(mark, 3, "{weapon:#x}");
+            }
+        }
+
+        /// `FUN_00479f50`: an acid round's hit (weapon 0xB) smokes on parts
+        /// 2, 0, 5 and 16 (kind 4, row 0xF, no offset), sized `Rnd * 4` over
+        /// 0x17D0, 0x1FA0, 0x1000 and 0x1000, after the blood's draws.
+        #[test]
+        fn an_acid_round_smokes_on_four_parts_of_the_adult() {
+            let setup = "w.r = { [0] = 2, 11, 0, 0 } function e:angle() return 0x123 end
+                         w.draws = { 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5 }";
+            let (_, log) = run(&adult(), setup, 1, &["effect"]);
+            assert_eq!(
+                log.iter()
+                    .filter(|call| call.starts_with("effect(4,15,"))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                [
+                    "effect(4,15,6104,291,2,0,0,0)",
+                    "effect(4,15,8108,291,0,0,0,0)",
+                    "effect(4,15,4112,291,5,0,0,0)",
+                    "effect(4,15,4116,291,16,0,0,0)",
+                ]
+            );
+        }
+
+        /// `funcs_479E5B` gives a hurt adult hit by an acid round the heavy
+        /// flinch (`0x47b360`): clip 6, and when it ends clip 0xA with four
+        /// smokes on parts 9, 13, 3 and 1, after the hit's own four.
+        #[test]
+        fn an_acid_round_gives_a_hurt_adult_the_heavy_flinch() {
+            let setup = "w.r = { [0] = 2, 11, 0, 0 } w.vars[6] = 3 w.draws = {}
+                         for i = 1, 17 do w.draws[i] = 1 end";
+            let (lua, log) = run(&adult(), setup, 1, &["effect", "clip"]);
+            let smokes: Vec<&str> = log
+                .iter()
+                .filter_map(|call| call.strip_prefix("effect(4,15,"))
+                .collect();
+            assert_eq!(
+                smokes,
+                [
+                    "6100,0,2,0,0,0)",
+                    "8100,0,0,0,0,0)",
+                    "4100,0,5,0,0,0)",
+                    "4100,0,16,0,0,0)",
+                    "6100,0,9,0,0,0)",
+                    "8100,0,13,0,0,0)",
+                    "4100,0,3,0,0,0)",
+                    "4100,0,1,0,0,0)",
+                ]
+            );
+            let clips: Vec<&String> = log.iter().filter(|call| call.starts_with("clip")).collect();
+            assert_eq!(clips, ["clip(6,0,7)", "clip(10,0,63)"]);
+            let (sub, drawn): (i64, i64) = eval(&lua, "return w.r[2], w.drawn");
+            assert_eq!((sub, drawn), (2, 17));
+        }
+
+        /// A hit during a flinch (`+0x222` set) puts back the flinch's
+        /// routine (`+0x1fc`), and `funcs_479E5B` is indexed by that: a
+        /// handgun hit in the heavy flinch's clip 0xA carries it on to the
+        /// walk, and an acid round's in the light flinch carries the light
+        /// one on, with no heavy smokes.
+        #[test]
+        fn a_hit_during_a_flinch_carries_that_flinch_on() {
+            for (hit, kept, smokes) in [(2, "11, 2", 0), (11, "2, 1", 4)] {
+                let setup = format!(
+                    "w.r = {{ [0] = 2, {hit}, 0, 0 }} w.vars[6] = 3 w.vars[7] = 0x82
+                     function e:restore_routine() w.r = {{ [0] = 2, {kept}, 0 }} end"
+                );
+                let (lua, log) = run(&adult(), &setup, 1, &["effect"]);
+                let (r0, r1): (i64, i64) = eval(&lua, "return w.r[0], w.r[1]");
+                assert_eq!((r0, r1), (1, 1), "hit {hit:#x}");
+                let heavy = log
+                    .iter()
+                    .filter(|call| call.starts_with("effect(4,15,"))
+                    .count();
+                assert_eq!(heavy, smokes, "hit {hit:#x}: {log:?}");
+            }
+        }
+
+        /// The heavy flinch's clip 0xA ends in the walk (`Routine` 1, 1),
+        /// and it shakes every fourth frame where the light flinch shakes
+        /// every sixteenth.
+        #[test]
+        fn the_heavy_flinch_walks_on_and_shakes_every_fourth_frame() {
+            for (weapon, drawn) in [(11, 2), (2, 0)] {
+                let setup = format!(
+                    "w.r = {{ [0] = 2, {weapon}, 2, 0 }} w.vars[6] = 3
+                     function e:move_cnt() return 4 end"
+                );
+                let (lua, _) = run(&adult(), &setup, 1, &[]);
+                let (r0, r1, count): (i64, i64, i64) = eval(&lua, "return w.r[0], w.r[1], w.drawn");
+                assert_eq!(count, drawn, "{weapon:#x}");
+                if weapon == 11 {
+                    assert_eq!((r0, r1), (1, 1));
+                }
             }
         }
 
