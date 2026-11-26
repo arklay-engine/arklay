@@ -1754,7 +1754,7 @@ fn spl_sp_move(game: &mut GameState, character: &mut Character, tick: &Tick<'_>,
 /// (`enemy_work[1]`'s `Routine_2` 5), and how many times Irons's step 3
 /// moved that `Routine_2` on by one.
 #[derive(Debug, Default)]
-struct Sp44 {
+struct SpDeath {
     calls: Vec<(u8, u8, u16, i16, player2::Matrix, [i16; 3])>,
     burst: bool,
     embryo_steps: u8,
@@ -1763,7 +1763,7 @@ struct Sp44 {
 /// `Spl_sp44_00` (`0x4f7690`): Ben's death, which the G embryo in him starts
 /// (`FUN_00474b80` sets his routines to 8, 0, 0). See [`spl_sp_death`];
 /// his step 3 does nothing.
-fn spl_sp44_00(mover: &mut player2::Mover<'_, '_>) -> Sp44 {
+fn spl_sp44_00(mover: &mut player2::Mover<'_, '_>) -> SpDeath {
     spl_sp_death(mover, false)
 }
 
@@ -1775,7 +1775,7 @@ fn spl_sp44_00(mover: &mut player2::Mover<'_, '_>) -> Sp44 {
 /// kind 0 row 2 (0xfa0) on part 0 every eighth count, and on the tick it
 /// counts from 0 it goes on to step 4 (nothing) and moves the embryo's
 /// `Routine_2` on again.
-fn spl_sp40_00(mover: &mut player2::Mover<'_, '_>) -> Sp44 {
+fn spl_sp40_00(mover: &mut player2::Mover<'_, '_>) -> SpDeath {
     spl_sp_death(mover, true)
 }
 
@@ -1785,13 +1785,16 @@ fn spl_sp40_00(mover: &mut player2::Mover<'_, '_>) -> Sp44 {
 /// 0x2a further down the body each time (`Timer0`, `+0x158`), and kind 0
 /// row 2 every fourth frame from 0x24 to 0x36; on frame 0x46 the embryo
 /// comes out (`enemy_work[1]`'s `Routine_2` 5). What the death does to the
-/// parts as drawn (parts shown, part 0's and its twin's swell as weights,
-/// the textures' moves) isn't drawn.
-fn spl_sp_death(mover: &mut player2::Mover<'_, '_>, irons: bool) -> Sp44 {
-    let mut out = Sp44::default();
+/// parts as drawn isn't drawn: part 0's and its twin's swell (kept as
+/// weights), the part step 0 shows (Ben's 15 at `+0xa14`, Irons's 16 at
+/// `+0xac0`), Irons's `Be_flg` 0x8000 on parts 9 to 11 (`Joint_trans2`'s
+/// `ko_joint_trans2` for them; nothing reads their `Workm`), and the
+/// textures' moves on frames 0x28 and 0x32.
+fn spl_sp_death(mover: &mut player2::Mover<'_, '_>, irons: bool) -> SpDeath {
+    let mut out = SpDeath::default();
     let dir = mover.player.angle as i16;
     let part0 = mover.work.workm(0);
-    let call = |out: &mut Sp44, row: u8, size: u16, dir: i16, point: [i16; 3]| {
+    let call = |out: &mut SpDeath, row: u8, size: u16, dir: i16, point: [i16; 3]| {
         if let Some(matrix) = part0 {
             out.calls.push((0, row, size, dir, matrix, point));
         }
@@ -1896,7 +1899,7 @@ fn spl_sp_death(mover: &mut player2::Mover<'_, '_>, irons: bool) -> Sp44 {
 
 /// `Spl_sp40_00`'s step 3, by `Timer0` (`+0x158`, signed): see
 /// [`spl_sp40_00`]. `bleed` is its `Esp_call(0x20fa0)` on part 0.
-fn spl_sp40_step_3(work: &mut player2::Work, out: &mut Sp44, bleed: impl Fn(&mut Sp44)) {
+fn spl_sp40_step_3(work: &mut player2::Work, out: &mut SpDeath, bleed: impl Fn(&mut SpDeath)) {
     let count = work.timers[0] as i16;
     if count == 0x82 {
         out.embryo_steps = out.embryo_steps.wrapping_add(1);
