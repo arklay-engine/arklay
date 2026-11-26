@@ -624,6 +624,8 @@ pub struct Work {
     /// `Atd[0]`, as the last `Oba_ck_em2` left it: the box the bodies push
     /// against, which does not follow a hit that moves the player afterwards.
     pub atd: Option<crate::zombie2::Atd>,
+    /// `Oba_ck_em2` ran this tick, from the player's move.
+    pub(crate) oba_ran: bool,
     /// Where the player stood before `Player_move` this tick, for `Old_x2`,
     /// `Old_y2` and `Old_z2`.
     pub old: Option<[i32; 3]>,
@@ -1351,6 +1353,7 @@ impl Default for Work {
             at_em_flg: 0,
             at_em_partner: false,
             atd: None,
+            oba_ran: false,
             old: None,
             old_box: None,
             on_object: None,
@@ -1421,6 +1424,10 @@ impl Work {
                 ..Neck::default()
             },
             title_first_move: self.title_first_move,
+            // `Pl_init` sizes `Atd[0]` but leaves where it stands: the bodies
+            // the load's first move (`Em_init_move`) pushes out of the player
+            // are pushed out of where the last room left it.
+            atd: self.atd,
             ..Self::default()
         }
     }

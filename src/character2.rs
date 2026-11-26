@@ -129,6 +129,22 @@ fn player_atd(game: &GameState, pos: [i32; 3]) -> crate::zombie2::Atd {
     }
 }
 
+/// `Pl_init`'s `Atd[0]`: the sizes of the player it makes (`Ofs_y`, `At_w`,
+/// `At_h`, `W`), at the place the last room left the box, which it doesn't
+/// write. With none before (a new game, a load, a warp) there is none to
+/// keep: the load's first move takes a box on the player's own place
+/// (`player_atd`), where the original's holds whatever its memory did.
+pub(crate) fn pl_init_atd(game: &mut GameState) {
+    let Some(kept) = game.re2.player.atd else {
+        return;
+    };
+    let sized = player_atd(game, [0; 3]);
+    game.re2.player.atd = Some(crate::zombie2::Atd {
+        at: kept.at,
+        ..sized
+    });
+}
+
 /// A character's `Atd[0]`: a zombie's own, as its `Oba_set_ofs` and pushes
 /// left it, else a box of its height and radius on its position.
 pub(crate) fn body_atd(character: &Character) -> crate::zombie2::Atd {
@@ -219,6 +235,28 @@ pub fn oba_ck_em2(game: &mut GameState, player: &mut crate::player::PlayerState,
     game.re2.player.at_em_partner = partner;
     game.re2.player.atd = Some(atd);
     game.re2.player.old = Some(old);
+    game.re2.player.oba_ran = true;
+}
+
+/// The end of `Game_loop`'s pass over the works: `Player_move` and
+/// `Oba_ck_em2` run on every tick of it, a stopped one too (`fg_stop` holds
+/// the moves, not the push), unless the player's `Type` has 0x8000. Where the
+/// player's own tick didn't run (a door's stop, a scene's hold), the push
+/// runs here from where the player stands, and `Atd[0]` follows it: room
+/// 21A's sleeping dog, pushed on the load's pass out of where Leon stood at
+/// 219's door 2, isn't pushed out of it again on its first live tick.
+pub fn oba_ck_em2_unmoved(game: &mut GameState, player: &mut crate::player::PlayerState) {
+    if std::mem::take(&mut game.re2.player.oba_ran)
+        || game.re2.player.kind & player2::KIND_NOT_MOVED != 0
+    {
+        return;
+    }
+    // `Game_loop`'s draw pass sets `Old_x` to `Pos_x` at the end of every
+    // tick, so a player held still has its old place where it stands.
+    let at = player.pos;
+    oba_ck_em2(game, player, at);
+    // The flag marks the player's own move; the next tick starts clear.
+    game.re2.player.oba_ran = false;
 }
 
 /// `Em10` throws a zombie back (`Routine` `0x901`), if it can be.
@@ -3273,6 +3311,100 @@ mod tests {
         let (kept, mirror) = placed(1 | crate::zombie2::BE_NO_SCA);
         assert_eq!(kept, [-17950, 0, -24000]);
         assert_eq!(mirror, [-17950, -24000]);
+    }
+
+    /// A room's load keeps the player's box where the last room left it,
+    /// sized for the player `Pl_init` makes: room 21A's sleeping dog in slot
+    /// 0 is pushed out of where Leon stood at 219's door 2.
+    #[test]
+    fn pl_init_keeps_the_players_box_where_the_last_room_left_it() {
+        let mut game = GameState::default();
+        game.re2.player.atd = Some(crate::zombie2::Atd {
+            ofs_x: 0,
+            ofs_y: -100,
+            at_w: 1,
+            at_h: 2,
+            w: 3,
+            at: [-6299, -1530, -12275],
+        });
+        game.re2.player = game.re2.player.entering_room();
+        pl_init_atd(&mut game);
+        let atd = game.re2.player.atd.unwrap();
+        assert_eq!(atd.at, [-6299, -1530, -12275]);
+        let sized = player_atd(&game, [0; 3]);
+        assert_eq!(
+            (atd.ofs_y, atd.at_w, atd.at_h, atd.w),
+            (sized.ofs_y, sized.at_w, sized.at_h, sized.w)
+        );
+        game.re2.player.atd = None;
+        game.re2.player = game.re2.player.entering_room();
+        pl_init_atd(&mut game);
+        assert_eq!(game.re2.player.atd, None, "none before: none yet");
+    }
+
+    /// `Game_loop` runs `Oba_ck_em2` once a tick, a held one too: where the
+    /// player's own tick didn't push, the push runs from where the player
+    /// stands; where it did, it doesn't run twice; a player whose `Type` has
+    /// 0x8000 isn't pushed.
+    #[test]
+    fn the_push_runs_once_a_tick_with_the_player_held_too() {
+        let room = RoomId::parse("1010").unwrap();
+        let mut body = crate::player::spawn(room, &RoomState::default());
+        body.pos = [0, 0, 0];
+        body.radius = 450;
+        let kendo = Character {
+            id: 0x48,
+            model: 0x48,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 0x2005,
+            work: player2::Work::default(),
+            body,
+            kind: 0,
+            kage: None,
+            l_spl: 0,
+            dir_spl: 0,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            partner: None,
+            zombie: None,
+        };
+        let setup = || {
+            let mut game = GameState::default();
+            game.id = room;
+            game.re2.characters.0 = vec![Some(Box::new(kendo.clone()))];
+            let mut player = crate::player::spawn(room, &RoomState::default());
+            player.pos = [-850, 0, 0];
+            (game, player)
+        };
+
+        let (mut game, mut player) = setup();
+        oba_ck_em2_unmoved(&mut game, &mut player);
+        assert_eq!(
+            player.pos,
+            [-901, 0, 0],
+            "held: pushed from where it stands"
+        );
+        assert_eq!(game.re2.player.at_em_flg, 1);
+        assert_eq!(game.re2.player.atd.map(|atd| atd.at[0]), Some(-901));
+        assert!(!game.re2.player.oba_ran);
+
+        let (mut game, mut player) = setup();
+        oba_ck_em2(&mut game, &mut player, [-850, 0, 0]);
+        player.pos = [-850, 0, 0];
+        oba_ck_em2_unmoved(&mut game, &mut player);
+        assert_eq!(player.pos, [-850, 0, 0], "moved: pushed once, not twice");
+        assert!(!game.re2.player.oba_ran, "the next tick starts unpushed");
+
+        let (mut game, mut player) = setup();
+        game.re2.player.kind |= player2::KIND_NOT_MOVED;
+        oba_ck_em2_unmoved(&mut game, &mut player);
+        assert_eq!(player.pos, [-850, 0, 0], "Type 0x8000: not pushed");
+        assert_eq!(game.re2.player.atd, None);
     }
 
     /// Ben's part 8 at (1000, -500, 2000), turned a quarter round.
