@@ -238,10 +238,50 @@ const MV_FACE_POINT: u8 = 0xD;
 const MV_CLIMB: u8 = 8;
 const MV_JUMP_DOWN: u8 = 9;
 
-/// `Oma_Spl_updown_ck`'s reach to a box and to an edge for Sherry's ids
-/// (`0x533368` and `0x5333a8` by `Id`, both 600 for 0x45 and 0x4F), which
-/// the climb and the jump also step by.
-const CLIMB_REACH: i32 = 600;
+/// How a partner climbs and jumps by `Id`: Sherry's (0x45 and 0x4F) are her
+/// own, everyone else's (Ada's) the others'.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ClimbBy {
+    /// `Oma_Spl_updown_ck`'s reach to a box (`0x533368` by `Id`) and to an
+    /// edge (`0x5333a8`), which `Aida_mv08` and `Aida_mv09` step by.
+    up: i32,
+    down: i32,
+    /// `Sca_ck_info`'s mask for the climb's and the edge's records: 0x800
+    /// for Sherry's ids, 0x1000 for the others. (`Oma_Spl_updown_ck` also
+    /// gives the player's Sherry, 0xF, 0x800, but she isn't a partner.)
+    mask: u16,
+    /// `Aida_mv08`'s lift and the end of its hold, and `Aida_mv09`'s frame
+    /// leaving the edge.
+    lift: u8,
+    unlock: u8,
+    jump: u8,
+}
+
+const SHERRY_CLIMB: ClimbBy = ClimbBy {
+    up: 600,
+    down: 600,
+    mask: crate::sca::CHARACTER_MASK_LOW,
+    lift: 99,
+    unlock: 0x77,
+    jump: 0x1D,
+};
+const OTHER_CLIMB: ClimbBy = ClimbBy {
+    up: 800,
+    down: 1000,
+    mask: crate::sca::CHARACTER_MASK,
+    lift: 0x1D,
+    unlock: 0x31,
+    jump: 0xE,
+};
+
+/// [`ClimbBy`] for a partner's `Id`.
+fn climb_by(id: u8) -> ClimbBy {
+    if matches!(id, 0x45 | 0x4F) {
+        SHERRY_CLIMB
+    } else {
+        OTHER_CLIMB
+    }
+}
 /// `Routine_2`'s bit for a jump down: `Aida_mv08` squares up and hands over
 /// to `Aida_mv09`.
 const CLIMB_IS_DROP: u8 = 2;
@@ -250,12 +290,8 @@ const CLIMB_CLIP: u8 = 6;
 const JUMP_CLIP: u8 = 7;
 const JUMP_FALL_CLIP: u8 = 8;
 const LAND_CLIP: u8 = 9;
-/// Sherry's climb lifts her on frame 99 of its clip and ends its hold on
-/// 0x77; her jump leaves the edge on frame 0x1D.
-const CLIMB_LIFT_FRAME: u8 = 99;
+/// The climb's hold starts on frame 0x11 of its clip, for everyone.
 const CLIMB_LOCK_FRAME: u8 = 0x11;
-const CLIMB_UNLOCK_FRAME: u8 = 0x77;
-const JUMP_FRAME: u8 = 0x1D;
 /// The climb's blend step on the room bank's clip.
 const CLIMB_STEP: u16 = 0x400;
 /// The jump's drop off the edge and its fall's first speed.
@@ -1347,13 +1383,14 @@ impl Auto<'_, '_, '_, '_> {
     }
 
     /// `Oma_Spl_updown_ck` (`0x4ce0c0`), without the object models: a box to
-    /// climb a quarter turn ahead of her, 600 on and a floor up, or an edge to
-    /// jump down from. The climb's and the edge's records are her `0x800`'s,
-    /// and the ground under the points is `Sc_id`'s `0x8000`, as the
+    /// climb a quarter turn ahead of her, her up reach on and a floor up, or
+    /// an edge her down reach on to jump down from ([`ClimbBy`]). The climb's
+    /// and the edge's records are those of her `ClimbBy::mask`, and the ground under the points is `Sc_id`'s `0x8000`, as the
     /// player's. The edge's ground isn't held under the ceiling, as the
     /// player's is. Either sends her to `Aida_mv08` and keeps her facing.
     fn updown_ck(&mut self) -> bool {
-        use crate::sca::{CHARACTER_MASK_LOW, FLOOR_HEIGHT, INFO_DOWN, INFO_UP, PLAYER_MASK};
+        use crate::sca::{FLOOR_HEIGHT, INFO_DOWN, INFO_UP, PLAYER_MASK};
+        let by = climb_by(self.m.tick.id);
         let Some(sca) = self.m.tick.room.sca.as_ref() else {
             return false;
         };
@@ -1361,19 +1398,19 @@ impl Auto<'_, '_, '_, '_> {
         let [x, y, z] = self.pos();
         let floor = self.m.work.floor;
         let radius = self.m.player.radius;
-        let (dx, dz) = crate::player2::rotate(facing, CLIMB_REACH, 0);
+        let (dx, dz) = crate::player2::rotate(facing, by.up, 0);
         let up = [x + dx, y - FLOOR_HEIGHT, z + dz];
-        if crate::sca::info_at(sca, CHARACTER_MASK_LOW, up, floor) & INFO_UP != 0 && floor < 31 {
+        if crate::sca::info_at(sca, by.mask, up, floor) & INFO_UP != 0 && floor < 31 {
             let ground = crate::sca::ground_at(sca, up, radius, PLAYER_MASK);
             if i32::from(ground.height as i16) <= up[1] && !ground.blocked {
                 self.start_climb(0);
                 return true;
             }
         }
+        let (dx, dz) = crate::player2::rotate(facing, by.down, 0);
         let mut down = [x + dx, y, z + dz];
         down[1] = i32::from(crate::sca::ground_at(sca, down, radius, PLAYER_MASK).height as i16);
-        if y < down[1] && crate::sca::info_at(sca, CHARACTER_MASK_LOW, down, floor) & INFO_DOWN != 0
-        {
+        if y < down[1] && crate::sca::info_at(sca, by.mask, down, floor) & INFO_DOWN != 0 {
             self.start_climb(CLIMB_IS_DROP);
             return true;
         }
@@ -1410,7 +1447,8 @@ impl Auto<'_, '_, '_, '_> {
 
     /// `Aida_mv08` (`0x4f4230`): turn square to the box on the first sub
     /// bank's clip 0, then climb it on the room bank's clip 6, stepping up
-    /// and on 600 on its frame 99; a jump down hands over to `Aida_mv09`
+    /// and on by her up reach on her lift frame ([`ClimbBy`]); a jump down
+    /// hands over to `Aida_mv09`
     /// once square. The climb ends at the stand.
     fn aida_mv08(&mut self) {
         if self.m.work.routine[3] == 0 {
@@ -1454,15 +1492,19 @@ impl Auto<'_, '_, '_, '_> {
                 if frame == CLIMB_LOCK_FRAME {
                     self.m.work.damage_cnt |= DAMAGE_LOCK;
                 }
-                if frame == CLIMB_LIFT_FRAME {
-                    self.m.work.hokan = 0;
-                    self.m.work.spd[0] = CLIMB_REACH as i16;
+                let by = climb_by(self.m.tick.id);
+                if frame == by.lift {
+                    // Only Sherry's lift (frame 99) clears `Hokan_flg`.
+                    if by == SHERRY_CLIMB {
+                        self.m.work.hokan = 0;
+                    }
+                    self.m.work.spd[0] = by.up as i16;
                     self.m.add_speed_xz();
                     self.m.player.pos[1] -= crate::sca::FLOOR_HEIGHT;
                     self.m.work.floor = self.m.work.floor.wrapping_add(1);
                     self.settle();
                 }
-                if self.m.work.move_cnt == CLIMB_UNLOCK_FRAME {
+                if self.m.work.move_cnt == by.unlock {
                     self.m.work.damage_cnt &= !DAMAGE_LOCK;
                     self.w.be_flg &= !BE_CLIMBING;
                 }
@@ -1476,8 +1518,8 @@ impl Auto<'_, '_, '_, '_> {
     }
 
     /// `Aida_mv09` (`0x4f4530`): the jump down on the room bank's clips 7 to
-    /// 9. She leaves the edge on clip 7's frame 0x1D (600 on, 0x226 down, a
-    /// floor down), falls 30 more a tick each tick to within 300 of the
+    /// 9. She leaves the edge on clip 7's jump frame (her down reach on, 0x226
+    /// down, a floor down; [`ClimbBy`]), falls 30 more a tick each tick to within 300 of the
     /// ground under her (`Sca_ck_hit` with a reach of 400), and lands on the
     /// ground `Game_loop` found, with a footfall, to the stand.
     fn aida_mv09(&mut self) {
@@ -1492,7 +1534,7 @@ impl Auto<'_, '_, '_, '_> {
                     self.w.be_flg |= BE_CLIMBING;
                 }
                 self.joint_step(Bank::Room, STEP);
-                if self.m.work.move_cnt == JUMP_FRAME {
+                if self.m.work.move_cnt == climb_by(self.m.tick.id).jump {
                     self.m.work.routine[3] = 2;
                 }
             }
@@ -1503,7 +1545,7 @@ impl Auto<'_, '_, '_, '_> {
                     self.m.work.move_no = JUMP_FALL_CLIP;
                     self.m.work.move_cnt = 0;
                     self.m.work.hokan = 0;
-                    self.m.work.spd[0] = CLIMB_REACH as i16;
+                    self.m.work.spd[0] = climb_by(self.m.tick.id).down as i16;
                     self.m.work.spd[2] = 0;
                     self.m.add_speed_xz();
                     self.m.player.pos[1] += JUMP_DROP;
@@ -1616,6 +1658,8 @@ mod tests {
 
     /// Sherry at the origin facing 0, Claire 1000 along x facing 0x800.
     struct Rig {
+        /// `Id`: Sherry's 0x45 unless a test makes her someone else.
+        id: u8,
         work: Work,
         body: PlayerState,
         room: RoomState,
@@ -1653,6 +1697,7 @@ mod tests {
             let mut work = Work::default();
             work.routine = [1, 0, 0, 0];
             Self {
+                id: 0x45,
                 work,
                 body,
                 room,
@@ -1707,7 +1752,7 @@ mod tests {
                 },
                 input: Input::default(),
                 options: Options::default(),
-                id: 0x45,
+                id: self.id,
                 life: 200,
                 poisoned: false,
                 stopped: false,
@@ -2601,6 +2646,61 @@ mod tests {
         assert_eq!(rig.work.floor, 0);
         assert_eq!(rig.be_flg & BE_CLIMBING, 0);
         assert_eq!(noise, NOISE_CLIMB, "the landing's footfall");
+    }
+
+    /// Ada (0x41) jumps further than Sherry: `Oma_Spl_updown_ck` finds the
+    /// edge 1000 on, and `Aida_mv09` leaves it on clip 7's frame 0xE and
+    /// steps 1000 on; her climb lifts her 800 on, on clip 6's frame 0x1D.
+    #[test]
+    fn ada_climbs_and_jumps_by_her_own_reach_and_frames() {
+        assert_eq!(climb_by(0x41), OTHER_CLIMB);
+        assert_eq!(climb_by(0x4F), SHERRY_CLIMB);
+        assert_eq!(OTHER_CLIMB.mask, crate::sca::CHARACTER_MASK);
+        let east = facing_x(1);
+        // 400 back from where Sherry finds the edge only Ada's reach does.
+        let mut rig = climb_rig([-18400, -1800, -10000], east, 1);
+        assert!(!rig.with_auto(|auto| auto.updown_ck()));
+        let mut rig = climb_rig([-18400, -1800, -10000], east, 1);
+        rig.id = 0x41;
+        assert!(rig.with_auto(|auto| auto.updown_ck()));
+        assert_eq!(rig.routine(), [1, MV_CLIMB, CLIMB_IS_DROP, 0]);
+        let mut rig = climb_rig([-18000, -1800, -10000], east, 1);
+        rig.id = 0x41;
+        rig.work.routine = [1, MV_CLIMB, CLIMB_IS_DROP, 0];
+        rig.partner.climb_dir = east;
+        rig.ground = 0;
+        let mut left = None;
+        for _ in 0..200 {
+            if rig.routine()[1] == MV_STAND {
+                break;
+            }
+            let frame = rig.work.move_cnt;
+            rig.with_auto(|auto| auto.move_type());
+            if left.is_none() && rig.routine()[3] == 3 {
+                left = Some(frame);
+            }
+        }
+        assert_eq!(left, Some(0xE));
+        assert_eq!(rig.body.pos, [-18000 + 1000, 0, -10000]);
+
+        let west = facing_x(-1);
+        let mut rig = climb_rig([-17300, 0, -10000], west, 0);
+        rig.id = 0x41;
+        rig.work.routine = [1, MV_CLIMB, 0, 0];
+        rig.partner.climb_dir = west;
+        let mut lifted = None;
+        for _ in 0..400 {
+            if rig.routine()[1] != MV_CLIMB {
+                break;
+            }
+            let (before, frame) = (rig.body.pos[1], rig.work.move_cnt);
+            rig.with_auto(|auto| auto.aida_mv08());
+            if lifted.is_none() && rig.body.pos[1] != before {
+                lifted = Some(frame);
+            }
+        }
+        assert_eq!(lifted, Some(0x1D));
+        assert_eq!(rig.body.pos, [-17300 - 800, -1800, -10000]);
     }
 
     #[test]

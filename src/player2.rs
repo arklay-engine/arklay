@@ -46,6 +46,8 @@ const MODE_DEAD: u8 = 3;
 /// `Pl_dead`.
 const MODE_DEAD_BODY: u8 = 7;
 pub(crate) const MODE_SCENARIO: u8 = 4;
+/// A script's routine 0x1A: `Aida_mv07`'s climb of the stairs.
+const SCE_STAIRS: u8 = 0x1A;
 /// `Pl_Em_damage` and `Pl_Em_die`: an enemy has hold of the player.
 pub(crate) const MODE_HELD: u8 = 5;
 pub(crate) const MODE_HELD_DIE: u8 = 6;
@@ -2370,6 +2372,24 @@ pub fn key_word(input: &Input) -> u16 {
 }
 
 impl<'a, 'b> Mover<'a, 'b> {
+    /// `Sca_info`'s stairs (`+0x112`'s 0x10, `0x695E7C`): those in front
+    /// of the body, none while it stands on an object.
+    fn stairs_ahead(&self) -> Option<&'b ScaRect> {
+        self.tick
+            .room
+            .sca
+            .as_ref()
+            .filter(|_| self.work.on_object.is_none())
+            .and_then(|sca| {
+                crate::sca::stairs_ahead(
+                    sca,
+                    self.player.pos,
+                    self.player.angle,
+                    self.player.radius,
+                )
+            })
+    }
+
     pub(crate) fn new(work: &'a mut Work, player: &'a mut PlayerState, tick: &'a Tick<'b>) -> Self {
         Self {
             work,
@@ -2425,20 +2445,7 @@ impl Mover<'_, '_> {
     fn pl_move(&mut self) {
         // `Sca_ck_em` leaves `Sca_info` empty while the player stands on an
         // object.
-        self.stairs = self
-            .tick
-            .room
-            .sca
-            .as_ref()
-            .filter(|_| self.work.on_object.is_none())
-            .and_then(|sca| {
-                crate::sca::stairs_ahead(
-                    sca,
-                    self.player.pos,
-                    self.player.angle,
-                    self.player.radius,
-                )
-            });
+        self.stairs = self.stairs_ahead();
         let (input, target) = player::analog_input(
             self.player,
             self.tick.room,
@@ -2513,7 +2520,7 @@ impl Mover<'_, '_> {
             return false;
         }
         if let Some(stairs) = self.stairs {
-            self.sca_hit_stairs(stairs);
+            let _ = self.sca_hit_stairs(stairs);
             return true;
         }
         if self.updown_ck() {
@@ -2682,7 +2689,7 @@ impl Mover<'_, '_> {
         if self.work.key_trg & KEY_ACTION != 0 {
             self.work.check = true;
             if let Some(stairs) = self.stairs {
-                self.sca_hit_stairs(stairs);
+                let _ = self.sca_hit_stairs(stairs);
             }
         }
         self.aim_branch(key);
@@ -2915,8 +2922,15 @@ impl Mover<'_, '_> {
 
     /// `Sca_hit_stairs`: from either end, in reach of the middle of its width.
     /// It also writes the end's position to `Atd[0]`, which the next tick
-    /// replaces from the player's own.
-    fn sca_hit_stairs(&mut self, stairs: &ScaRect) {
+    /// replaces from the player's own. A body in a script's routine
+    /// (`Routine_0` 4) climbs by `Aida_mv07` (0x1A) rather than `pl_mv_07`,
+    /// with `Be_flg`'s 8 up, which keeps `Sca_ck_em` off it until the climb's
+    /// end drops it; `pl_mv_07`'s own climb is held off the walls by
+    /// [`Work::climbing`]. The original also raises `fg_status`'s 0x40 here
+    /// for every body, which `pl_mv_07` drops on its last tick and
+    /// `Aida_mv07` never does; that isn't modelled. True when it takes the
+    /// stairs.
+    fn sca_hit_stairs(&mut self, stairs: &ScaRect) -> bool {
         let (x, z) = (i32::from(stairs.x), i32::from(stairs.z));
         let (width, depth) = (i32::from(stairs.width), i32::from(stairs.depth));
         let (px, pz) = (self.player.pos[0] - x, self.player.pos[2] - z);
@@ -2930,13 +2944,18 @@ impl Mover<'_, '_> {
         if ((across_size - 500) as u32) < ((across - 0xFA) as u32)
             || ((along_size + 0x514) as u32) < ((along + 0x28A) as u32)
         {
-            return;
+            return false;
         }
         let (low, high) = crate::sca::stairs_ends(stairs);
         let diff = low - high;
         let steps = ((i64::from(diff) * 0x6E5D_4C3B) >> 32) as i32 - diff;
         self.work.timer1 = ((steps >> 10) - (steps >> 31) - 1) as i16;
-        self.work.routine[1] = MOVE_STAIRS;
+        if self.work.routine[0] == MODE_SCENARIO {
+            self.work.routine[1] = SCE_STAIRS;
+            self.work.be_flg |= BE_NO_SCA;
+        } else {
+            self.work.routine[1] = MOVE_STAIRS;
+        }
         self.work.routine[2] = 0;
         let near = along < along_size >> 1;
         self.work.timer2 = u8::from((axis & 1 == 1) == near);
@@ -2946,6 +2965,7 @@ impl Mover<'_, '_> {
             (false, true) => 0xC00,
             (false, false) => 0x400,
         };
+        true
     }
 
     /// `pl_mv_07`: turn to the stairs, climb them step by step, walk off. The
@@ -7350,7 +7370,8 @@ impl Mover<'_, '_> {
             0x00 => self.spl_sce_mv00(Bank::Room),
             0x01 => self.spl_sce_mv00(Bank::Pld),
             0x02 | 0x03 => self.spl_sce_mv00(Bank::Weapon),
-            0x04 | 0x12 => self.spl_walk(by_id(id, &SCE_WALK_SPEED, &SPL_WALK_SPEED), 0),
+            0x04 => self.spl_walk(by_id(id, &SCE_WALK_SPEED, &SPL_WALK_SPEED), 0),
+            0x12 => self.spl_sce12(by_id(id, &SCE_WALK_SPEED, &SPL_WALK_SPEED)),
             0x05 => self.spl_walk(by_id(id, &SCE_RUN_SPEED, &SPL_RUN_SPEED), 1),
             0x06 => {
                 if self.work.routine[2] == 0 {
@@ -7365,6 +7386,7 @@ impl Mover<'_, '_> {
             0x0B => self.spl_sce_mv04(Bank::Pld),
             0x0C | 0x0D => self.spl_sce_mv04(Bank::Weapon),
             0x15 => self.spl_sce15(),
+            SCE_STAIRS => self.aida_mv07(),
             0x20 => self.spl_sce20(),
             _ => {}
         }
@@ -7503,6 +7525,79 @@ impl Mover<'_, '_> {
         if self.spl_sce_mv02() {
             self.arrive();
         }
+    }
+
+    /// `Spl_sce12` (`0x4F6680`): `Spl_sce04`'s walk, but on its way it takes
+    /// stairs in front of it (`Sca_hit_stairs`) where `Spl_sce04` checks for
+    /// an object to climb.
+    fn spl_sce12(&mut self, speed: i16) {
+        if self.work.routine[2] == 2
+            && let Some(stairs) = self.stairs_ahead()
+            && self.sca_hit_stairs(stairs)
+        {
+            return;
+        }
+        self.spl_walk(speed, 0);
+    }
+
+    /// `Aida_mv07` (`0x4F3FA0`), a script's routine 0x1A: `pl_mv_07`'s turn
+    /// and steps without its shadow's lead, every step moved by
+    /// `Add_speedXYZ`. The last step's end drops `Be_flg`'s 8, raises the
+    /// room flag and leaves the body on routine 6, the script's idle, with
+    /// no walk off. Its footfalls are a run's.
+    fn aida_mv07(&mut self) {
+        let climb = STAIRS_CLIPS[usize::from(self.work.timer2 != 0)];
+        if self.work.routine[2] == 0 {
+            self.work.routine[2] = 1;
+            self.work.bank = Bank::Weapon;
+            self.work.move_no = 0;
+            self.work.move_cnt = 0;
+            self.work.hokan = FULL_BLEND;
+            self.work.damage_cnt |= DAMAGE_LOCK;
+        }
+        match self.work.routine[2] {
+            1 => {
+                let target = self.work.timer0;
+                self.player.angle = goto(self.player.angle, target, STAIRS_TURN);
+                let error =
+                    (i32::from(target) - i32::from(self.player.angle) + STAIRS_TURN_CLOSE) & 0x0FFF;
+                if error < STAIRS_TURN_CLOSE * 2 {
+                    self.work.routine[2] = 2;
+                    self.player.angle = goto(self.player.angle, target, STAIRS_TURN);
+                }
+                self.joint_move();
+            }
+            2 | 3 => {
+                if self.work.routine[2] == 2 {
+                    self.work.routine[2] = 3;
+                    let flight = self.work.timer1 as u8;
+                    self.work.floor = if self.work.timer2 == 0 {
+                        self.work.floor.wrapping_add(flight)
+                    } else {
+                        self.work.floor.wrapping_sub(flight)
+                    };
+                    self.work.bank = Bank::Room;
+                    self.work.move_no = climb;
+                    self.work.move_cnt = 0;
+                    self.work.hokan = STAIRS_FIRST_BLEND;
+                }
+                self.stairs_step(climb, STAIRS_FIRST_STEP);
+            }
+            4 => self.stairs_step(climb, BLEND_STEP),
+            5 => {
+                self.spd_get();
+                if self.joint_move() {
+                    self.work.damage_cnt &= !DAMAGE_LOCK;
+                    self.work.be_flg &= !BE_NO_SCA;
+                    self.arrived = Some(self.work.sce_flg_no);
+                    self.work.routine[1] = 6;
+                    self.work.routine[2] = 0;
+                }
+                self.add_speed_xyz();
+            }
+            _ => {}
+        }
+        self.footfall(1, NOISE_RUN);
     }
 
     fn spl_sce09(&mut self) {
@@ -10668,6 +10763,50 @@ mod tests {
                 assert_eq!(setup.work.floor, want, "not with the height");
             }
         }
+    }
+
+    /// A script's walk with stairs (`plc_dest` routine 0x12, `Spl_sce12`)
+    /// takes the stairs in front of it by `Aida_mv07` (routine 0x1A), off
+    /// the walls (`Be_flg`'s 8) until its last step, which raises the room
+    /// flag and leaves the body on routine 6. A plain walk (routine 4)
+    /// passes them by.
+    #[test]
+    fn a_scripts_walk_with_stairs_climbs_them() {
+        let mut setup = at_stairs([1500, 0, 700], 0xC00);
+        setup.work.routine = [MODE_SCENARIO, 6, 0, 0];
+        plc_dest(&mut setup.work, 0, 0x12, 9, 1500, 5000);
+        let mut arrived = None;
+        for _ in 0..20 {
+            arrived = arrived.or(setup.tick(Input::default(), 200));
+            if setup.work.routine[1] == SCE_STAIRS {
+                break;
+            }
+        }
+        assert_eq!(setup.work.routine[..2], [MODE_SCENARIO, SCE_STAIRS]);
+        assert_eq!(setup.work.timer0, 0xC00);
+        assert_ne!(setup.work.be_flg & BE_NO_SCA, 0);
+        let flight = setup.work.timer1 as u8;
+        assert!(flight > 0);
+        for _ in 0..300 {
+            arrived = arrived.or(setup.tick(Input::default(), 200));
+            if setup.work.routine[1] != SCE_STAIRS {
+                break;
+            }
+            assert_ne!(setup.work.be_flg & BE_NO_SCA, 0, "off the walls on the way");
+        }
+        assert_eq!(setup.work.routine[..3], [MODE_SCENARIO, 6, 0]);
+        assert_eq!(setup.work.be_flg & BE_NO_SCA, 0);
+        assert_eq!(setup.work.damage_cnt & DAMAGE_LOCK, 0);
+        assert_eq!(arrived, Some(9));
+        assert_eq!(setup.work.floor, flight, "a flight up");
+
+        let mut setup = at_stairs([1500, 0, 700], 0xC00);
+        setup.work.routine = [MODE_SCENARIO, 6, 0, 0];
+        plc_dest(&mut setup.work, 0, 0x04, 9, 1500, 5000);
+        for _ in 0..20 {
+            setup.tick(Input::default(), 200);
+        }
+        assert_eq!(setup.work.routine[..2], [MODE_SCENARIO, 0x04]);
     }
 
     #[test]
