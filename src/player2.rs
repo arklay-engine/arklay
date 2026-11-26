@@ -8238,6 +8238,7 @@ pub fn member(work: &Work, member: u8) -> Option<i32> {
         0x1D => i32::from(work.spd[1]),
         0x1E => i32::from(work.spd[2]),
         0x1F => i32::from(work.hokan),
+        0x26 => i32::from(work.parts0_y as i16),
         _ => return None,
     })
 }
@@ -8262,6 +8263,10 @@ pub fn set_member(work: &mut Work, member: u8, value: i32) -> bool {
         0x1D => work.spd[1] = value as i16,
         0x1E => work.spd[2] = value as i16,
         0x1F => work.hokan = value as u8,
+        // `Parts0_pos_y` (`+0x1de`), `J_seq`'s scale of the first part's
+        // height: room 300's scene with Irons (`ROOM3001`'s `main_06` and
+        // `main_16`) sets his 0xF38 and then 0x1000 over `Spl_Init`'s 0x107B.
+        0x26 => work.parts0_y = i32::from(value as i16),
         _ => return false,
     }
     true
@@ -13126,6 +13131,22 @@ mod tests {
         plc_ret(&mut setup.work);
         setup.tick(input(false, false, false), 30);
         assert_eq!(setup.work.floor, 0);
+    }
+
+    /// `Member_set_branch`'s 0x26 writes `Parts0_pos_y`, a signed word, which
+    /// scales the root's height on the pose; `Load_member_branch`'s reads it.
+    #[test]
+    fn member_0x26_sets_the_scale_of_the_root_s_height() {
+        let mut work = Work::default();
+        work.set_parts0_y(0x107B);
+        assert_eq!(member(&work, 0x26), Some(0x107B));
+        assert!(set_member(&mut work, 0x26, 0xF38));
+        assert_eq!(member(&work, 0x26), Some(0xF38));
+        assert_eq!(work.scaled_height(-1000), ((-1000 * 0xF38) >> 12) as i16);
+        assert!(set_member(&mut work, 0x26, 0x1000));
+        assert_eq!(work.scaled_height(-1000), -1000);
+        assert!(set_member(&mut work, 0x26, 0x1_8000));
+        assert_eq!(work.parts0_y, -0x8000);
     }
 
     #[test]
