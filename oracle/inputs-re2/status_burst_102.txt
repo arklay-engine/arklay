@@ -1,4 +1,4 @@
-# room 102 with the custom handgun in slot 0: START, decide on its slot, down three times to the fourth command and decide (the flag up), decide on the slot again, down three times and decide (the flag down), then START out
+# room 102 with the custom handgun in slot 0: START, decide on its slot, down three times to the fourth command and decide (the flag up, the cursor kept on command 0), decide again (the flag down), down three times round the menu to COMBN and decide, then START out
 0
 380 start
 384

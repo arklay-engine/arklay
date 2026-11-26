@@ -27,6 +27,7 @@
 //! down every four ticks.
 
 use super::GameState;
+use crate::scd2::host::COMMON_BANK;
 use crate::scd2::host::item_max;
 
 pub mod binders;
@@ -130,7 +131,6 @@ const CUSTOM_HANDGUN: u8 = 4;
 /// `fg_common`'s 0x7E, which command 0 turns over: the custom handgun's
 /// fire, read by `pl_mv05_w2` to `w4`.
 pub const BURST_FLAG: u8 = 0x7E;
-use crate::scd2::host::COMMON_BANK;
 
 /// The first id USE doesn't equip (`0x4F8620`): ammunition from here.
 const FIRST_AMMO: u8 = 0x14;
@@ -274,9 +274,10 @@ pub struct ItemPage {
     /// handgun's, which `St_menu0_item` builds for item 4 alone.
     pub burst: bool,
     /// Command 0's label as `St_init_disp_menu1` last built it: on when
-    /// `fg_common`'s 0x7E was. The menu's opening and each tick of the menu
-    /// build it; command 0's tick draws the menu before it turns the flag
-    /// over, so the label shows the change from the next tick.
+    /// `fg_common`'s 0x7E was. The original builds it on the menu's opening
+    /// and on command 0, after that tick's draw, so the label shows the
+    /// change from the next tick; arklay takes the flag on each menu tick,
+    /// which is the same, as nothing else turns it while the menu is up.
     pub burst_label: bool,
 }
 
