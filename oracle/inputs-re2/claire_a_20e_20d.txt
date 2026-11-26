@@ -1,0 +1,191 @@
+# Claire A in 20E's south half (#896): west to the 15 handgun rounds (8:171) on the table, taken facing east, door 1 back
+# into 20C, south down the west arm to door 1 (the Club Key's: the press, Yes, and the used-key message's close), and
+# into 20D
+# made in arklay (steered by a script): no zombie reaches her; 20C loads at 888 and hands back on 1194, 20D at 1464,
+# which hands back on 1770; the steering script's grab check fired while she turned on the spot, so she waits there on
+# alternate left and right taps at 388-429, 728-769 and 1196-1237
+344 right up run
+349 up run
+353 right up run
+354 up run
+361 right up run
+362 left up run
+364 up run
+386 right
+388 left
+389 right
+390 left
+391 right
+392 left
+393 right
+394 left
+395 right
+396 left
+397 right
+398 left
+399 right
+400 left
+401 right
+402 left
+403 right
+404 left
+405 right
+406 left
+407 right
+408 left
+409 right
+410 left
+411 right
+412 left
+413 right
+414 left
+415 right
+416 left
+417 right
+418 left
+419 right
+420 left
+421 right
+422 left
+423 right
+424 left
+425 right
+426 left
+427 right
+428 left
+429 right
+433 right up
+451 up
+461 right up
+462 up
+466 right
+476
+482 confirm
+485
+582 confirm
+585
+682 confirm
+685
+725 right up run
+728 left
+729 right
+730 left
+731 right
+732 left
+733 right
+734 left
+735 right
+736 left
+737 right
+738 left
+739 right
+740 left
+741 right
+742 left
+743 right
+744 left
+745 right
+746 left
+747 right
+748 left
+749 right
+750 left
+751 right
+752 left
+753 right
+754 left
+755 right
+756 left
+757 right
+758 left
+759 right
+760 left
+761 right
+762 left
+763 right
+764 left
+765 right
+766 left
+767 right
+768 left
+769 right
+770 right up run
+774 up run
+779 left up run
+780 up run
+793 left up run
+794 up run
+796 left up run
+797 up run
+808 left up
+811 up
+835 left up
+836 up
+845 left
+847
+853 confirm
+854
+890 up
+1194 right
+1196 left
+1197 right
+1198 left
+1199 right
+1200 left
+1201 right
+1202 left
+1203 right
+1204 left
+1205 right
+1206 left
+1207 right
+1208 left
+1209 right
+1210 left
+1211 right
+1212 left
+1213 right
+1214 left
+1215 right
+1216 left
+1217 right
+1218 left
+1219 right
+1220 left
+1221 right
+1222 left
+1223 right
+1224 left
+1225 right
+1226 left
+1227 right
+1228 left
+1229 right
+1230 left
+1231 right
+1232 left
+1233 right
+1234 left
+1235 right
+1236 left
+1237 right
+1240 right up run
+1257 up run
+1262 left up run
+1263 up run
+1264 left up
+1274 up
+1284 left up
+1285 up
+1302 left up
+1303 up
+1304 left
+1313
+1319 confirm
+1320
+1383 confirm
+1384
+1429 confirm
+1430
+1466 up
+1772
