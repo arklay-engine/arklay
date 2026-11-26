@@ -2688,6 +2688,14 @@ impl GameHost<'_> {
             return;
         };
         let data: [u8; 6] = std::array::from_fn(|index| at(3 + index) as u8);
+        // `aot_table` points into `Door_aot_set`'s own bytes, where the
+        // three words follow the area as the door's `Next_pos_x`, `y` and
+        // `z`: room 403's `main_12` moves where its lift sets Leon down in 404.
+        if let Some(door) = self.game.doors.get_mut(slot).and_then(Option::as_mut) {
+            door.next_pos = std::array::from_fn(|axis| {
+                i32::from(i16::from_le_bytes([data[axis * 2], data[axis * 2 + 1]]))
+            });
+        }
         let mut params = [0; 8];
         if at(1) as u8 == SCE_ITEM {
             let [model, action] = if old.kind == RoomActionKind::Item {
@@ -7818,6 +7826,25 @@ mod tests {
         assert_eq!(action.kind, RoomActionKind::Item);
         assert_eq!(action.params[..5], [83, 1, 156, 255, 1]);
         assert_eq!(game.re2.gates[8].parent, Some(0xC2));
+    }
+
+    #[test]
+    fn aot_reset_moves_a_doors_next_position() {
+        let mut game = GameState::default();
+        game.is_re2_room = true;
+        // Room 403's door 1, the lift down to 404, and `main_12`'s reset.
+        let ops = [
+            1, 1, 81, 4, 0, -27119, -27068, 1700, 1830, -12470, 0, -830, 1024, 3, 4, 2, 0, 40, 5,
+            0, 0, 0, 0,
+        ];
+        let mut host = GameHost { game: &mut game };
+        host.exec(0, crate::scd2::opcode::lookup(0x3B).unwrap(), &ops);
+        let reset = [1, 1, 65, 26, 208, 0, 0, 184, 251];
+        host.exec(0, crate::scd2::opcode::lookup(0x46).unwrap(), &reset);
+        let door = game.doors[1].as_ref().unwrap();
+        assert_eq!(door.next_pos, [-12262, 0, -1096]);
+        assert_eq!(door.next_angle, 1024);
+        assert_eq!(door.next_room, 4);
     }
 
     #[test]
