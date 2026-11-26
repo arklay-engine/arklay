@@ -131,12 +131,7 @@ impl GameState {
     /// `0x691F6D`) and raises the START gate (`0x691F76`) first.
     pub fn start_re2_script_map(&mut self) -> Option<ScriptMapOutcome> {
         let map = self.re2_script_map.as_mut()?;
-        let page = &mut self.re2_box_bytes;
-        page.routine = 0;
-        page.sub = 0;
-        page.count = 0;
-        page.cursor = 0;
-        page.gate = 1;
+        self.re2_box_bytes.status_start();
         map.floor = floor_for(map.target);
         map.fade_in = Some(0);
         map.drawn = true;

@@ -1,0 +1,179 @@
+# Claire A on 200's balcony from 20A's door 0: the jump down by the stairs, door 1 into 201, the item box (the Ink Ribbons,
+# the Red Jewel and the valve handle go in, which leaves four free slots), the desk opened with the lock pick and its First
+# Aid Spray taken, door 1 into 204, its Green Herb by the north wall, and door 0 back into 201 (#896, the detour)
+# made in arklay: 201 loads at 617, 204 at 2511, 201 again at 3651, which hands back on 3955
+344 up
+346 up run
+380 right up run
+381 up run
+396 right up run
+397 up run
+399 right up run
+402 right
+407 right up run
+408 right
+413 right up run
+414 right
+419 right up run
+420 right
+426 right up run
+427 left
+433
+439 confirm
+440
+499 left up run
+500 left
+503 left up run
+527 right up run
+534 up run
+566 left up run
+567 up run
+569 left up run
+570 up run
+574
+580 confirm
+581
+617 up
+949 left
+962 left up
+1000 left
+1002 left up
+1003 left
+1006 left up
+1007 left
+1010 left up
+1011 right
+1036
+1042 confirm
+1043
+1132 down
+1135
+1162 confirm
+1165
+1192 confirm
+1195
+1222 confirm
+1225
+1252 down
+1255
+1282 confirm
+1285
+1312 confirm
+1315
+1342 down
+1345
+1372 confirm
+1375
+1402 cancel
+1405
+1472 right
+1487 right up run
+1502 up run
+1518 right up run
+1519 up run
+1536 right up run
+1537 up run
+1558 right up
+1561 right
+1566 right up
+1567 right
+1571 right up
+1572 right
+1576 right up
+1577 right
+1582 right up
+1583 left
+1591
+1597 confirm
+1600
+1697 confirm
+1700
+1797 confirm
+1800
+1897 confirm
+1900
+1997 confirm
+2000
+2137 confirm
+2140
+2277 confirm
+2280
+2377 right
+2405 right up run
+2427 left up run
+2429 up run
+2445 left up run
+2446 up run
+2449 right
+2468
+2474 confirm
+2475
+2511 up
+2817 left up run
+2819 up run
+2821 left up run
+2822 up run
+2834 right up run
+2835 up run
+2838 right up run
+2841 up run
+2870 right up run
+2871 up run
+2884 left up run
+2885 up run
+2922 left up run
+2923 up run
+2928 right
+2934 right up run
+2949 up run
+2951 right up run
+2952 up run
+2980 left up run
+2981 up run
+2984 right up
+2988 up
+2994 right up
+2995 up
+3065 right up
+3066 up
+3090 right up
+3091 up
+3096 right up
+3097 right
+3115
+3121 confirm
+3124
+3221 confirm
+3224
+3321 confirm
+3324
+3364 right
+3375 right up run
+3392 up run
+3407 right up run
+3408 up run
+3410 left up run
+3417 up run
+3433 left up run
+3434 up run
+3459 left
+3463 left up run
+3480 up run
+3508 right up run
+3509 up run
+3540 right up run
+3541 up run
+3565 left up run
+3566 up run
+3570 left up
+3576 up
+3593 left up
+3594 up
+3601 left up
+3602 up
+3603 right
+3608
+3614 confirm
+3615
+3651 up
+3955

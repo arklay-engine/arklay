@@ -1065,6 +1065,21 @@ const ITEM_GET_UNCUT_TICK: u8 = 8;
 /// A file's fade (`St_init02`'s sub 3) ends, and its page cue plays, this
 /// many ticks after the window's sixth.
 const ITEM_GET_FILE_FADE_TICKS: u8 = 5;
+/// `St_main02`'s routines in the page's byte (`0x691F61`): `St_get_check`,
+/// then `St_get_item`.
+const ITEM_GET_ROUTINE_CHECK: u8 = 2;
+const ITEM_GET_ROUTINE_ITEM: u8 = 3;
+/// `St_get_item`'s subs in `0x691F62`: the question, the fly, the take, a
+/// no's count out (from 4, a tick each), and the personal slot's wait and
+/// its last tick.
+const ITEM_GET_SUB_ASK: u8 = 1;
+const ITEM_GET_SUB_FLY: u8 = 2;
+const ITEM_GET_SUB_TAKE: u8 = 3;
+const ITEM_GET_SUB_REFUSE: u8 = 4;
+const ITEM_GET_SUB_PERSONAL: u8 = 0x13;
+const ITEM_GET_SUB_PERSONAL_FLY: u8 = 0x14;
+/// `St_get_file`'s sub when the reader exits, which the close leaves.
+const ITEM_GET_FILE_SUB_EXIT: u8 = 6;
 
 /// What `room_set` (0x00477904) backs up when the model byte makes the
 /// player Rebecca in Chris's game, and puts back when it makes him Chris
@@ -9978,6 +9993,7 @@ impl GameState {
             // 0x60A)`, for every pick-up.
             self.pad_repeat.set(pad_repeat::STATUS_SETTING);
             self.start_re2_status_task();
+            self.re2_item_get_page_open(file_of_item(item).is_none());
             // Game mode's step 5 zeroes `fg_stop` there, which a drawer's
             // open raised.
             self.re2_drawer_window_stop(true);
@@ -10032,6 +10048,7 @@ impl GameState {
                 self.state_bytes[usize::from(STATE_BYTE_SELECTED_ITEM)] = item;
                 let check = self.re2_item_get_slot(get.action);
                 get.slot = check.ok();
+                self.re2_item_get_page_check(self.re2_personal_pickup(item), &check);
                 match check {
                     // `St_get_check` sends the personal slot's item to sub
                     // 0x13 before it looks at the slots: no question, and
@@ -10108,10 +10125,81 @@ impl GameState {
         if phase == Re2ItemGetPhase::FileFade && ticks > 0 {
             self.re2_file.page_draws = self.re2_file.page_draws.saturating_add(1);
         }
+        self.re2_item_get_page_tick(phase, ticks, get.file.is_some());
         get.phase = phase;
         get.ticks = ticks;
         self.re2_item_get = Some(get);
         cues
+    }
+
+    /// The get-item window's `Status` start, whose page bytes the item box's
+    /// page shares; for an item, `St_init02` (`0x4FD2C0`) then sets routine
+    /// 2, `St_get_check`. A file's reader (its routine 4 and `St_get_file`'s
+    /// subs) is not modelled: its routine stays 0 until the close.
+    fn re2_item_get_page_open(&mut self, item: bool) {
+        self.re2_box_bytes.status_start();
+        if item {
+            self.re2_box_bytes.routine = ITEM_GET_ROUTINE_CHECK;
+        }
+    }
+
+    /// The page bytes `St_get_item` (`0x4FD6F0`) and `St_main02` leave on
+    /// this tick of the window's `phase`. A file's reader runs its own
+    /// routines, of which only the sub it exits on is kept.
+    fn re2_item_get_page_tick(&mut self, phase: Re2ItemGetPhase, ticks: u8, file: bool) {
+        let page = &mut self.re2_box_bytes;
+        match phase {
+            // Sub 0x13 counts `0x691F63` up a tick each, and sub 0x14 takes
+            // its last tick.
+            Re2ItemGetPhase::Wait if ticks + 1 < ITEM_GET_WAIT_TICKS => page.count = ticks,
+            Re2ItemGetPhase::Wait => {
+                page.sub = ITEM_GET_SUB_PERSONAL_FLY;
+                page.count = ticks;
+            }
+            // Sub 0x14 zeroes the count for its fly; a question's leaves it.
+            Re2ItemGetPhase::Fly if ticks == 0 => {
+                if page.sub == ITEM_GET_SUB_PERSONAL_FLY {
+                    page.count = 0;
+                }
+                page.sub = ITEM_GET_SUB_FLY;
+            }
+            // Sub 3 on the tick before the take, whose end is sub 0.
+            Re2ItemGetPhase::Fly if ticks + 1 == ITEM_GET_TAKE_TICK => page.sub = ITEM_GET_SUB_TAKE,
+            Re2ItemGetPhase::Shown if ticks == 0 => page.sub = 0,
+            // Sub 4 counts up to 0x12, which starts the close.
+            Re2ItemGetPhase::Refuse => page.sub = ITEM_GET_SUB_REFUSE + ticks,
+            // `St_main02`'s routine 0 sets the fade out and routine 1 waits
+            // for it, to the task's exit.
+            Re2ItemGetPhase::Close if ticks == 0 => {
+                page.routine = itembox2::ROUTINE_FADE_SET;
+                if file {
+                    page.sub = ITEM_GET_FILE_SUB_EXIT;
+                }
+            }
+            Re2ItemGetPhase::Close if ticks == 1 => page.routine = itembox2::ROUTINE_FADE_WAIT,
+            _ => {}
+        }
+    }
+
+    /// `St_get_check` (`0x4FD5C0`): routine 3, `St_get_item`, with sub 1 for
+    /// the question, 0x13 for the personal slot's item and sub 0 for a full
+    /// message, and the count byte (`0x691F63`) 1 when the item joins a stack.
+    fn re2_item_get_page_check(
+        &mut self,
+        personal: bool,
+        check: &Result<crate::scd2::host::ItemGetSlot, u8>,
+    ) {
+        use crate::scd2::host::ItemGetSlot;
+        let page = &mut self.re2_box_bytes;
+        page.routine = ITEM_GET_ROUTINE_ITEM;
+        let (sub, count) = match check {
+            _ if personal => (ITEM_GET_SUB_PERSONAL, 0),
+            Ok(ItemGetSlot::Merge(_)) => (ITEM_GET_SUB_ASK, 1),
+            Ok(_) => (ITEM_GET_SUB_ASK, 0),
+            Err(_) => (0, 0),
+        };
+        page.sub = sub;
+        page.count = count;
     }
 
     /// One tick of game mode 7's computer, on this tick's `Key` and

@@ -111,6 +111,17 @@ pub struct BoxPage {
 const NONE: u8 = 0x80;
 
 impl BoxPage {
+    /// `Status`'s start (`0x501D25`), for every status screen: the page's
+    /// bytes (`0x691F60` to `0x691F6D`) cleared and the START gate
+    /// (`0x691F76`) raised.
+    pub fn status_start(&mut self) {
+        self.routine = 0;
+        self.sub = 0;
+        self.count = 0;
+        self.cursor = 0;
+        self.gate = 1;
+    }
+
     /// `St_init01`'s step 0 (`0x4FBEB0`): the page on the inventory's first
     /// slot, the box's rows as they were left, the lines' pulse at 1.
     pub fn new(top: u8, equipped: u8) -> Self {
