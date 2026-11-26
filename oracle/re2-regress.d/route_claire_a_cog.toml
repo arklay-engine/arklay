@@ -394,3 +394,27 @@ frame_max_mean = 0.95
 frame_windows = [[360, 478, 0.25], [821, 1328, 0.4], [1669, 1874, 0.25], [2085, 2435, 0.25], [2778, 2910, 0.25], [3251, 3809, 0.2]]
 expect = "match"
 record = "--start claire --warp 207:-25640:0:-16590:0:1 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --life 200 --give 0:3:5 --give 2:0x33:1 --give 3:0x2F:1 --give 4:0x4A:1 --give 5:0x3A:1 --give 6:0x43:1 --give 7:0x33:1 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1"
+
+# Rooms 114, 113, 112, 117 and 111: the Grenade Launcher equipped, 113 and 112 to the balcony, 117's licker killed with
+# it, and 111: the Square Crank, the stairs, the cog in the clock, the switch, and the Blue Stone.
+[[run]]
+name = "claire_a_114_111"
+room = "114"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_114_111.lua"
+input = "claire_a_114_111.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 5910
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 5909]
+# 114 to door 0's press (794), the status screen included, 113 from its hand back (1136) to door 1's press (1307), 112 from its hand back (1649) to door 2's press (2427), its
+# scene included, 117 from its hand back (2779) to door 2's press (3737), the licker's fight included, and 111 from its hand back (4089) to the end, its two status
+# screens and scenes included; the doors' frames count only in the whole run's mean (the worst, 3773 (7.1) and 2463, are the 111 and 117 loads, #672); 0.49 measured, the
+# windows 0.05, 0.17, 0.22, 0.06, 0.57
+frame_max_mean = 0.6
+frame_windows = [[360, 793, 0.2], [1136, 1306, 0.3], [1649, 2426, 0.35], [2779, 3736, 0.2], [4089, 5909, 0.7]]
+expect = "match"
+record = "--start claire --warp 114:-25167:0:-14447:1920:4 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --life 200 --give 0:3:5 --give 2:0x33:1 --give 3:0x4A:1 --give 4:0x3A:1 --give 5:0x43:1 --give 6:0x33:1 --give 7:0x09:6 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"
