@@ -196,3 +196,25 @@ frame_max_mean = 1.0
 frame_windows = [[360, 388, 0.2], [682, 970, 0.45], [1323, 2006, 0.3]]
 expect = "match"
 record = "--start claire --warp 20C:-10200:0:-25900:3072:0 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 31:1 --flag 6:33 --flag 6:205 --life 72 --give 0:3:1 --give 2:0x5A:1 --give 3:0x5C:3 --give 4:0x23:1 --give 5:0x26:1 --box 2:0x1E:3 --box 3:0x33:1 --box 4:0x32:1"
+
+# Rooms 110, 10F and 200: from the top of 200's ladder, past 110's licker at a run to door 0, 10F's Lighter, and back
+# through 110 at a walk, which the licker doesn't hear, down the ladder into 200.
+[[run]]
+name = "claire_a_110_200"
+room = "110"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_110_200.lua"
+input = "claire_a_110_200.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2785
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2784]
+# 110 to door 0's press (622), 10F from its hand back (974) to door 1's press (1368) and 110 from its hand back (1720) to the ladder's first press (2383); the doors'
+# frames count only in the whole run's mean (the worst, 658 (7.0), 1404 and 2513, are the 10F, 110 and 200 loads, #672); 0.71 measured, the windows 0.06, 0.06 and 0.04
+frame_max_mean = 0.8
+frame_windows = [[360, 621, 0.2], [974, 1367, 0.2], [1720, 2382, 0.2]]
+expect = "match"
+record = "--start claire --warp 110:-13697:-7200:8942:3224:13 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 31:1 --flag 6:33 --flag 6:205 --life 200 --give 0:3:1 --give 2:0x5A:1 --give 3:0x5C:3 --give 4:0x26:1 --box 2:0x1E:3 --box 3:0x33:1 --box 4:0x32:1"

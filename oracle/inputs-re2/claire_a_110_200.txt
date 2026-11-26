@@ -1,0 +1,129 @@
+# Claire A from the top of 200's ladder in 110 for 10F's Lighter (#896): 110's licker (the Club Key's, 8:119) is left
+# behind at a run, east along the north corridor and down the east corridor to door 0; 10F: the Lighter (8:39) taken
+# facing south, door 1 back into 110, and the way back at a walk, which the licker doesn't hear, to the ladder (door 2,
+# three presses) down into 200
+# made in arklay (steered by a script): 10F loads at 657 and hands back on 973, 110 at 1403 (back on 1719), 200 at 2443,
+# which hands back on 2779
+344 up run
+346 right up run
+347 up run
+350 left up run
+351 up run
+352 left up run
+355 right up run
+362 right
+364 right up run
+367 right
+369 right up run
+371 right
+373 right up run
+374 right
+377 right up run
+379 up run
+392 right up run
+393 up run
+394 left up run
+403 up run
+420 right up run
+441 up run
+452 right up run
+453 up run
+463 left up run
+464 up run
+469 right up run
+470 up run
+530 left up run
+532 up run
+566 right up run
+567 up run
+569 right up run
+570 left up run
+574 up run
+582 left up run
+583 up run
+593 right up run
+594 up run
+596 left up
+605 up
+607 left up
+608 up
+609 left
+616
+622 confirm
+623
+659 up
+975 right up run
+976 up run
+985 right up
+997 up
+1007 right up
+1008 up
+1023 left up
+1024 right
+1032
+1038 confirm
+1041
+1138 confirm
+1141
+1238 confirm
+1241
+1281 right
+1290 right up
+1306 up
+1325 right up
+1326 up
+1352 right up
+1353 up
+1356 left
+1362
+1368 confirm
+1369
+1405 up
+1721 right up
+1730 up
+1755 right up
+1756 up
+1793 right up
+1794 up
+1796 right up
+1798 up
+1894 right up
+1895 up
+1907 right up
+1908 up
+1935 right up
+1936 up
+2050 right up
+2051 up
+2058 left up
+2059 up
+2085 left up
+2086 up
+2152 right up
+2153 up
+2154 left up
+2167 up
+2177 left up
+2178 up
+2202 left up
+2218 up
+2244 left up
+2245 up
+2270 right up
+2279 up
+2294 right up
+2295 up
+2317 left up
+2340 up
+2350 left up
+2354 up
+2374 left
+2377
+2383 action
+2385
+2395 action
+2397
+2407 action
+2409
+2447 up
+2781
