@@ -1,0 +1,319 @@
+# Chris's game as special_ex_chris_door plays it into room F14 (2046), then aiming down F14's corridor from 2090 and firing every 16 ticks while the zombies `Sce_em_set2` placed come (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+740 right
+743
+860 down
+863
+890 up
+893
+920 confirm
+923
+1250 left
+1253
+1290 left
+1293
+1350 confirm
+1353
+1600 confirm
+1603
+1700 up
+1750 left
+1761 up
+1902 right
+1909
+1920 confirm
+1923
+2090 aim fire
+2093 aim
+2106 aim fire
+2109 aim
+2122 aim fire
+2125 aim
+2138 aim fire
+2141 aim
+2154 aim fire
+2157 aim
+2170 aim fire
+2173 aim
+2186 aim fire
+2189 aim
+2202 aim fire
+2205 aim
+2218 aim fire
+2221 aim
+2234 aim fire
+2237 aim
+2250 aim fire
+2253 aim
+2266 aim fire
+2269 aim
+2282 aim fire
+2285 aim
+2298 aim fire
+2301 aim
+2314 aim fire
+2317 aim
+2330 aim fire
+2333 aim
+2346 aim fire
+2349 aim
+2362 aim fire
+2365 aim
+2378 aim fire
+2381 aim
+2394 aim fire
+2397 aim
+2410 aim fire
+2413 aim
+2426 aim fire
+2429 aim
+2442 aim fire
+2445 aim
+2458 aim fire
+2461 aim
+2474 aim fire
+2477 aim
+2490 aim fire
+2493 aim
+2506 aim fire
+2509 aim
+2522 aim fire
+2525 aim
+2538 aim fire
+2541 aim
+2554 aim fire
+2557 aim
+2570 aim fire
+2573 aim
+2586 aim fire
+2589 aim
+2602 aim fire
+2605 aim
+2618 aim fire
+2621 aim
+2634 aim fire
+2637 aim
+2650 aim fire
+2653 aim
+2666 aim fire
+2669 aim
+2682 aim fire
+2685 aim
+2698 aim fire
+2701 aim
+2714 aim fire
+2717 aim
+2730 aim fire
+2733 aim
+2746 aim fire
+2749 aim
+2762 aim fire
+2765 aim
+2778 aim fire
+2781 aim
+2794 aim fire
+2797 aim
+2810 aim fire
+2813 aim
+2826 aim fire
+2829 aim
+2842 aim fire
+2845 aim
+2858 aim fire
+2861 aim
+2874 aim fire
+2877 aim
+2890 aim fire
+2893 aim
+2906 aim fire
+2909 aim
+2922 aim fire
+2925 aim
+2938 aim fire
+2941 aim
+2954 aim fire
+2957 aim
+2970 aim fire
+2973 aim
+2986 aim fire
+2989 aim
+3002 aim fire
+3005 aim
+3018 aim fire
+3021 aim
+3034 aim fire
+3037 aim
+3050 aim fire
+3053 aim
+3066 aim fire
+3069 aim
+3082 aim fire
+3085 aim
+3098 aim fire
+3101 aim
+3114 aim fire
+3117 aim
+3130 aim fire
+3133 aim
+3146 aim fire
+3149 aim
+3162 aim fire
+3165 aim
+3178 aim fire
+3181 aim
+3194 aim fire
+3197 aim
+3210 aim fire
+3213 aim
+3226 aim fire
+3229 aim
+3242 aim fire
+3245 aim
+3258 aim fire
+3261 aim
+3274 aim fire
+3277 aim
+3290 aim fire
+3293 aim
+3306 aim fire
+3309 aim
+3322 aim fire
+3325 aim
+3338 aim fire
+3341 aim
+3354 aim fire
+3357 aim
+3370 aim fire
+3373 aim
+3386 aim fire
+3389 aim
+3402 aim fire
+3405 aim
+3418 aim fire
+3421 aim
+3434 aim fire
+3437 aim
+3450 aim fire
+3453 aim
+3466 aim fire
+3469 aim
+3482 aim fire
+3485 aim
+3498 aim fire
+3501 aim
+3514 aim fire
+3517 aim
+3530 aim fire
+3533 aim
+3546 aim fire
+3549 aim
+3562 aim fire
+3565 aim
+3578 aim fire
+3581 aim
+3594 aim fire
+3597 aim
+3610 aim fire
+3613 aim
+3626 aim fire
+3629 aim
+3642 aim fire
+3645 aim
+3658 aim fire
+3661 aim
+3674 aim fire
+3677 aim
+3690 aim fire
+3693 aim
+3706 aim fire
+3709 aim
+3722 aim fire
+3725 aim
+3738 aim fire
+3741 aim
+3754 aim fire
+3757 aim
+3770 aim fire
+3773 aim
+3786 aim fire
+3789 aim
+3802 aim fire
+3805 aim
+3818 aim fire
+3821 aim
+3834 aim fire
+3837 aim
+3850 aim fire
+3853 aim
+3866 aim fire
+3869 aim
+3882 aim fire
+3885 aim
+3898 aim fire
+3901 aim
+3914 aim fire
+3917 aim
+3930 aim fire
+3933 aim
+3946 aim fire
+3949 aim
+3962 aim fire
+3965 aim
+3978 aim fire
+3981 aim
+3994 aim fire
+3997 aim
+4010 aim fire
+4013 aim
+4026 aim fire
+4029 aim
+4042 aim fire
+4045 aim
+4058 aim fire
+4061 aim
+4074 aim fire
+4077 aim
+4090 aim fire
+4093 aim
+4106 aim fire
+4109 aim
+4122 aim fire
+4125 aim
+4138 aim fire
+4141 aim
+4154 aim fire
+4157 aim
+4170 aim fire
+4173 aim
+4186 aim fire
+4189 aim
+4202 aim fire
+4205 aim
+4218 aim fire
+4221 aim
+4234 aim fire
+4237 aim
+4250 aim fire
+4253 aim
+4266 aim fire
+4269 aim
+4282 aim fire
+4285 aim
+4298 aim fire
+4301
