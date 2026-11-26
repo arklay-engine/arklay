@@ -338,12 +338,6 @@ impl Heap {
         self.top = None;
     }
 
-    /// `Sce_em_set2` allocates at `Mem_top` as `Sce_em_set` does, which isn't followed: `Mem_top`
-    /// is unknown for the rest of the room.
-    pub fn em_set2(&mut self) {
-        self.top = None;
-    }
-
     /// `Snd_bgm_set`: `Snd_bgm_main` loads the main bank when its id changed, and `Snd_bgm_sub` the
     /// sub bank when its id changed or the main was loaded, both at [`BGM_AT`]; an id of 0xFF loads
     /// nothing. (`Snd_bgm_set` returns early under `fg_system`'s 0x2000, the attract demos, which

@@ -767,6 +767,9 @@ pub const STATUS_HOLD: u8 = 25;
 pub const SET_ROOM_STATUS_KEEP: u32 = 0xFFF0_4000;
 /// `fg_enemy_0`'s bank: stages below this keep theirs there, `Sce_em_set` says.
 const ENEMY_BANK: u8 = 6;
+/// The banks beside `fg_enemy_0` and `fg_enemy_1` (0x98EEB0 and 0x98EED0,
+/// banks 38 and 39) where `Sce_em_set2` puts an enemy its draw places.
+const ENEMY_CHANCE_BANK: u8 = 38;
 const CAMPAIGN_ENEMY_STAGES: u8 = 3;
 /// `Sce_em_set`'s flag of someone who can't die.
 pub const NO_ENEMY_FLAG: u8 = 0xFF;
@@ -2749,6 +2752,30 @@ impl GameHost<'_> {
         }
     }
 
+    /// `Sce_em_set2` (`0x4E7CB0`): on the room's first visit (its `fg_map`
+    /// bit down) a draw of `Rnd` against the record's chance (`+0x16`,
+    /// which a script's `work_copy` sets) puts the enemy's flag in the
+    /// bank beside the placement's ([`ENEMY_CHANCE_BANK`]) when it is
+    /// under the chance, else in the placement's own, which then leaves it
+    /// out; the rest is `Sce_em_set`'s.
+    fn sce_em_set2(&mut self, at: impl Fn(usize) -> i64) {
+        if !self.game.re2_room_visited() {
+            let checked = self
+                .game
+                .re2
+                .enemy_flag_bank(self.game.origin().re2_stage());
+            let draw = self.game.re2.rnd.draw();
+            let chance = at(15) as u32;
+            let bank = if (u32::from(draw) * 100) >> 8 < chance {
+                checked - ENEMY_BANK + ENEMY_CHANCE_BANK
+            } else {
+                checked
+            };
+            self.game.re2.set_flag(bank, at(8) as u8, 1);
+        }
+        self.sce_em_set(at);
+    }
+
     /// `Sce_em_set`, for the characters `_Spl` runs.
     fn sce_em_set(&mut self, at: impl Fn(usize) -> i64) {
         let id = at(2) as u8;
@@ -3490,10 +3517,7 @@ impl Host for GameHost<'_> {
                 self.game.re2_heap.rbj_reset();
                 log_unmodelled(op.mnemonic);
             }
-            "sce_em_set2" => {
-                self.game.re2_heap.em_set2();
-                log_unmodelled(op.mnemonic);
-            }
+            "sce_em_set2" => self.sce_em_set2(at),
             "obj_model_set" => self.obj_model_set(at),
             "speed_set" => {
                 if let Some(speed) = self
@@ -5778,6 +5802,54 @@ mod tests {
         };
         assert!(check(&mut host, ahead) != Step::False);
         assert!(check(&mut host, behind) == Step::False);
+    }
+
+    /// `Sce_em_set2` in Extreme Battle's F14 (`init_00`'s zombie in slot 0,
+    /// flag 64): on the first visit a draw of `Rnd` against the chance
+    /// puts the flag in bank 39 (placed) or in `fg_enemy_1` (left out);
+    /// once the room is visited there is no draw.
+    #[test]
+    fn sce_em_set2_draws_its_chance_on_a_rooms_first_visit() {
+        let em = |chance: i64| -> Vec<i64> {
+            vec![
+                0, 0, 0x1F, 6, 0, 0, 4, 1, 64, -25900, 0, -1199, 571, 0, 0, chance, 0,
+            ]
+        };
+        let fresh = || {
+            let mut game = GameState::default();
+            game.id = crate::state::RoomId::parse("f140").unwrap();
+            game.re2.rnd = crate::zombie2::Rnd(57857);
+            game
+        };
+        let mut next = crate::zombie2::Rnd(57857);
+        let draw = u32::from(next.draw());
+        // `special_ex_leon_door`'s first draw on F14: (r * 100) >> 8.
+        let roll = (draw * 100) >> 8;
+        for (chance, placed) in [
+            (0, false),
+            (100, true),
+            (roll as i64, false),
+            (roll as i64 + 1, true),
+        ] {
+            let mut game = fresh();
+            exec(&mut game, "sce_em_set2", &em(chance));
+            assert_eq!(game.re2.rnd, next, "one draw at {chance}");
+            assert_eq!(game.re2.flag(39, 64), placed, "chance {chance}");
+            assert_eq!(game.re2.flag(7, 64), !placed, "chance {chance}");
+            assert_eq!(game.re2.enemies, u8::from(placed), "chance {chance}");
+        }
+        // A visited room draws nothing and keeps the flags it has.
+        let mut game = fresh();
+        let stage = game.id.re2_stage() - 1;
+        game.re2.set_flag(
+            crate::game::status2::map::VISITED_BANK,
+            crate::game::status2::map::visited_index(stage, 0x14),
+            1,
+        );
+        exec(&mut game, "sce_em_set2", &em(100));
+        assert_eq!(game.re2.rnd, crate::zombie2::Rnd(57857));
+        assert!(!game.re2.flag(39, 64) && !game.re2.flag(7, 64));
+        assert_eq!(game.re2.enemies, 1);
     }
 
     #[test]

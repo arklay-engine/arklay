@@ -404,7 +404,7 @@ fn the_rdts_relocated_entries_are_addresses() {
 }
 
 #[test]
-fn the_zapping_models_a_mirror_and_an_em_set2_end_what_is_known() {
+fn the_zapping_models_and_a_mirror_end_what_is_known() {
     let files = files(vec![
         (rdt_entry("1000"), rdt(0x2000, 0x100)),
         (emd_entry(ZOMBIE, 0), zombie_model()),
@@ -440,7 +440,6 @@ fn the_zapping_models_a_mirror_and_an_em_set2_end_what_is_known() {
         })
         .is_some()
     );
-    assert_eq!(after(&|heap: &mut Heap| heap.em_set2()), None);
     assert!(after(&|_: &mut Heap| {}).is_some());
 }
 
