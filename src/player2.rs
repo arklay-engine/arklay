@@ -5672,10 +5672,11 @@ impl Mover<'_, '_> {
     /// matrix, or `RotMatrix` of the pose's angles. A `J_seq2` body's
     /// `rotation` is not read, so a turn added to the pose's angles (the
     /// neck's, `Neck::apply`) would be lost: no `J_seq2` body (the lickers)
-    /// calls `Rot_neck_em`.
+    /// calls `Rot_neck_em`, and `Em_28`, whose death plays through `J_seq2`,
+    /// turns no part from then on.
     fn part_rotation(&self, part: usize, rotation: [i16; 3]) -> [[i16; 3]; 3] {
         debug_assert!(
-            self.work.jseq2.is_none() || self.work.neck.turn == [0; 2],
+            self.work.jseq2.is_none() || self.work.neck.turn == [0; 2] || self.work.neck.thirds,
             "a J_seq2 body's neck turn is not drawn"
         );
         self.work
@@ -5691,6 +5692,23 @@ impl Mover<'_, '_> {
     /// `Joint_move`) leaves them.
     pub(crate) fn start_jseq2(&mut self) {
         let parts = self.posed_rotations().into_iter().map(rot_matrix).collect();
+        self.work.jseq2 = Some(parts);
+    }
+
+    /// Play through `J_seq2` from the matrices the last draw had: each part's
+    /// `M` the `RotMatrix` of its angles with the neck's turn on them, as
+    /// `J_seq` and then `Em_28`'s `RotMatrix` of parts 2 to 4 leave them
+    /// before its death's `Joint_move2` (`FUN_0047b5b0`).
+    pub(crate) fn start_jseq2_turned(&mut self) {
+        let (clips, keyframes) = self.tick.banks.get(self.work.bank);
+        let parts = self
+            .player
+            .anim
+            .pose_keyframe(clips, keyframes)
+            .map_or_else(Vec::new, |mut pose| {
+                self.work.neck.apply(&mut pose);
+                pose.rotations.into_iter().map(rot_matrix).collect()
+            });
         self.work.jseq2 = Some(parts);
     }
 
@@ -12488,6 +12506,96 @@ mod tests {
         assert_eq!(mover.work.jseq2, None, "the init's step is `J_seq`'s");
         mover.start_jseq2();
         assert_eq!(mover.work.jseq2, Some(vec![raw]));
+    }
+
+    /// `Em_28`'s death starts `J_seq2` from the matrices its last draw had:
+    /// `J_seq`'s `RotMatrix` of each part's angles, and on parts 2 to 4 the
+    /// third of the neck's turn its `RotMatrix` added. The fall's first step
+    /// then eases those matrices (`HMatrix`), not the angles.
+    #[test]
+    fn the_adults_jseq2_starts_from_the_turned_matrices() {
+        let rotations = vec![
+            [0x10, 0x20, 0x30],
+            [0x40, 0x50, 0x60],
+            [0x70, 0x80, 0x90],
+            [0xA0, 0xB0, 0xC0],
+            [0xD0, 0xE0, 0xF0],
+        ];
+        let target: Vec<[i16; 3]> = rotations.iter().map(|r| r.map(|v| v + 0x100)).collect();
+        let mut setup = Setup::new(0);
+        setup.keyframes = [rotations.clone(), target.clone()]
+            .into_iter()
+            .map(|rotations| Keyframe {
+                offset: [0; 3],
+                vertex: [0; 3],
+                rotations,
+            })
+            .collect();
+        setup.clips = (0..2)
+            .map(|keyframe| Clip {
+                frames: vec![ClipFrame {
+                    keyframe,
+                    timing: 0,
+                    flags: 0,
+                }],
+            })
+            .collect();
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0x28,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: [None; NECK_WORKS],
+            targets: &[],
+            neck_targets: &[],
+            enemies: 0,
+            pushing: false,
+            objects: &[],
+            key_trg: 0,
+        };
+        let mut mover = Mover::new(&mut setup.work, &mut setup.player, &tick);
+        mover.work.bank = Bank::Pld;
+        mover.work.neck.thirds = true;
+        mover.work.neck.turn = [0x90, 0];
+        mover.work.move_no = 0;
+        mover.work.move_cnt = 0;
+        mover.work.hokan = 0;
+        mover.joint_move_late_reversed(0x40, false);
+        mover.start_jseq2_turned();
+        let turned: Vec<_> = rotations
+            .iter()
+            .enumerate()
+            .map(|(part, &[x, y, z])| {
+                let third = if (2..=4).contains(&part) { 0x30 } else { 0 };
+                rot_matrix([x, y + third, z])
+            })
+            .collect();
+        assert_eq!(mover.work.jseq2.as_ref(), Some(&turned));
+        // The death's `Hokan_flg` 0x3f and `Joint_move2`'s 0x40.
+        mover.work.move_no = 1;
+        mover.work.move_cnt = 0;
+        mover.work.hokan = 0x3F;
+        mover.joint_move_late_reversed(0x40, false);
+        let eased: Vec<_> = turned
+            .iter()
+            .zip(&target)
+            .map(|(&last, &rotation)| jseq2_matrix(last, rotation, Some(0x40 * 0x3F)))
+            .collect();
+        assert_eq!(mover.work.jseq2, Some(eased));
+        assert_eq!(mover.work.hokan, 0x3E);
     }
 
     /// The draw's joint matrices are the game's seen with Y flipped, so the
