@@ -21603,6 +21603,7 @@ fn run_re2_init(
     crate::game::pl_change2::set_room_change(game);
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
+    crate::character2::pl_init_atd(game);
     if game.re2.player.title_first_move {
         // A game the title starts: `Set_room`'s `Pl_init` comes before
         // `Sce_scheduler_set`, so a scene the load pass starts on the player
@@ -22734,6 +22735,9 @@ fn tick_room_timed(
         }
     } else if !player_script::control_gate(context.game, context.player) {
         tick_pad_driven_player(&mut context, pad);
+    }
+    if context.game.is_re2_room {
+        crate::character2::oba_ck_em2_unmoved(context.game, context.player);
     }
     // `update_player_anim` runs `EntityUpdateLookAtAngles` after the state
     // function and before the collision pass, whether or not the message gate
