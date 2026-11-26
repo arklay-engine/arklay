@@ -1711,17 +1711,24 @@ fn hung_on(
 /// other Ben, 0x46, which `_Spl`'s tables run alike.
 const BEN: u8 = 0x44;
 const BEN_ALT: u8 = 0x46;
+/// Irons's id, whose `Spl_Sp_Move` is his death in room 300.
+const IRONS: u8 = 0x40;
 
 /// `Spl_Sp_Move` (`0x4f6e50`, `_Spl`'s `Routine_0` 8): a character's own
 /// scene, from the table at `0x53d6e8` by `Id` and `Routine_1`. Only `Routine_1`
-/// 0 has entries: 0x40's (`0x4f6e70`, not ported) and Ben's, 0x44's and
+/// 0 has entries: 0x40's (Irons's death, `Spl_sp40_00`) and Ben's, 0x44's and
 /// 0x46's (`Spl_sp44_00`). Anyone else stands still.
 fn spl_sp_move(game: &mut GameState, character: &mut Character, tick: &Tick<'_>, slot: usize) {
-    if character.work.routine[1] != 0 || !matches!(character.id, BEN | BEN_ALT) {
+    if character.work.routine[1] != 0 || !matches!(character.id, IRONS | BEN | BEN_ALT) {
         return;
     }
+    let irons = character.id == IRONS;
     let effects = player2::spl_special(&mut character.work, &mut character.body, tick, |mover| {
-        spl_sp44_00(mover)
+        if irons {
+            spl_sp40_00(mover)
+        } else {
+            spl_sp44_00(mover)
+        }
     });
     let anchor = crate::esp2::Anchor {
         body: crate::esp2::Body::Enemy(slot as u8),
@@ -1732,31 +1739,55 @@ fn spl_sp_move(game: &mut GameState, character: &mut Character, tick: &Tick<'_>,
             .effects
             .call_on_part(kind, row, size, dir, anchor, matrix, point);
     }
-    if effects.burst
-        && let Some(embryo) = game.re2.characters.0.get_mut(1).and_then(Option::as_mut)
-    {
-        embryo.work.routine[2] = 5;
+    if let Some(embryo) = game.re2.characters.0.get_mut(1).and_then(Option::as_mut) {
+        let step = &mut embryo.work.routine[2];
+        if effects.burst {
+            *step = 5;
+        }
+        *step = step.wrapping_add(effects.embryo_steps);
     }
 }
 
-/// What Ben's death did this tick: the `Esp_call`s on his part 0 (kind, row,
-/// size, direction, the part's `Workm` as the last draw left it, and the
-/// point on it), and whether it let the embryo out of him.
+/// What a death in `Spl_Sp_Move` did this tick: the `Esp_call`s on the
+/// body's part 0 (kind, row, size, direction, the part's `Workm` as the last
+/// draw left it, and the point on it), whether it let the embryo out
+/// (`enemy_work[1]`'s `Routine_2` 5), and how many times Irons's step 3
+/// moved that `Routine_2` on by one.
 #[derive(Debug, Default)]
 struct Sp44 {
     calls: Vec<(u8, u8, u16, i16, player2::Matrix, [i16; 3])>,
     burst: bool,
+    embryo_steps: u8,
 }
 
 /// `Spl_sp44_00` (`0x4f7690`): Ben's death, which the G embryo in him starts
-/// (`FUN_00474b80` sets his routines to 8, 0, 0). Clip 0 plays once, through
-/// `Hokan_flg` 0xf, with his blood on part 0: two drops at the start, two
-/// every fourth frame below 0x2a further down his body each time (`Timer0`,
-/// `+0x158`), and kind 0 row 2 every fourth frame from 0x24 to 0x36; on
-/// frame 0x46 the embryo comes out (`enemy_work[1]`'s `Routine_2` 5). What
-/// the death does to his parts as drawn (part 15 shown, parts 0's and 15's
-/// swell, the textures' moves) isn't drawn.
+/// (`FUN_00474b80` sets his routines to 8, 0, 0). See [`spl_sp_death`];
+/// his step 3 does nothing.
 fn spl_sp44_00(mover: &mut player2::Mover<'_, '_>) -> Sp44 {
+    spl_sp_death(mover, false)
+}
+
+/// `Spl_sp40_00` (`0x4f6e70`): Irons's death in room 300, which the G embryo
+/// in him starts as Ben's does. Steps 0 to 2 are Ben's (see
+/// [`spl_sp_death`]); step 2 falls into 3, which counts `Timer0` (`+0x158`)
+/// down from 0x96: at 0x82 it moves the embryo's `Routine_2` on one, from
+/// 0x81 to 0x61 it swells and shrinks part 0, from 0x8b to 0x74 it bleeds
+/// kind 0 row 2 (0xfa0) on part 0 every eighth count, and on the tick it
+/// counts from 0 it goes on to step 4 (nothing) and moves the embryo's
+/// `Routine_2` on again.
+fn spl_sp40_00(mover: &mut player2::Mover<'_, '_>) -> Sp44 {
+    spl_sp_death(mover, true)
+}
+
+/// Steps 0 to 3 of `Spl_sp44_00` and `Spl_sp40_00`, alike but for what they
+/// draw and Irons's step 3. Clip 0 plays once, through `Hokan_flg` 0xf, with
+/// blood on part 0: two drops at the start, two every fourth frame below
+/// 0x2a further down the body each time (`Timer0`, `+0x158`), and kind 0
+/// row 2 every fourth frame from 0x24 to 0x36; on frame 0x46 the embryo
+/// comes out (`enemy_work[1]`'s `Routine_2` 5). What the death does to the
+/// parts as drawn (parts shown, part 0's and its twin's swell as weights,
+/// the textures' moves) isn't drawn.
+fn spl_sp_death(mover: &mut player2::Mover<'_, '_>, irons: bool) -> Sp44 {
     let mut out = Sp44::default();
     let dir = mover.player.angle as i16;
     let part0 = mover.work.workm(0);
@@ -1851,10 +1882,41 @@ fn spl_sp44_00(mover: &mut player2::Mover<'_, '_>) -> Sp44 {
         2 => {
             work.timers[0] = 0x96;
             work.routine[2] = 3;
+            if irons {
+                spl_sp40_step_3(work, &mut out, |out| call(out, 2, 0xFA0, dir, [0; 3]));
+            }
+        }
+        3 if irons => {
+            spl_sp40_step_3(work, &mut out, |out| call(out, 2, 0xFA0, dir, [0; 3]));
         }
         _ => {}
     }
     out
+}
+
+/// `Spl_sp40_00`'s step 3, by `Timer0` (`+0x158`, signed): see
+/// [`spl_sp40_00`]. `bleed` is its `Esp_call(0x20fa0)` on part 0.
+fn spl_sp40_step_3(work: &mut player2::Work, out: &mut Sp44, bleed: impl Fn(&mut Sp44)) {
+    let count = work.timers[0] as i16;
+    if count == 0x82 {
+        out.embryo_steps = out.embryo_steps.wrapping_add(1);
+    }
+    let swell = match count {
+        0x78..=0x81 => 100,
+        0x72..=0x76 => -200,
+        0x67..=0x70 => 0x50,
+        0x61..=0x65 => -0xA0,
+        _ => 0,
+    };
+    work.sp_weight = work.sp_weight.wrapping_add(swell);
+    if count > 0x73 && count < 0x8C && count & 7 == 0 {
+        bleed(out);
+    }
+    work.timers[0] = count.wrapping_sub(1) as u16;
+    if count == 0 {
+        work.routine[2] = 4;
+        out.embryo_steps = out.embryo_steps.wrapping_add(1);
+    }
 }
 
 /// `Game_loop` and `Em_init_move` start at `splayer_work`.
@@ -3298,6 +3360,8 @@ mod tests {
             (BEN, 0, true),
             (BEN_ALT, 0, true),
             (BEN, 1, false),
+            (IRONS, 0, true),
+            (IRONS, 1, false),
             (0x41, 0, false),
         ] {
             let mut game = GameState::default();
@@ -3306,6 +3370,123 @@ mod tests {
             ben.work.routine[1] = one;
             spl_sp_move(&mut game, &mut ben, &tick, 0);
             assert_eq!(ben.work.routine[2] != 0, runs, "{id:#x} {one}");
+        }
+    }
+
+    /// Irons in his death (`Spl_sp40_00`) at `step` with `Timer0` `count`,
+    /// and the embryo in `enemy_work[1]` at `Routine_2` `embryo`.
+    fn irons_dying(step: u8, count: u16, embryo: u8) -> (GameState, Character) {
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![None; 3];
+        let mut g = sherry(0);
+        g.id = crate::zombie2::EMBRYO_ID;
+        g.work.routine = [1, 3, embryo, 0];
+        game.re2.characters.0[1] = Some(Box::new(g));
+        let mut irons = ben_dying(step, 0);
+        irons.id = IRONS;
+        irons.model = IRONS;
+        irons.work.timers[0] = count;
+        (game, irons)
+    }
+
+    fn embryo_step(game: &GameState) -> u8 {
+        game.re2.characters.0[1].as_ref().unwrap().work.routine[2]
+    }
+
+    /// Irons's death starts as Ben's does: clip 0 of the room's bank through
+    /// `Hokan_flg` 0xf, his blood on part 0, and on frame 0x46 the embryo
+    /// out of him (`Routine_2` 5).
+    #[test]
+    fn irons_s_death_plays_clip_0_and_lets_the_embryo_out() {
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        let (mut game, mut irons) = irons_dying(0, 0, 2);
+        irons.work.move_cnt = 9;
+        irons.work.bank = player2::Bank::Weapon;
+        spl_sp_move(&mut game, &mut irons, &tick, 0);
+        assert_eq!(irons.work.bank, player2::Bank::Room);
+        assert_eq!((irons.work.move_no, irons.work.hokan), (0, 0xF));
+        assert_eq!(irons.work.timers[0], 1);
+        assert_eq!(embryo_step(&game), 2);
+        let (mut game, mut irons) = irons_dying(1, 0, 2);
+        irons.work.move_cnt = 0x46;
+        spl_sp_move(&mut game, &mut irons, &tick, 0);
+        assert_eq!(embryo_step(&game), 5);
+    }
+
+    /// Step 2 sets `Timer0` 0x96 and falls into step 3, which counts it
+    /// down; at 0x82 it moves the embryo's `Routine_2` on one, and on the
+    /// tick it counts from 0 it goes on to step 4 and moves it on again.
+    /// Ben's step 2 doesn't fall through, and his step 3 does nothing.
+    #[test]
+    fn irons_s_death_counts_down_and_moves_the_embryo_on() {
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        let (mut game, mut irons) = irons_dying(2, 0, 9);
+        spl_sp_move(&mut game, &mut irons, &tick, 0);
+        assert_eq!((irons.work.routine[2], irons.work.timers[0]), (3, 0x95));
+        assert_eq!(embryo_step(&game), 9);
+        let (mut game, mut irons) = irons_dying(3, 0x82, 9);
+        spl_sp_move(&mut game, &mut irons, &tick, 0);
+        assert_eq!((irons.work.routine[2], irons.work.timers[0]), (3, 0x81));
+        assert_eq!(embryo_step(&game), 10);
+        let (mut game, mut irons) = irons_dying(3, 1, 10);
+        spl_sp_move(&mut game, &mut irons, &tick, 0);
+        assert_eq!((irons.work.routine[2], irons.work.timers[0]), (3, 0));
+        assert_eq!(embryo_step(&game), 10);
+        spl_sp_move(&mut game, &mut irons, &tick, 0);
+        assert_eq!((irons.work.routine[2], irons.work.timers[0]), (4, 0xFFFF));
+        assert_eq!(embryo_step(&game), 11);
+        spl_sp_move(&mut game, &mut irons, &tick, 0);
+        assert_eq!(irons.work.timers[0], 0xFFFF, "step 4 does nothing");
+        let (mut game, mut ben) = irons_dying(2, 0, 9);
+        ben.id = BEN;
+        spl_sp_move(&mut game, &mut ben, &tick, 0);
+        assert_eq!((ben.work.routine[2], ben.work.timers[0]), (3, 0x96));
+        ben.work.timers[0] = 0x82;
+        spl_sp_move(&mut game, &mut ben, &tick, 0);
+        assert_eq!((ben.work.routine[2], ben.work.timers[0]), (3, 0x82));
+        assert_eq!(embryo_step(&game), 9);
+    }
+
+    /// Step 3 swells part 0 by 100 from 0x81 to 0x78, shrinks it by 200
+    /// from 0x76 to 0x72, swells it by 0x50 from 0x70 to 0x67 and shrinks
+    /// it by 0xa0 from 0x65 to 0x61; it bleeds kind 0 row 2 (0xfa0) on
+    /// part 0 at the counts of eight from 0x88 to 0x78.
+    #[test]
+    fn irons_s_death_swells_part_0_and_bleeds_by_its_count() {
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        for (count, swell, bleeds) in [
+            (0x90, 0, false),
+            (0x88, 0, true),
+            (0x82, 0, false),
+            (0x81, 100, false),
+            (0x80, 100, true),
+            (0x78, 100, true),
+            (0x77, 0, false),
+            (0x76, -200, false),
+            (0x72, -200, false),
+            (0x71, 0, false),
+            (0x70, 0x50, false),
+            (0x67, 0x50, false),
+            (0x66, 0, false),
+            (0x65, -0xA0, false),
+            (0x61, -0xA0, false),
+            (0x60, 0, false),
+        ] {
+            let (_, mut irons) = irons_dying(3, count, 9);
+            irons.work.sp_weight = 0x800;
+            let out = player2::spl_special(&mut irons.work, &mut irons.body, &tick, spl_sp40_00);
+            assert_eq!(irons.work.sp_weight, 0x800 + swell, "{count:#x}");
+            let calls: Vec<_> = out
+                .calls
+                .iter()
+                .map(|&(kind, row, size, dir, _, point)| (kind, row, size, dir, point))
+                .collect();
+            let expected: &[_] = if bleeds {
+                &[(0, 2, 0xFA0, 0x400, [0; 3])]
+            } else {
+                &[]
+            };
+            assert_eq!(calls, expected, "{count:#x}");
         }
     }
 
