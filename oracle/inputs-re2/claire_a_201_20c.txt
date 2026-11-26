@@ -1,0 +1,154 @@
+# Claire A from 204's door 0 back in 201: door 0 into 200, the stairs up to the balcony (the action key at their foot), door 3
+# into 20A, a wait in its passage until its four zombies come down, then north by the west wall, round the north room's
+# far side and east along the corridor to door 2, and into 20C (#896, the detour's way back)
+# made in arklay (steered by a script round the zombies): no zombie reaches her; 200 loads at 640, 20A at 1374, 20C at
+# 2432, which hands back on 2738
+344 up
+345 left up run
+356 up run
+364 right up run
+365 up run
+367 right up run
+368 up run
+371 right up run
+372 up run
+375 right up run
+376 up run
+378 right up run
+379 up run
+381 right up run
+382 up run
+386 right up run
+387 up run
+393 right up run
+394 up run
+400 right up run
+401 up run
+403 right up run
+404 up run
+407 right up run
+408 up run
+410 right up run
+411 up run
+413 right up run
+414 up run
+415 right up run
+416 up run
+420 right up run
+421 up run
+425 left up
+432 up
+433 left up
+434 up
+485 right up
+486 up
+497 right up
+498 up
+505 right up
+506 up
+513 right up
+514 up
+523 right up
+524 up
+576 right up
+577 up
+594 left
+599
+605 confirm
+606
+642 up
+974 right up run
+978 up run
+1013 left up run
+1014 right up
+1025 up
+1044 right up
+1045 up
+1050 right up
+1051 up
+1062 right up
+1063 up
+1107 right
+1119
+1125 confirm
+1126
+1185 left
+1193 left up run
+1209 up run
+1213 left up run
+1214 up run
+1218 right up
+1223 up
+1303 right up
+1304 up
+1329 right up
+1330 up
+1331 left
+1333
+1339 confirm
+1340
+1376 up
+1692 left
+1694 left up run
+1718 left
+1757
+2044 right
+2062 right up run
+2083 up run
+2085 left up run
+2088 right up run
+2094 up run
+2114 left up run
+2115 up run
+2118 left up run
+2119 up run
+2121 left up run
+2126 right up run
+2138 up run
+2148 left up run
+2152 up run
+2161 left up run
+2162 up run
+2164 right up run
+2171 right
+2173 right up run
+2174 right
+2176 right up run
+2178 right
+2180 right up run
+2181 right
+2184 right up run
+2185 right
+2187 right up run
+2188 right
+2190 right up run
+2194 up run
+2206 right up run
+2207 up run
+2226 right up run
+2241 up run
+2242 left up run
+2243 up run
+2244 left up run
+2245 up run
+2246 left up run
+2260 up run
+2276 left up run
+2277 up run
+2291 right up run
+2292 up run
+2293 left up run
+2294 up run
+2309 left up run
+2310 up run
+2333 right up run
+2334 left up
+2337 up
+2346 left up
+2347 up
+2365 left up
+2366 up
+2371 left
+2391
+2397 confirm
+2398
