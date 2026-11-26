@@ -100,7 +100,9 @@ pub const SUB_COMMAND: u8 = 2;
 pub const SUB_OPENING: u8 = 3;
 pub const SUB_CLOSING: u8 = 4;
 
-/// The commands (`0x4F8610`), as the menu's cursor counts them.
+/// The commands (`0x4F8610`), as the menu's cursor counts them. Command 0
+/// is the custom handgun's alone ([`ItemPage::burst`]).
+pub const COMMAND_BURST: u8 = 0;
 pub const COMMAND_COMBINE: u8 = 1;
 pub const COMMAND_CHECK: u8 = 2;
 pub const COMMAND_USE: u8 = 3;
@@ -122,6 +124,13 @@ pub const MESSAGE_BULLETS: u8 = 5;
 pub const MESSAGE_NOT_NOW: u8 = 7;
 /// COMBN step 11's message 0xB, "Will you mix the herb?" with yes and no.
 pub const MESSAGE_MIX: u8 = 0xB;
+
+/// The custom handgun (`Item_work`'s id 4), whose menu has command 0.
+const CUSTOM_HANDGUN: u8 = 4;
+/// `fg_common`'s 0x7E, which command 0 turns over: the custom handgun's
+/// fire, read by `pl_mv05_w2` to `w4`.
+pub const BURST_FLAG: u8 = 0x7E;
+use crate::scd2::host::COMMON_BANK;
 
 /// The first id USE doesn't equip (`0x4F8620`): ammunition from here.
 const FIRST_AMMO: u8 = 0x14;
@@ -261,6 +270,14 @@ pub struct ItemPage {
     /// USE's heal, applied once the panel is done.
     pub amount: i16,
     pub panel: Panel,
+    /// The menu has command 0 (`0x689DF4`'s low byte): the custom
+    /// handgun's, which `St_menu0_item` builds for item 4 alone.
+    pub burst: bool,
+    /// Command 0's label as `St_init_disp_menu1` last built it: on when
+    /// `fg_common`'s 0x7E was. The menu's opening and each tick of the menu
+    /// build it; command 0's tick draws the menu before it turns the flag
+    /// over, so the label shows the change from the next tick.
+    pub burst_label: bool,
 }
 
 impl Default for ItemPage {
@@ -280,6 +297,8 @@ impl Default for ItemPage {
             result: 0,
             amount: 0,
             panel: Panel::default(),
+            burst: false,
+            burst_label: false,
         }
     }
 }
@@ -1221,9 +1240,16 @@ impl GameState {
         match page.sub {
             SUB_GRID => self.re2_grid(page, input, out),
             SUB_MENU => {
-                // `0x4F83C3`: down goes 3, 2, 1, 3; up the other way.
+                page.burst_label = self.re2.flag(COMMON_BANK, BURST_FLAG);
+                // `0x4F83C3`: down goes 3, 2, 1, 3, or 3, 2, 1, 0, 3 with
+                // command 0; up the other way.
+                let bottom = if page.burst {
+                    COMMAND_BURST
+                } else {
+                    COMMAND_COMBINE
+                };
                 if input.down {
-                    page.command_cursor = if page.command_cursor <= COMMAND_COMBINE {
+                    page.command_cursor = if page.command_cursor <= bottom {
                         COMMAND_USE
                     } else {
                         page.command_cursor - 1
@@ -1231,7 +1257,7 @@ impl GameState {
                 }
                 if input.up {
                     page.command_cursor = if page.command_cursor >= COMMAND_USE {
-                        COMMAND_COMBINE
+                        bottom
                     } else {
                         page.command_cursor + 1
                     };
@@ -1251,6 +1277,16 @@ impl GameState {
                 }
             }
             SUB_COMMAND => match page.command {
+                // `0x4F84B6`: command 0 turns `fg_common`'s 0x7E over and
+                // goes back to the menu with its cursor on command 0; the
+                // label drawn this tick is the one before
+                // ([`ItemPage::burst_label`]).
+                COMMAND_BURST if page.burst => {
+                    self.re2.set_flag(COMMON_BANK, BURST_FLAG, 7);
+                    page.sub = SUB_MENU;
+                    page.command = 0;
+                    page.command_cursor = COMMAND_BURST;
+                }
                 COMMAND_COMBINE => self.re2_combine(page, input, out),
                 COMMAND_CHECK => self.re2_check(page, out),
                 COMMAND_USE => self.re2_use(page),
@@ -1286,8 +1322,10 @@ impl GameState {
             out.sounds.push(Sound::Cursor);
         }
         if input.confirm && self.re2_slot(page.cursor)[0] != 0 {
-            // `0x4FF060` builds the menu with its cursor on the top entry.
-            // (The custom handgun's extra entry, command 0, isn't ported.)
+            // `0x4FF060` builds the menu with its cursor on the top entry,
+            // and for the custom handgun with command 0 below the others.
+            page.burst = self.re2_slot(page.cursor)[0] == CUSTOM_HANDGUN;
+            page.burst_label = self.re2.flag(COMMON_BANK, BURST_FLAG);
             page.command_cursor = COMMAND_USE;
             page.sub = SUB_OPENING;
             page.command = 0;

@@ -666,7 +666,7 @@ const STOP_BANK: u8 = 2;
 /// `fg_stop`'s `0x10000000`, which holds `Esp_move`.
 const STOP_EFFECTS: u8 = 3;
 /// `fg_common`.
-const COMMON_BANK: u8 = 4;
+pub const COMMON_BANK: u8 = 4;
 /// `Pri_be_flg`: a bank per camera, 13 onwards, with a bit per mask group.
 const MASK_BANK: usize = 13;
 /// How many cameras `Pri_be_flg` has a bank for.
