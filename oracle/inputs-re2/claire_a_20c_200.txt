@@ -1,0 +1,54 @@
+# Claire A from 20A's door 2 into 20C, straight back: turned round to door 0, back into 20A, west along its corridor, round
+# the north room's far side past its four zombies and down the passage to door 0, onto 200's balcony (#896, the
+# detour for the item box, the desk's First Aid Spray and 204's Green Herb before 20C's loop)
+# made in arklay (steered by a script round the zombies): no zombie reaches her; door 0 of 20C loads 20A at 424, door 0
+# of 20A loads 200 at 1006 and hands back on 1322
+344 left
+389 confirm
+390
+676 right up run
+690 up run
+691 right up run
+692 up run
+715 right up run
+716 up run
+729 left up run
+730 up run
+731 right up run
+732 up run
+738 right up run
+739 up run
+765 left up run
+766 up run
+768 right up run
+789 up run
+794 left
+798 left up run
+818 up run
+836 left up run
+840 up run
+845 left up run
+860 up run
+865 left up run
+866 up run
+871 left up run
+872 up run
+881 left up run
+893 up run
+901 right up run
+916 left up run
+917 up run
+927 left up run
+928 up run
+933 right up run
+934 up run
+936 right up run
+943 up run
+952 right up run
+953 up run
+955 right up run
+957 up run
+960 left up run
+961 left
+971 confirm
+972
