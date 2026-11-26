@@ -1,0 +1,244 @@
+# Claire A from the foot of 110's ladder in 200 back to 20C with the Lighter (#896): west and down the west stairs, across
+# the hall to the east stairs (the action key at their foot), door 3 into 20A, a wait in its passage until a zombie comes
+# within 2500, then north by the west wall, round the north room's far side and east along the corridor to door 2, and
+# into 20C
+# made in arklay (steered by a script round the zombies): no zombie reaches her; 20A loads at 972 and hands back on
+# 1288, 20C at 2096, which hands back on 2402; the steering script's grab check fired while she turned on the spot, so
+# she waits there on alternate left and right taps at 346-387, 438-480 and 645-686
+344 right
+346 left
+347 right
+348 left
+349 right
+350 left
+351 right
+352 left
+353 right
+354 left
+355 right
+356 left
+357 right
+358 left
+359 right
+360 left
+361 right
+362 left
+363 right
+364 left
+365 right
+366 left
+367 right
+368 left
+369 right
+370 left
+371 right
+372 left
+373 right
+374 left
+375 right
+376 left
+377 right
+378 left
+379 right
+380 left
+381 right
+382 left
+383 right
+384 left
+385 right
+386 left
+387 right
+392 right up run
+407 up run
+410 right up run
+411 up run
+414 left up run
+415 up run
+419 left up run
+424 up run
+438 left
+439 right
+440 left
+441 right
+442 left
+443 right
+444 left
+445 right
+446 left
+447 right
+448 left
+449 right
+450 left
+451 right
+452 left
+453 right
+454 left
+455 right
+456 left
+457 right
+458 left
+459 right
+460 left
+461 right
+462 left
+463 right
+464 left
+465 right
+466 left
+467 right
+468 left
+469 right
+470 left
+471 right
+472 left
+473 right
+474 left
+475 right
+476 left
+477 right
+478 left
+479 right
+480 left
+484 left up run
+496 up run
+498 right up run
+499 up run
+550 left up run
+551 up run
+555 right up run
+556 up run
+583 left up run
+584 up run
+586 left up run
+597 up run
+604 left up run
+605 up run
+619 right up run
+620 up run
+623 up
+642 right up
+643 up
+645 right
+646 left
+647 right
+648 left
+649 right
+650 left
+651 right
+652 left
+653 right
+654 left
+655 right
+656 left
+657 right
+658 left
+659 right
+660 left
+661 right
+662 left
+663 right
+664 left
+665 right
+666 left
+667 right
+668 left
+669 right
+670 left
+671 right
+672 left
+673 right
+674 left
+675 right
+676 left
+677 right
+678 left
+679 right
+680 left
+681 right
+682 left
+683 right
+684 left
+685 right
+686 left
+687 right up
+688 up
+691 right up
+692 up
+702 right up
+703 up
+736 left up
+737 up
+738 right
+746
+752 confirm
+753
+812 left
+817 left up run
+831 up run
+840 right up
+843 up
+849 right up
+850 up
+930 left up
+931
+937 confirm
+938
+974 up
+1290 left
+1292 left up run
+1309 up run
+1311 left
+1337
+1763 right
+1776 right up run
+1790 up run
+1791 right up run
+1792 up run
+1796 left up run
+1798 right up run
+1803 up run
+1822 left up run
+1823 up run
+1826 left up run
+1827 up run
+1828 left up run
+1832 right up run
+1842 up run
+1849 right up run
+1850 up run
+1852 left up run
+1856 up run
+1858 left up run
+1859 up run
+1866 right up run
+1871 right
+1873 right up run
+1877 right
+1879 right up run
+1881 right
+1883 right up run
+1887 up run
+1897 right up run
+1898 up run
+1916 right up run
+1928 up run
+1932 left up run
+1934 up run
+1935 left up run
+1946 up run
+1968 left up run
+1969 up run
+1975 right up run
+1976 left up run
+1977 up run
+2006 left up run
+2007 up run
+2013 up
+2025 left up
+2026 up
+2043 left
+2055
+2061 confirm
+2062
+2098 up
+2404
