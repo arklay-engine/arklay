@@ -438,7 +438,7 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
                 at: [zombie.atd.at[0], zombie.atd.at[2]],
                 at_y: zombie.atd.at[1],
                 at_w: zombie.atd.at_w,
-                at_w1: if character.id == crate::zombie2::DOG_ID {
+                widen: if character.id == crate::zombie2::DOG_ID {
                     600
                 } else if character.id == crate::zombie2::ALLIGATOR_ID {
                     // `FUN_00468a10`.
@@ -458,14 +458,11 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
                         | crate::zombie2::ROACH_ID
                         | crate::zombie2::EMBRYO_ID
                 ) {
-                    // `Em_21`, `MrX_init`, `Em_25`'s, `Em_26`'s, `Em_27`'s and
-                    // `Em_29`'s inits never give it an `Atd[1]`.
+                    // Not yet ported from these kinds' inits: 0 here is
+                    // arklay's, not their `+0x1EE`.
                     0
                 } else {
-                    zombie
-                        .licker
-                        .as_ref()
-                        .map_or(500, |licker| licker.head.at_w)
+                    zombie.licker.as_ref().map_or(500, |licker| licker.widen())
                 },
                 neck_y: character.work.neck.position.map_or(pos[1], |neck| neck[1]),
                 ofs_y: zombie.atd.ofs_y,
@@ -2905,6 +2902,84 @@ mod tests {
             oba_ck_em2(&mut game, &mut player, [-850, 0, 0]);
             assert_eq!(player.pos, [x, 0, 0], "player {player_flag}");
             assert_eq!(game.re2.player.at_em_flg, u32::from(player_flag == 0));
+        }
+    }
+
+    #[test]
+    fn a_grenade_meets_a_floor_licker_by_its_wider_blast_box() {
+        // Room 110 (`claire_a_110_10a`, tick 1287): the second round, at
+        // (-25203, -8682, 9875), meets the licker coming on. `Em22_Atd_set_1`
+        // widens a blast's box by 700 / 4 for it (`+0x1EE`), not by its head
+        // box's `At_w` (0x180), which falls short this tick. On a wall
+        // `Em22_Atd_set_2` makes it 0x1E4.
+        let room = RoomId::parse("1100").unwrap();
+        let mut body = crate::player::spawn(room, &RoomState::default());
+        body.pos = [-25866, -7200, 10158];
+        body.angle = 1904;
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.life = 41;
+        zombie.atd = crate::zombie2::Atd {
+            ofs_x: 0x2A0,
+            ofs_y: 0,
+            at_w: 0x250,
+            at_h: 600,
+            w: 1000,
+            at: [-26600, -7200, 10212],
+        };
+        let mut licker = crate::zombie2::licker::Licker::default();
+        licker.head = crate::zombie2::Atd {
+            ofs_x: -0x60,
+            ofs_y: -0x180,
+            at_w: 0x180,
+            at_h: 0x180,
+            w: 0x180,
+            at: [0; 3],
+        };
+        let floor = Box::new(licker);
+        let mut wall = floor.clone();
+        wall.back = Some(crate::zombie2::Atd::default());
+        for (licker, widen) in [(floor, 700), (wall, 0x1E4)] {
+            zombie.licker = Some(licker);
+            let character = Character {
+                id: 0x22,
+                model: 0x22,
+                em_set: (0, 0, NO_ENEMY_FLAG),
+                arms: Arms::default(),
+                be_flg: 1,
+                work: player2::Work::default(),
+                body: body.clone(),
+                kind: 0,
+                kage: None,
+                l_spl: 0,
+                dir_spl: 0,
+                start: (0, 0),
+                sound_type: 0,
+                distance: 0,
+                area: crate::scd2::host::NO_AREA,
+                with_room: false,
+                held_bank: None,
+                partner: None,
+                zombie: Some(zombie.clone()),
+            };
+            let mut game = GameState::default();
+            game.re2.characters.0 = vec![Some(Box::new(character))];
+            let targets = targets_of(&game.re2);
+            assert_eq!(targets[0].widen, widen);
+            let hits = |widen: u16| {
+                let mut targets = targets.clone();
+                targets[0].widen = widen;
+                let blast = crate::weapon2::Blast {
+                    at: [-25203, -8682 + 1000, 9875],
+                    dir: 3048,
+                    word: 0x3_0009,
+                };
+                let mut rect = [-1400, 0, 350, 250];
+                crate::weapon2::blast_ck(&blast, &mut rect, &mut targets)
+                    .iter()
+                    .any(|effect| matches!(effect, crate::weapon2::BlastEffect::Hit(_)))
+            };
+            assert!(hits(widen));
+            assert!(!hits(0x180));
         }
     }
 

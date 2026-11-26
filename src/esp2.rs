@@ -3657,7 +3657,7 @@ pub(crate) mod tests {
             pos,
             at: [pos[0], pos[2]],
             at_y: pos[1],
-            at_w1: 400,
+            widen: 400,
             ofs_y: -1000,
             at_h: 1000,
             ..Default::default()
@@ -3903,7 +3903,7 @@ pub(crate) mod tests {
             life: 50,
             pos: [-700, 0, 0],
             at: [-700, 0],
-            at_w1: 400,
+            widen: 400,
             ofs_y: -1000,
             at_h: 1000,
             ..Default::default()
