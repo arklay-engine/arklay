@@ -39,6 +39,7 @@ mod bot;
 mod debug_hud;
 mod debug_view;
 mod re2_config;
+mod re2_exb_opening;
 mod re2_pause;
 mod script;
 mod watch;
@@ -2354,6 +2355,14 @@ struct GameSession {
     re2_config: Option<re2_config::Re2Config>,
     /// That screen while it runs (`ui/title.lua`'s option task).
     re2_config_screen: Option<Box<LuaScreen>>,
+    /// Extreme Battle's opening while its task runs
+    /// ([`game::exb_opening2::Opening`]).
+    re2_exb_opening: Option<Box<game::exb_opening2::Opening>>,
+    /// `Game_loop`'s step 1 starts the opening on the next tick.
+    re2_exb_opening_due: bool,
+    /// What the opening's last pass drew, and its static's two pictures.
+    re2_exb_view: Option<game::exb_opening2::View>,
+    re2_exb_static: Option<[Option<Image>; 2]>,
     /// What `FUN_0044af00` kept of the player for the screen's end.
     re2_config_player: Option<re2_config::KeptPlayer>,
     /// The volumes the screen shows, as it last published them.
@@ -3731,6 +3740,10 @@ impl GameSession {
             re2_save_stop: 0,
             re2_config: None,
             re2_config_screen: None,
+            re2_exb_opening: None,
+            re2_exb_opening_due: false,
+            re2_exb_view: None,
+            re2_exb_static: None,
             re2_config_player: None,
             re2_config_shown: [None; 2],
             re2_config_volumes: None,
@@ -4094,6 +4107,9 @@ impl GameSession {
         self.step_re2_save();
         self.step_re2_config();
         let result = self.tick_session(pack, ui, input, action);
+        if self.take_re2_exb_opening_due() {
+            self.start_re2_exb_opening(pack);
+        }
         self.swap_cbuff();
         if start_box {
             self.game.start_re2_box();
@@ -4724,6 +4740,10 @@ impl GameSession {
         }
         // RE 2's results own task 0 from the tick `Game_loop` chains them.
         if self.game.is_re2_room && self.tick_re2_result(pack, &ui, &input) {
+            return Ok(());
+        }
+        // Extreme Battle's opening holds the room's task until it ends.
+        if self.game.is_re2_room && self.tick_re2_exb_opening(pack) {
             return Ok(());
         }
         // RE2's pad has one button for the confirm and the shot (raw 0x80,
@@ -10601,6 +10621,7 @@ impl GameSession {
         self.room_fade_draw = self.room_fade.overlay();
         self.room_fade.tick();
         self.present_skip.movie_set_black(3);
+        self.arm_re2_exb_opening();
     }
 
     /// One tick of the loading narration: advance the message window and, the
@@ -10914,7 +10935,14 @@ impl GameSession {
                     self.re2_save.map_or(0, Re2Save::game_mode)
                 }
             }),
-            re2_option: self.game.is_re2_room.then(|| self.re2_config_trace()),
+            // The option screen's fields, and Extreme Battle's opening's.
+            re2_option: self.game.is_re2_room.then(|| {
+                format!(
+                    "{} exo={}",
+                    self.re2_config_trace(),
+                    self.re2_exb_opening_trace()
+                )
+            }),
             re2_save_screen: self.game.is_re2_room.then(|| self.re2_save_screen_trace()),
             re2_save_scroll: self.game.is_re2_room.then(|| self.re2_save_scroll_trace()),
             re2_save_blink: self
@@ -11103,6 +11131,15 @@ impl GameSession {
                 ],
                 [0, 0, 0, 255],
             );
+            return Ok(());
+        }
+        // Extreme Battle's opening draws over black while the room waits.
+        if self.re2_exb_opening_shows() {
+            self.gpu_scene_visible = false;
+            if let Some(list) = self.framebuffer.list_mut() {
+                list.reset();
+            }
+            self.draw_re2_exb_opening();
             return Ok(());
         }
         // The screens below replace the whole frame, scene included.
@@ -21621,6 +21658,11 @@ fn run_re2_init(
     // A `Sce_Status` the last room's scripts fired doesn't open the screen
     // in this one.
     game.re2_status_request = false;
+    // `Sce_scheduler_set` first raises `fg_common`'s 0xFF under Extreme
+    // Battle while the room isn't visited yet (`fg_map`, by
+    // `Sce_get_map_flg`), and lowers it once it is; `St_room_set` marks the
+    // room after its first scripts.
+    game.re2_extreme_new_room();
     // `Sce_scheduler_set` rolls `Sce_rnd` before the room's first scripts.
     game.re2.sce_rnd_set();
     // And clears the last room's script work before them (`Sce_work_clr`).

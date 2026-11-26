@@ -3558,8 +3558,10 @@ impl Host for GameHost<'_> {
                 }
             }
             "xa_on" => {
+                // `scd_var_stage` + 1: a letter stage's room reads its
+                // stage's bank.
                 let stage = if at(0) == 0 {
-                    self.game.origin().stage
+                    self.game.origin().re2_stage()
                 } else {
                     0
                 };
@@ -5790,6 +5792,10 @@ mod tests {
         assert!(!GameHost { game: &mut game }.waiting());
         exec(&mut game, "xa_on", &[1, 6]);
         assert_eq!(game.re2.voice.request.as_deref(), Some("voice/1/00_06.wav"));
+        // Extreme Battle's F12 (letter stage `F`) is `scd_var_stage` 5.
+        game.id.stage = 15;
+        exec(&mut game, "xa_on", &[0, 100]);
+        assert_eq!(game.re2.voice.request.as_deref(), Some("voice/1/06_64.wav"));
     }
 
     #[test]

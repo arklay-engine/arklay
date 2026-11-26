@@ -15,7 +15,7 @@ frames = [189, 1345]
 expect = "match"
 record = ""
 
-# The same record's game, from `Game_loop`'s first tick (1377): room F12 as `Title_game_init` starts it. This record's boot film picked Claire: `fg_status` bit 31, under which room F12 is disc 1's.
+# The same record's game, from `Game_loop`'s first tick (1377): room F12 as `Title_game_init` starts it, and on 1378 Extreme Battle's opening (`Exbtl_Opening`, 0x446D50), whose first page and its fade and the second page's lines run to the record's end. This record's boot film picked Claire: `fg_status` bit 31, under which room F12 is disc 1's.
 [[run]]
 name = "special_ex_play"
 ref = "special_ex"
@@ -23,12 +23,13 @@ ui = "title"
 boot = true
 seed = 0x80000000
 offset = 0
-ticks = 1379
+ticks = 2300
 compare_from = 1377
 input = "special_ex.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl"
-frames = [1377, 1378]
-expect = { tick = 1378, fields = ["fgstat"], note = "on 1378 the original runs Extreme Battle's opening (`Exbtl_Opening`, 0x446D50, task 1 from `Game_loop`'s first tick, which suspends play: `Load_open5_7` and `FUN_004474A0`, its lines and the stage 7 voice line that raises `fg_status`'s 0x20), which arklay doesn't port, so its game plays on from the room's first tick (issue #946)" }
+frames = [1377, 2299]
+voice_from_ref = true
+expect = "match"
 
 # A confirm in the fade in, the level page's EXIT and its cancel key, then EXIT: the title again from black on 889.
 [[run]]
@@ -118,7 +119,7 @@ frames = [189, 1375]
 expect = "match"
 record = ""
 
-# The same record's game, from `Game_loop`'s first tick (1407): room F12 as `Title_game_init` starts it.
+# The same record's game, from `Game_loop`'s first tick (1407): room F12 and Extreme Battle's opening from 1408, with no key, to the record's end in its second page.
 [[run]]
 name = "special_ex_leon_play"
 ref = "special_ex_leon"
@@ -126,12 +127,13 @@ ui = "title"
 boot = true
 seed = 0
 offset = 0
-ticks = 1409
+ticks = 3600
 compare_from = 1407
 input = "special_ex_leon.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl"
-frames = [1407, 1408]
-expect = { tick = 1408, fields = ["fgstat"], note = "on 1408 the original runs Extreme Battle's opening (`Exbtl_Opening`, 0x446D50, task 1 from `Game_loop`'s first tick, which suspends play: `Load_open5_7` and `FUN_004474A0`, its lines and the stage 7 voice line that raises `fg_status`'s 0x20), which arklay doesn't port, so its game plays on from the room's first tick (issue #946)" }
+frames = [1407, 3599]
+voice_from_ref = true
+expect = "match"
 
 # The character's choice (`ExBattle`), right to Claire; level 1: its fade in, the turns, the text and the confirm's flash and fade, to the tick the choice ends (1365).
 [[run]]
@@ -148,7 +150,7 @@ frames = [189, 1365]
 expect = "match"
 record = ""
 
-# The same record's game, from `Game_loop`'s first tick (1397): room F12 as `Title_game_init` starts it. This record's boot film picked Claire: `fg_status` bit 31, under which room F12 is disc 1's.
+# The same record's game, from `Game_loop`'s first tick (1397): room F12 and Extreme Battle's opening from 1398, its skip on 1600 and its end on 1631, then the room from 1632, its script's black and fade in (`main_02`) and the walk. This record's boot film picked Claire: `fg_status` bit 31, under which room F12 is disc 1's.
 [[run]]
 name = "special_ex_claire_play"
 ref = "special_ex_claire"
@@ -156,12 +158,13 @@ ui = "title"
 boot = true
 seed = 0x80000000
 offset = 0
-ticks = 1399
+ticks = 3600
 compare_from = 1397
 input = "special_ex_claire.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl"
-frames = [1397, 1398]
-expect = { tick = 1398, fields = ["fgstat"], note = "on 1398 the original runs Extreme Battle's opening (`Exbtl_Opening`, 0x446D50, task 1 from `Game_loop`'s first tick, which suspends play: `Load_open5_7` and `FUN_004474A0`, its lines and the stage 7 voice line that raises `fg_status`'s 0x20), which arklay doesn't port, so its game plays on from the room's first tick (issue #946)" }
+frames = [1397, 3599]
+voice_from_ref = true
+expect = "match"
 
 # The character's choice (`ExBattle`), left to Ada; level 3: its fade in, the turns, the text and the confirm's flash and fade, to the tick the choice ends (1365).
 [[run]]
@@ -178,7 +181,7 @@ frames = [189, 1365]
 expect = "match"
 record = ""
 
-# The same record's game, from `Game_loop`'s first tick (1397): room F12 as `Title_game_init` starts it.
+# The same record's game, from `Game_loop`'s first tick (1397): room F12 and Extreme Battle's opening from 1398, with no key, to the record's end in its second page.
 [[run]]
 name = "special_ex_ada_play"
 ref = "special_ex_ada"
@@ -186,12 +189,13 @@ ui = "title"
 boot = true
 seed = 0
 offset = 0
-ticks = 1399
+ticks = 3600
 compare_from = 1397
 input = "special_ex_ada.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl"
-frames = [1397, 1398]
-expect = { tick = 1398, fields = ["fgstat"], note = "on 1398 the original runs Extreme Battle's opening (`Exbtl_Opening`, 0x446D50, task 1 from `Game_loop`'s first tick, which suspends play: `Load_open5_7` and `FUN_004474A0`, its lines and the stage 7 voice line that raises `fg_status`'s 0x20), which arklay doesn't port, so its game plays on from the room's first tick (issue #946)" }
+frames = [1397, 3599]
+voice_from_ref = true
+expect = "match"
 
 # The character's choice (`ExBattle`), left past Ada to Chris (the wrap from 0 to 3); level 2: its fade in, the turns, the text and the confirm's flash and fade, to the tick the choice ends (1395).
 [[run]]
@@ -208,7 +212,7 @@ frames = [189, 1395]
 expect = "match"
 record = ""
 
-# The same record's game, from `Game_loop`'s first tick (1427): room F12 as `Title_game_init` starts it. This record's boot film picked Claire: `fg_status` bit 31, under which room F12 is disc 1's.
+# The same record's game, from `Game_loop`'s first tick (1427): room F12 and Extreme Battle's opening from 1428, its skip on 1600 and its end on 1631, then the room, where Chris (player 0xB) stands past 300 ticks into his own idle (`pl_mv_00`'s clips 0x11 and 0x12, from 2060). This record's boot film picked Claire: `fg_status` bit 31, under which room F12 is disc 1's.
 [[run]]
 name = "special_ex_chris_play"
 ref = "special_ex_chris"
@@ -216,9 +220,26 @@ ui = "title"
 boot = true
 seed = 0x80000000
 offset = 0
-ticks = 1429
+ticks = 3600
 compare_from = 1427
 input = "special_ex_chris.txt"
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl"
-frames = [1427, 1428]
-expect = { tick = 1428, fields = ["fgstat"], note = "on 1428 the original runs Extreme Battle's opening (`Exbtl_Opening`, 0x446D50, task 1 from `Game_loop`'s first tick, which suspends play: `Load_open5_7` and `FUN_004474A0`, its lines and the stage 7 voice line that raises `fg_status`'s 0x20), which arklay doesn't port, so its game plays on from the room's first tick (issue #946)" }
+frames = [1427, 3599]
+voice_from_ref = true
+expect = "match"
+
+# Leon's choice as `special_ex_leon` makes it, and the game from `Game_loop`'s first tick (1407) through Extreme Battle's opening with no key (`Exbtl_Opening`, 0x446D50): its wait, both pages of its lines, the static and its end, then the room's fade in and a walk.
+[[run]]
+name = "special_ex_leon_open"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 4700
+compare_from = 1407
+input = "special_ex_leon_open.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl,exo"
+frames = [1407, 4699]
+voice_from_ref = true
+expect = "match"
+record = ""

@@ -1,0 +1,42 @@
+# EX.BATTLE's START on level 2 and Leon's choice, as special_ex_leon takes them, then the game in room F12 and Extreme Battle's opening with no key: both pages of its lines, the static, and its end (4300); then the room's own fade in and a walk forward (4420) (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+740 right
+743
+770 right
+773
+800 right
+803
+830 left
+833
+860 down
+863
+890 up
+893
+920 confirm
+923
+1220 right
+1223
+1260 left
+1263
+1265 right
+1268
+1330 confirm
+1333
+4420 up
+4480
