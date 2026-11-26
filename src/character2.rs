@@ -487,6 +487,9 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
                 } else if character.id == crate::zombie2::LARVA_ID {
                     // `FUN_004b03d0`, for the kinds it ports.
                     200
+                } else if character.id == crate::zombie2::ADULT_ID {
+                    // The G adult's init, `FUN_004771d0`.
+                    800
                 } else if matches!(
                     character.id,
                     crate::zombie2::CROW_ID
@@ -3084,6 +3087,67 @@ mod tests {
             assert!(hits(widen));
             assert!(!hits(0x180));
         }
+    }
+
+    #[test]
+    fn a_grenade_meets_the_g_adult_by_its_wider_blast_box() {
+        // `FUN_004771d0`, the G adult's init, sets `+0x1EE` to 800: a blast's
+        // box is 200 wider for it, where arklay's old 500 gave 125. Room
+        // 309's second acid round (`claire_a_309_30a`, tick 1528) meets the
+        // adult by that margin.
+        let room = RoomId::parse("3090").unwrap();
+        let mut body = crate::player::spawn(room, &RoomState::default());
+        body.pos = [650, 0, 0];
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.life = 479;
+        zombie.atd = crate::zombie2::Atd {
+            ofs_x: 0,
+            ofs_y: -1000,
+            at_w: 1000,
+            at_h: 1000,
+            w: 1000,
+            at: [650, 0, 0],
+        };
+        let character = Character {
+            id: crate::zombie2::ADULT_ID,
+            model: crate::zombie2::ADULT_ID,
+            em_set: (0, 0, NO_ENEMY_FLAG),
+            arms: Arms::default(),
+            be_flg: 1,
+            work: player2::Work::default(),
+            body,
+            kind: 0,
+            kage: None,
+            l_spl: 0,
+            dir_spl: 0,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            partner: None,
+            zombie: Some(zombie),
+        };
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![Some(Box::new(character))];
+        let targets = targets_of(&game.re2);
+        assert_eq!(targets[0].widen, 800);
+        let hits = |widen: u16| {
+            let mut targets = targets.clone();
+            targets[0].widen = widen;
+            let blast = crate::weapon2::Blast {
+                at: [0, -1000, 0],
+                dir: 0,
+                word: 0x3_000B,
+            };
+            let mut rect = [-1400, 0, 350, 250];
+            crate::weapon2::blast_ck(&blast, &mut rect, &mut targets)
+                .iter()
+                .any(|effect| matches!(effect, crate::weapon2::BlastEffect::Hit(_)))
+        };
+        assert!(hits(800));
+        assert!(!hits(500));
     }
 
     #[test]
