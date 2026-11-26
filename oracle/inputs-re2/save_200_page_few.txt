@@ -1,0 +1,61 @@
+# room 200: three saves to new files from the typewriter, each its Yes, decide on "new file" and a press in the wait, with right and left held on "Create New" on the second screen (one save, three rows); then a fourth screen of five rows: right and left held on "Create New", then down to the first save's row and right and left held there; then cancel (oracle/re2.md, "The save screen")
+364 action
+368
+410 action
+414
+460 action
+464
+540 action
+544
+600 action
+604
+800 action
+804
+884 action
+888
+930 action
+934
+980 action
+984
+1060 action
+1064
+1074 right
+1094
+1099 left
+1116
+1120 action
+1124
+1320 action
+1324
+1404 action
+1408
+1450 action
+1454
+1500 action
+1504
+1580 action
+1584
+1640 action
+1644
+1840 action
+1844
+1924 action
+1928
+1970 action
+1974
+2020 action
+2024
+2100 action
+2104
+2144 right
+2164
+2174 left
+2194
+2214 down
+2217
+2234 right
+2254
+2264 left
+2284
+2304 cancel
+2307

@@ -1223,13 +1223,14 @@ fn the_paging_keys_wait_for_the_cursor() {
 
 /// End and Home put the name scroll at 25 and 0 on any list, with the move
 /// cue and the cursor's wait when it moves (`save_200_page`'s 564 and 579,
-/// two rows); right steps it on to 25 on a list longer than the screen
-/// (7864 to 7876, 16 rows), where on one that fits it stops at 21
+/// two rows); right steps it on to 25 on a list of more than two rows
+/// (`save_200_page_few`'s 1077 to 1089 with three rows, `save_200_page`'s
+/// 7864 to 7876 with 16), where on one of two it stops at 21
 /// (`save_200_scroll`, `title_load_game`).
 #[test]
 fn end_and_home_put_the_name_scroll_at_its_ends() {
     let dir = folder("paging-scroll");
-    saves_in(&dir, 2);
+    saves_in(&dir, 0);
     let mut screen = open(&dir);
     to_the_list(&mut screen, &dir);
     let (_, cues) = tick(&mut screen, &dir, keys(&["key:End"]));
@@ -1240,15 +1241,12 @@ fn end_and_home_put_the_name_scroll_at_its_ends() {
     }
     let (_, cues) = tick(&mut screen, &dir, keys(&["key:End"]));
     assert!(cues.is_empty(), "at its end already");
+    let right = UiInput {
+        held_right: true,
+        ..UiInput::default()
+    };
     // Right past End's 25 on a list that stops right at 21 leaves it.
-    let (_, cues) = tick(
-        &mut screen,
-        &dir,
-        UiInput {
-            held_right: true,
-            ..UiInput::default()
-        },
-    );
+    let (_, cues) = tick(&mut screen, &dir, right);
     assert!(cues.is_empty());
     assert_eq!(screen.value("sv_scroll"), 25);
     let (_, cues) = tick(&mut screen, &dir, keys(&["key:Home"]));
@@ -1257,10 +1255,6 @@ fn end_and_home_put_the_name_scroll_at_its_ends() {
     for _ in 0..3 {
         tick(&mut screen, &dir, UiInput::default());
     }
-    let right = UiInput {
-        held_right: true,
-        ..UiInput::default()
-    };
     let steps = |screen: &mut LuaScreen, dir: &Path| {
         let mut steps = Vec::new();
         for _ in 0..16 {
@@ -1271,12 +1265,14 @@ fn end_and_home_put_the_name_scroll_at_its_ends() {
         }
         steps
     };
-    assert_eq!(steps(&mut screen, &dir), [8, 16, 21], "four rows fit");
-    let dir = folder("paging-scroll-long");
-    saves_in(&dir, 14);
-    let mut screen = open(&dir);
-    to_the_list(&mut screen, &dir);
-    assert_eq!(steps(&mut screen, &dir), [8, 16, 24, 25], "16 rows don't");
+    assert_eq!(steps(&mut screen, &dir), [8, 16, 21], "two rows");
+    for (saves, rows) in [(1, "three rows"), (3, "five rows"), (14, "16 rows")] {
+        let dir = folder(&format!("paging-scroll-{saves}"));
+        saves_in(&dir, saves);
+        let mut screen = open(&dir);
+        to_the_list(&mut screen, &dir);
+        assert_eq!(steps(&mut screen, &dir), [8, 16, 24, 25], "{rows}");
+    }
 }
 
 #[test]
