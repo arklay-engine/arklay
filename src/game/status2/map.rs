@@ -582,12 +582,17 @@ impl GameState {
         if !self.re2.flag(0, crate::scd2::host::FG_SYSTEM_EXTREME) {
             return;
         }
-        let stage = self.id.re2_stage().saturating_sub(1);
-        let visited = self
-            .re2
-            .flag(VISITED_BANK, visited_index(stage, self.id.room));
+        let visited = self.re2_room_visited();
         self.re2
             .set_flag(COMMON_BANK, EXTREME_NEW_ROOM, u8::from(!visited));
+    }
+
+    /// This room's `fg_map` bit (`Flg_ck(fg_map, Sce_get_map_flg(stage,
+    /// room))`, with `scd_var_stage`'s stage).
+    pub fn re2_room_visited(&self) -> bool {
+        let stage = self.id.re2_stage().saturating_sub(1);
+        self.re2
+            .flag(VISITED_BANK, visited_index(stage, self.id.room))
     }
 
     /// The trace's `mapfg`: `fg_map`'s five words (`0x98EC04` to
