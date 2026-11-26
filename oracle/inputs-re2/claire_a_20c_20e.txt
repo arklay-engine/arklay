@@ -1,0 +1,154 @@
+# Claire A from 20C's arrival with the Lighter (#896): a wait of 30 ticks, then at full life (full speed) up the east arm
+# by its east wall past the crawler, the north corridor by its north wall past the corner zombie and round the middle one,
+# down the west arm to the Red Herb (8:170), taken facing east, and door 3 into 20E's south half
+# made in arklay (steered by a script round the zombies): no zombie reaches her; 20E loads at 1098 and hands back on
+# 1399; the steering script's grab check fired while she turned on the spot, so she waits there on alternate left and
+# right taps at 473-514 and 552-593
+374 right up run
+376 up run
+382 right up run
+383 up run
+397 left up run
+399 up run
+447 left up run
+450 up run
+461 left up run
+462 up run
+466 right up run
+467 up run
+470 right up run
+471 left
+473 right
+474 left
+475 right
+476 left
+477 right
+478 left
+479 right
+480 left
+481 right
+482 left
+483 right
+484 left
+485 right
+486 left
+487 right
+488 left
+489 right
+490 left
+491 right
+492 left
+493 right
+494 left
+495 right
+496 left
+497 right
+498 left
+499 right
+500 left
+501 right
+502 left
+503 right
+504 left
+505 right
+506 left
+507 right
+508 left
+509 right
+510 left
+511 right
+512 left
+513 right
+514 left
+515 left up run
+539 up run
+540 left up run
+541 up run
+547 right up run
+548 up run
+550 right
+552 left
+553 right
+554 left
+555 right
+556 left
+557 right
+558 left
+559 right
+560 left
+561 right
+562 left
+563 right
+564 left
+565 right
+566 left
+567 right
+568 left
+569 right
+570 left
+571 right
+572 left
+573 right
+574 left
+575 right
+576 left
+577 right
+578 left
+579 right
+580 left
+581 right
+582 left
+583 right
+584 left
+585 right
+586 left
+587 right
+588 left
+589 right
+590 left
+591 right
+592 left
+593 right
+596 right up run
+610 up run
+612 right up run
+613 up run
+618 left up run
+619 up run
+621 left up run
+632 up run
+636 left up run
+637 up run
+638 left up run
+653 up run
+655 left up run
+656 up run
+681 left up run
+682 up run
+690 right up run
+691 up run
+695 left up
+699 up
+718 left up
+719 up
+737 left up
+738 up
+739 left
+750
+756 confirm
+759
+856 confirm
+859
+956 confirm
+959
+999 left
+1011 left up
+1030 up
+1039 left up
+1040 up
+1052 left
+1057
+1063 confirm
+1064
+1100 up
+1401
