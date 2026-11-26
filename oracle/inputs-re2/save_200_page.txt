@@ -1,0 +1,229 @@
+# room 200: fourteen saves to new files from the typewriter, each its Yes, decide on "new file" and a press in the wait (End and Home on the first two screens, with no save listed and with one); then a fifteenth screen, whose list of 16 rows has right and left held on "Create New" first; then the paging keys move it (`FUN_00432670`): Page Up and Page Down by half the 10 rows shown, to the list's ends, End and Home on the name scroll, Delete, and the cursor's moves between them; right held from 0 to the scroll's end and left back; then cancel (oracle/re2.md, "The save screen")
+364 action
+368
+410 action
+414
+460 action
+464
+540 action
+544
+564 key:end
+565
+579 key:home
+580
+600 action
+604
+800 action
+804
+884 action
+888
+930 action
+934
+980 action
+984
+1060 action
+1064
+1084 key:end
+1085
+1099 key:home
+1100
+1120 action
+1124
+1320 action
+1324
+1404 action
+1408
+1450 action
+1454
+1500 action
+1504
+1580 action
+1584
+1640 action
+1644
+1840 action
+1844
+1924 action
+1928
+1970 action
+1974
+2020 action
+2024
+2100 action
+2104
+2160 action
+2164
+2360 action
+2364
+2444 action
+2448
+2490 action
+2494
+2540 action
+2544
+2620 action
+2624
+2680 action
+2684
+2880 action
+2884
+2964 action
+2968
+3010 action
+3014
+3060 action
+3064
+3140 action
+3144
+3200 action
+3204
+3400 action
+3404
+3484 action
+3488
+3530 action
+3534
+3580 action
+3584
+3660 action
+3664
+3720 action
+3724
+3920 action
+3924
+4004 action
+4008
+4050 action
+4054
+4100 action
+4104
+4180 action
+4184
+4240 action
+4244
+4440 action
+4444
+4524 action
+4528
+4570 action
+4574
+4620 action
+4624
+4700 action
+4704
+4760 action
+4764
+4960 action
+4964
+5044 action
+5048
+5090 action
+5094
+5140 action
+5144
+5220 action
+5224
+5280 action
+5284
+5480 action
+5484
+5564 action
+5568
+5610 action
+5614
+5660 action
+5664
+5740 action
+5744
+5800 action
+5804
+6000 action
+6004
+6084 action
+6088
+6130 action
+6134
+6180 action
+6184
+6260 action
+6264
+6320 action
+6324
+6520 action
+6524
+6604 action
+6608
+6650 action
+6654
+6700 action
+6704
+6780 action
+6784
+6840 action
+6844
+7040 action
+7044
+7124 action
+7128
+7170 action
+7174
+7220 action
+7224
+7300 action
+7304
+7360 action
+7364
+7560 action
+7564
+7644 action
+7648
+7690 action
+7694
+7740 action
+7744
+7820 action
+7824
+7864 right
+7884
+7894 left
+7914
+7924 key:pageup
+7925
+7944 key:pageup
+7945
+7964 key:pagedown
+7965
+7984 key:pageup
+7985
+7986 key:pageup
+7987
+8004 down
+8007
+8024 key:pageup
+8025
+8044 key:pagedown
+8045
+8064 key:pagedown
+8065
+8084 key:end
+8085
+8104 key:home
+8105
+8124 key:delete
+8125
+8144 key:end
+8145
+8164 right
+8167
+8184 key:home
+8185
+8204 up
+8207
+8224 key:pagedown
+8225
+8244 right
+8284
+8304 left
+8344
+8364 cancel
+8367

@@ -1,0 +1,18 @@
+# `Sce_fade_adjust`'s hold in stage 6 (oracle/re2-deviations.md, "Script fades").
+
+# Room 60D from room 60C's door: its init sets fade 1 (`sce_fade_set(1, 1, 7, -32768)`) and adjusts it to 4096, which
+# `Sce_fade_adjust` would skip if `FUN_00442e40` read `Marni`'s 0x6000; the recording's frames have the adjusted fade,
+# then a walk.
+[[run]]
+name = "fade_60d"
+room = "60D"
+setup_script = "fade_60d.lua"
+input = "fade_60d.txt"
+input_shift = 344
+ticks = 700
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
+frames = [360, 699]
+# 15.4 measured (45.9 with the fade held): the room's lighting isn't the original's
+frame_max_mean = 16.0
+expect = "match"
+record = "--no-enemies --life 200 --warp 60D:-20729:0:-24149:2160"

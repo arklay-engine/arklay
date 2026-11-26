@@ -1171,6 +1171,114 @@ fn more_saves_than_rows_scroll_and_up_wraps_to_the_bottom() {
     assert_eq!(places, expected);
 }
 
+/// Keys newly down on one tick, by their source names (`key:PageUp`).
+fn keys(names: &[&str]) -> UiInput {
+    let mut input = UiInput::default();
+    for name in names {
+        crate::ui::push_newly_down(
+            &mut input.newly_down,
+            crate::controls::Source::parse(name).unwrap(),
+        );
+    }
+    input
+}
+
+/// The paging keys (`FUN_00432670`), as `save_200_page` records them over
+/// fourteen saves (16 rows, 10 shown): Page Up moves the list down half the
+/// rows shown with the cursor on the top one, Page Down up as far with the
+/// cursor on the bottom one, each to the list's end and with no cue or
+/// wait; Delete does nothing, and of two keys the table's first is read.
+#[test]
+fn the_paging_keys_move_the_list_by_half_the_rows_shown() {
+    let dir = folder("paging");
+    saves_in(&dir, 14);
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    let mut press = |names: &[&str]| {
+        let (_, cues) = tick(&mut screen, &dir, keys(names));
+        let sv = sv(&screen);
+        (sv[4], sv[5], sv[7], cues.len())
+    };
+    // (cursor, top, wait, cues): 7864, 7884, 7904 and 7924.
+    assert_eq!(press(&["key:PageUp"]), (0, 5, 0, 0));
+    assert_eq!(press(&["key:PageUp"]), (0, 6, 0, 0));
+    assert_eq!(press(&["key:PageDown"]), (9, 1, 0, 0));
+    assert_eq!(press(&["key:PageDown"]), (9, 0, 0, 0));
+    assert_eq!(press(&["key:Delete"]), (9, 0, 0, 0));
+    assert_eq!(press(&["key:PageDown", "key:PageUp"]), (0, 5, 0, 0));
+}
+
+/// The cursor's wait keeps the paging keys from being read, as it keeps
+/// the pad's (`Card_access` reads them while `0x986388` is 0).
+#[test]
+fn the_paging_keys_wait_for_the_cursor() {
+    let dir = folder("paging-wait");
+    saves_in(&dir, 14);
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    tick(&mut screen, &dir, held_down());
+    tick(&mut screen, &dir, keys(&["key:PageUp"]));
+    assert_eq!(sv(&screen)[4..6], [1, 0]);
+}
+
+/// End and Home put the name scroll at 25 and 0 on any list, with the move
+/// cue and the cursor's wait when it moves (`save_200_page`'s 564 and 579,
+/// two rows); right steps it on to 25 on a list longer than the screen
+/// (7864 to 7876, 16 rows), where on one that fits it stops at 21
+/// (`save_200_scroll`, `title_load_game`).
+#[test]
+fn end_and_home_put_the_name_scroll_at_its_ends() {
+    let dir = folder("paging-scroll");
+    saves_in(&dir, 2);
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    let (_, cues) = tick(&mut screen, &dir, keys(&["key:End"]));
+    assert_eq!(cues, [UiCue::Core(4)]);
+    assert_eq!((screen.value("sv_scroll"), sv(&screen)[7]), (25, 3));
+    for _ in 0..3 {
+        tick(&mut screen, &dir, UiInput::default());
+    }
+    let (_, cues) = tick(&mut screen, &dir, keys(&["key:End"]));
+    assert!(cues.is_empty(), "at its end already");
+    // Right past End's 25 on a list that stops right at 21 leaves it.
+    let (_, cues) = tick(
+        &mut screen,
+        &dir,
+        UiInput {
+            held_right: true,
+            ..UiInput::default()
+        },
+    );
+    assert!(cues.is_empty());
+    assert_eq!(screen.value("sv_scroll"), 25);
+    let (_, cues) = tick(&mut screen, &dir, keys(&["key:Home"]));
+    assert_eq!(cues, [UiCue::Core(4)]);
+    assert_eq!(screen.value("sv_scroll"), 0);
+    for _ in 0..3 {
+        tick(&mut screen, &dir, UiInput::default());
+    }
+    let right = UiInput {
+        held_right: true,
+        ..UiInput::default()
+    };
+    let steps = |screen: &mut LuaScreen, dir: &Path| {
+        let mut steps = Vec::new();
+        for _ in 0..16 {
+            let (_, cues) = tick(screen, dir, right);
+            if !cues.is_empty() {
+                steps.push(screen.value("sv_scroll"));
+            }
+        }
+        steps
+    };
+    assert_eq!(steps(&mut screen, &dir), [8, 16, 21], "four rows fit");
+    let dir = folder("paging-scroll-long");
+    saves_in(&dir, 14);
+    let mut screen = open(&dir);
+    to_the_list(&mut screen, &dir);
+    assert_eq!(steps(&mut screen, &dir), [8, 16, 24, 25], "16 rows don't");
+}
+
 #[test]
 fn only_re2_saves_are_listed_and_load_mode_adds_the_autosaves() {
     let dir = folder("kinds");

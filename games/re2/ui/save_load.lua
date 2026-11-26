@@ -16,7 +16,7 @@
 -- |---|---|
 -- | 0 | the font and the folder; then 1 |
 -- | 1 | the folder's saves counted (`cnt0`), the rows `min(10, cnt0 - mode + 2)`; then 2 |
--- | 2 | the list: a held direction moves the cursor every 4 ticks with the move cue (`4:4`), wrapping; decide picks the row (`FUN_00431D10`), cancel plays `4:5` and goes to 99 |
+-- | 2 | the list: the paging keys (`FUN_00432670`) first, then a held direction moves the cursor every 4 ticks with the move cue (`4:4`), wrapping; decide picks the row (`FUN_00431D10`), cancel plays `4:5` and goes to 99 |
 -- | 3 | the write: the ribbon and the count (the engine's write tick), the file; then 0x22 |
 -- | 0x1E | the overwrite choice, as Classic REbirth patches it: left and right (edges) move it between Overwrite and Cancel with the move cue; decide on Overwrite goes to 0x1F with the decide cue; decide on Cancel, or cancel, plays `4:5` and goes back to 2 |
 -- | 0x1F | as 3, the new save taking the row, whose old file is deleted once the new one is written (the original deletes it in 0x1E, before the write); then 0x20 |
@@ -29,8 +29,8 @@
 -- (`oracle/re2.md`, "The save screen"): the layout here is measured from
 -- the original's frames, and the overwrite is the patched one (the
 -- executable's own is a three-way choice with an Update that keeps the
--- name). A file that can't be read or written (0x62 and its message) and
--- the keyboard paging (`FUN_00432670`) aren't ported.
+-- name). A file that can't be read or written (0x62 and its message)
+-- isn't ported.
 
 local CrText = require("ui/cr_text")
 
@@ -72,8 +72,12 @@ local KEY, SPACE = 0x22, 0x24
 
 -- `ScreenInput.held`'s directions.
 local HELD_UP, HELD_DOWN, HELD_LEFT, HELD_RIGHT = 0x10, 0x20, 0x40, 0x80
--- Where Classic REbirth stops the name scroll.
-local SCROLL_MAX = 21
+-- Where Classic REbirth stops the name scroll: right stops at 21 on a list
+-- that fits on the screen (`save_200_scroll`, `title_load_game`) and at 25
+-- on a longer one (`save_200_page`'s 16 rows, every row alike); End puts
+-- it at 25 on any list. What decides between 21 and 25 is Classic
+-- REbirth's own code, read here from those three lists alone.
+local SCROLL_MAX, SCROLL_LONG_MAX, SCROLL_END = 21, 25, 25
 
 local s = {}
 M.state = s
@@ -205,9 +209,70 @@ local function picked()
     return 99
 end
 
+-- `FUN_00432670`'s keys, its table (`0x522074`) in order: of those newly
+-- down, the first in the table is the one read.
+local PAGE_UP, PAGE_DOWN, END, HOME = 1, 2, 3, 4
+local PAGE_KEYS = { "key:PageUp", "key:PageDown", "key:End", "key:Home", "key:Delete" }
+
+local function page_key(input)
+    local down = {}
+    for _, name in ipairs(input.keys or {}) do
+        down[name] = true
+    end
+    for key, name in ipairs(PAGE_KEYS) do
+        if down[name] then
+            return key
+        end
+    end
+end
+
+-- The name scroll to `scroll`: kept for the next screen and, when it moves,
+-- the move cue and the cursor's wait, as Classic REbirth has it.
+local function scroll_to(api, scroll)
+    if scroll ~= s.scroll then
+        s.scroll = scroll
+        api:keep("card_scroll", scroll)
+        s.timer = 3
+        api:core_sound(CUE_MOVE)
+    end
+end
+
+-- State 2's paging keys (`FUN_00432670`), read before the pad: Page Up
+-- moves the list down by half the rows shown, to its end, with the cursor
+-- on the top row; Page Down up by as much, to its start, with the cursor
+-- on the bottom one; neither plays a cue or waits. End and Home put the
+-- name scroll at its end and at 0. Delete, the table's fifth, does nothing.
+-- True when a key was taken.
+local function page(api, input)
+    local key = page_key(input)
+    if key == PAGE_UP then
+        s.top = s.top + s.rows // 2
+        if total_rows() - s.rows <= s.top then
+            s.top = total_rows() - s.rows
+        end
+        s.cursor = 0
+    elseif key == PAGE_DOWN then
+        s.top = s.top - s.rows // 2
+        if s.top < 0 then
+            s.top = 0
+        end
+        s.cursor = s.rows - 1
+    elseif key == END then
+        scroll_to(api, SCROLL_END)
+    elseif key == HOME then
+        scroll_to(api, 0)
+    else
+        return false
+    end
+    return true
+end
+
 local function browse(api, input)
     if s.timer ~= 0 then
         s.timer = s.timer - 1
+        return
+    end
+    if page(api, input) then
         return
     end
     local held = input.held or 0
@@ -240,22 +305,22 @@ local function browse(api, input)
     elseif held & (HELD_LEFT | HELD_RIGHT) ~= 0 then
         -- The name scroll (`0x986384`), which a held direction keeps from a
         -- decide: 8 a step, right before left. Classic REbirth keeps it
-        -- within 0 to 21 on every row and, when a step moves it, plays the
+        -- within 0 and the row's end and, when a step moves it, plays the
         -- move cue and waits as a cursor's move does; it draws nothing by
         -- it on the rows the recordings show.
         local scroll = s.scroll + (held & HELD_RIGHT ~= 0 and 8 or -8)
-        if scroll > SCROLL_MAX then
-            scroll = SCROLL_MAX
+        -- A step right never takes the scroll back from where End left it.
+        local last = total_rows() > s.rows and SCROLL_LONG_MAX or SCROLL_MAX
+        if last < s.scroll then
+            last = s.scroll
+        end
+        if scroll > last then
+            scroll = last
         end
         if scroll < 0 then
             scroll = 0
         end
-        if scroll ~= s.scroll then
-            s.scroll = scroll
-            api:keep("card_scroll", scroll)
-            s.timer = 3
-            api:core_sound(CUE_MOVE)
-        end
+        scroll_to(api, scroll)
         return
     elseif input.confirm or input.start then
         local row = picked()

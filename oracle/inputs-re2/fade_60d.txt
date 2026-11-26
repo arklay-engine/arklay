@@ -1,0 +1,3 @@
+# room 60D from room 60C's door: the init's fade, then a walk forward and a stop (oracle/re2-deviations.md, "Script fades")
+500 up
+560
