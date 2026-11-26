@@ -298,6 +298,15 @@ KB_READERS = (
 )
 
 
+def equip_slot(gives: list[str], item: int) -> int:
+    """The inventory slot `--equip ITEM` holds: the first that holds ITEM once every `--give SLOT:ITEM:COUNT` is written, else slot 0 (`St+8`)."""
+    held: dict[int, int] = {}
+    for give in gives:
+        slot, given, _ = (int(part, 0) for part in give.split(":"))
+        held[slot] = given
+    return min((slot for slot, given in held.items() if given == item), default=0)
+
+
 def key_word(word: str) -> int | None:
     """An input word's virtual key (`key:X`), or None for a word that names no key."""
     if not word.startswith("key:"):
@@ -2163,7 +2172,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         if args.equip_load is not None:
                             # Held before the warp's door, so the room's load
                             # brings in its weapon files.
-                            game.write(EQUIPPED, bytes((0, 0, args.equip_load)))
+                            game.write(EQUIPPED, bytes((equip_slot(args.give, args.equip_load), 0, args.equip_load)))
                             game.write(PL + PL_WEAPON, struct.pack("<H", args.equip_load))
                         if args.warp:
                             warp(game, args.warp)
@@ -2179,7 +2188,7 @@ def record(args: argparse.Namespace, trace_path: Path, work: Path, tick_delay: f
                         if args.life is not None:
                             game.write(PL + ENTITY_LIFE, struct.pack("<h", args.life))
                 if settled and args.equip is not None:
-                    game.write(EQUIPPED, bytes((0, 0, args.equip)))
+                    game.write(EQUIPPED, bytes((equip_slot(args.give, args.equip), 0, args.equip)))
                     game.write(PL + PL_WEAPON, struct.pack("<H", args.equip))
                 if (
                     settled
@@ -2903,11 +2912,11 @@ def build_parser() -> argparse.ArgumentParser:
         )
         command.add_argument(
             "--equip", type=lambda text: int(text, 0), default=None, metavar="ID",
-            help="hold this weapon from the moment play is settled; give its slot with --give",
+            help="hold this weapon from the moment play is settled, in the slot --give puts it in (else slot 0)",
         )
         command.add_argument(
             "--equip-load", type=lambda text: int(text, 0), default=None, metavar="ID",
-            help="hold this weapon before --warp's door; give its slot with --give. The player keeps the handgun's clips (PLW02), so use the status screen's EQUIP for a weapon whose clips differ",
+            help="hold this weapon before --warp's door, in the slot --give puts it in (else slot 0). The player keeps the handgun's clips (PLW02), so use the status screen's EQUIP for a weapon whose clips differ",
         )
         command.add_argument(
             "--life", type=int, default=None, metavar="N",
