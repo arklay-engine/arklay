@@ -19317,6 +19317,7 @@ fn play_re2_sounds(
             .placement_cut(placed)
             .and_then(|placed| room.cuts.get(usize::from(placed)))
             .unwrap_or(cut);
+        let (id, level) = se2::room_case(game_id.stage, game_id.room, re2.pl_id, id);
         let tone_volume = match forced {
             Some((volume, _)) => volume,
             None => sounds.banks.volume(id.kind, id.slot)?,
@@ -19343,8 +19344,8 @@ fn play_re2_sounds(
                 se2::positional_volume(volume, louder, enemy, game_id.stage, game_id.room, id.slot),
                 pan,
             )
-        } else if id.kind == Kind::Room && id.slot == 0x14 {
-            (0x6e, 0)
+        } else if let Some(level) = level {
+            (level, 0)
         } else {
             (tone_volume, 0)
         };

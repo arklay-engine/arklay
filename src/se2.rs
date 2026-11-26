@@ -675,6 +675,28 @@ pub fn positional_volume(
     volume.min(0x7f) as u8
 }
 
+/// `Snd_se_on`'s own cases for sound `id` in room `stage`/`room` (`stage` as
+/// the room id's digit) with player `player`: the sound as it plays, and the
+/// level it plays at unplaced in place of its tone's. The room bank's slot
+/// 0x14 is 0x6E everywhere; in room 404 with Ada the player (`0x4EDA8C`) the
+/// bank's slots 10 to 14 are placed, and 15 to 17 are 0x6E too.
+pub fn room_case(stage: u8, room: u8, player: u8, id: SoundId) -> (SoundId, Option<u8>) {
+    if id.kind != Kind::Room {
+        return (id, None);
+    }
+    let ada_404 = (stage, room) == (4, 4) && player == crate::game::pl_change2::ADA;
+    if ada_404 && (10..15).contains(&id.slot) {
+        let placed = SoundId {
+            positional: true,
+            muffled: true,
+            ..id
+        };
+        return (placed, None);
+    }
+    let forced = id.slot == 0x14 || ada_404 && (15..18).contains(&id.slot);
+    (id, forced.then_some(0x6e))
+}
+
 /// `Snd_se_dir_ck`: the 12-bit yaw from one point to another.
 pub(crate) fn se_dir_ck(from_x: i32, from_z: i32, to_x: i32, to_z: i32) -> i32 {
     let dx = to_x - from_x;
@@ -909,6 +931,23 @@ mod tests {
         assert_eq!(positional_volume(120, false, false, 1, 0x0a, 10), 0x7f);
         // A zombie's slot 10 in 10A (`route_200_heart`'s 97) is `Snd_se_enem`'s.
         assert_eq!(positional_volume(97, false, true, 1, 0x0a, 10), 97);
+    }
+
+    #[test]
+    fn room_404_places_and_levels_its_bank_for_ada() {
+        let room = |slot: u8| SoundId {
+            kind: Kind::Room,
+            slot,
+            positional: false,
+            muffled: false,
+        };
+        let ada = crate::game::pl_change2::ADA;
+        assert_eq!(room_case(4, 4, ada, room(0x11)), (room(0x11), Some(0x6e)));
+        let (placed, level) = room_case(4, 4, ada, room(12));
+        assert!(placed.positional && placed.muffled && level.is_none());
+        assert_eq!(room_case(4, 4, 0, room(0x11)), (room(0x11), None), "Leon");
+        assert_eq!(room_case(4, 5, ada, room(0x11)), (room(0x11), None));
+        assert_eq!(room_case(1, 0, 0, room(0x14)), (room(0x14), Some(0x6e)));
     }
 
     #[test]
