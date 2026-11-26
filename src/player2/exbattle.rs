@@ -325,13 +325,14 @@ impl ExModel {
         let pos = self.body.pos;
         let light = [0, 1, 2].map(|axis| i32::from((pos[axis] + LIGHT_OFFSET[axis]) as i16));
         let offset = [0, 1, 2].map(|axis| (root[axis] - light[axis]) >> 4);
-        let range = i64::from(LIGHT_RANGE >> 4);
-        let distance = integer_sqrt(
-            i64::from(offset[2]) * i64::from(offset[2])
-                + i64::from(offset[0]) * i64::from(offset[0]),
+        let range = i32::from(LIGHT_RANGE >> 4);
+        let distance = square_root0(
+            offset[2]
+                .wrapping_mul(offset[2])
+                .wrapping_add(offset[0].wrapping_mul(offset[0])),
         );
-        let reach = (range - distance).max(0);
-        let level = (i64::from(self.light.level) * reach / range) as u8;
+        let reach = range.wrapping_sub(distance).max(0);
+        let level = (i32::from(self.light.level) * reach / range) as u8;
         let length = offset
             .iter()
             .map(|v| f64::from(*v).powi(2))
@@ -365,21 +366,6 @@ impl ExModel {
             self.work.routine[2], self.work.move_no, self.work.move_cnt, self.work.hokan
         )
     }
-}
-
-/// `SquareRoot0`: the integer root, truncated.
-fn integer_sqrt(value: i64) -> i64 {
-    if value <= 0 {
-        return 0;
-    }
-    let mut root = (value as f64).sqrt() as i64;
-    while root * root > value {
-        root -= 1;
-    }
-    while (root + 1) * (root + 1) <= value {
-        root += 1;
-    }
-    root
 }
 
 #[cfg(test)]
@@ -445,17 +431,144 @@ mod tests {
     }
 
     /// `Ex_Set_light`: a light of level 0xF0 with the root 0x4B0 below it
-    /// along x lights at (500 - 75) / 500 of its level, from straight
-    /// along x but for its height.
+    /// along x lights at (500 - 74) / 500 of its level (`SquareRoot0` of
+    /// 75 squared is 74), from straight along x but for its height.
     #[test]
     fn the_light_fades_with_distance_across_the_floor() {
         let mut leon = ExModel::new(1);
         leon.light.level = 0xF0;
         let light = leon.lighting([2250, -1000, 0]);
         let source = light.sources[0];
-        assert_eq!(source.color, [(0xF0 * 425 / 500) as u8; 3]);
+        assert_eq!(source.color, [(0xF0 * 426 / 500) as u8; 3]);
+        // Where the exact root and `SquareRoot0`'s part: 140 along x reads
+        // as 139, so 0xFF lights at 361 / 500, not 360.
+        leon.light.level = 0xFF;
+        let light = leon.lighting([2250 + 0x4B0 - 140 * 16, -1000, 0]);
+        assert_eq!(light.sources[0].color, [(0xFF * 361 / 500) as u8; 3]);
         assert_eq!(source.dir[1], 0);
         assert!(source.dir[0] < -4000);
         assert_eq!(light.ambient, [64.0; 3]);
+    }
+
+    /// A model of `bones` parts, all on part 0, and `parts` meshes, with
+    /// three two-frame clips, each frame its own keyframe.
+    fn assets(bones: usize, parts: usize) -> ExAssets {
+        use crate::model::{ClipFrame, Skeleton, Texture8, Tmd, TmdObject};
+        let frame = |keyframe| ClipFrame {
+            keyframe,
+            timing: 0,
+            flags: 0,
+        };
+        ExAssets::new(Emd {
+            skeleton: Skeleton {
+                relative: vec![[0; 3]; bones],
+                children: std::iter::once((1..bones as u8).collect())
+                    .chain((1..bones).map(|_| Vec::new()))
+                    .collect(),
+            },
+            keyframes: (0..6)
+                .map(|k| Keyframe {
+                    rotations: vec![[k * 0x100, 0, 0]],
+                    ..Keyframe::default()
+                })
+                .collect(),
+            clips: (0..3)
+                .map(|clip| Clip {
+                    frames: vec![frame(clip * 2), frame(clip * 2 + 1)],
+                })
+                .collect(),
+            damage_clips: Vec::new(),
+            damage_keyframes: Vec::new(),
+            banks: Vec::new(),
+            mesh: Tmd {
+                objects: vec![TmdObject::default(); parts],
+            },
+            texture: Texture8 {
+                width: 0,
+                height: 0,
+                indices: Vec::new(),
+                palettes: Vec::new(),
+                stp: Vec::new(),
+            },
+            morphs: Vec::new(),
+            marni: None,
+        })
+    }
+
+    /// `ExPl_animate` for Leon: `Routine_2` 0 falls through to 1 on the
+    /// same pass, clip 0's end starts clip 1 under 2, which loops, and the
+    /// confirm's clip 2 ends in 4, where nothing more plays.
+    #[test]
+    fn leons_motions_run_the_intro_the_loop_and_the_confirm() {
+        let assets = assets(1, 1);
+        let mut leon = ExModel::new(1);
+        leon.animate(Some(&assets));
+        assert_eq!(leon.trace(), "1,00010000");
+        leon.animate(Some(&assets));
+        assert_eq!(leon.work.routine[2], 2);
+        assert_eq!((leon.work.move_no, leon.work.move_cnt), (1, 0));
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            leon.animate(Some(&assets));
+            seen.push(leon.work.move_cnt);
+        }
+        assert_eq!(leon.work.routine[2], 2, "clip 1 loops under 2");
+        assert_eq!(leon.work.move_no, 1);
+        assert_eq!(seen, [1, 0, 1, 0]);
+        leon.confirm();
+        leon.animate(Some(&assets));
+        assert_eq!(leon.trace(), "3,02010000");
+        leon.animate(Some(&assets));
+        assert_eq!(leon.work.routine[2], 4);
+        let held = leon.trace();
+        leon.animate(Some(&assets));
+        assert_eq!(leon.trace(), held, "4 plays nothing");
+    }
+
+    /// Ada: `Routine_2` 0 loops her clip 0, and the confirm's clip 1 ends
+    /// in 2, where nothing more plays.
+    #[test]
+    fn adas_motions_loop_until_the_confirm_ends() {
+        let assets = assets(1, 1);
+        let mut ada = ExModel::new(0);
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            ada.animate(Some(&assets));
+            seen.push((ada.work.routine[2], ada.work.move_no, ada.work.move_cnt));
+        }
+        assert_eq!(seen, [(0, 0, 1), (0, 0, 0), (0, 0, 1), (0, 0, 0)]);
+        ada.confirm();
+        ada.animate(Some(&assets));
+        assert_eq!(ada.trace(), "1,01010000");
+        ada.animate(Some(&assets));
+        assert_eq!(ada.work.routine[2], 2);
+        let held = ada.trace();
+        ada.animate(Some(&assets));
+        assert_eq!(ada.trace(), held);
+    }
+
+    /// `ExPl_sort`'s parts: Claire's five past the skeleton follow it
+    /// (15 to 19), and a model with fewer meshes than parts is cut to them
+    /// (Ada's part 15, which isn't drawn).
+    #[test]
+    fn the_sort_adds_claires_parts_and_cuts_to_the_mesh() {
+        let mut claire = ExModel::new(2);
+        let wide = assets(15, 20);
+        claire.animate(Some(&wide));
+        let joints = claire.sort(&wide);
+        assert_eq!(joints.len(), 20);
+        assert_eq!(claire.light_root(), joints[0].t);
+        // The chain hangs from the head (part 8) and the last part from the
+        // right hand (part 11), each at its place on its parent.
+        let on = |parent: usize, at: [i32; 3]| {
+            let p = joints[parent];
+            [0, 1, 2].map(|row| p.t[row] + (0..3).map(|k| (p.r[row][k] * at[k]) >> 12).sum::<i32>())
+        };
+        assert_eq!(joints[15].t, on(8, [-40, -368, 0]));
+        assert_eq!(joints[19].t, on(11, [0x40, 0x3C0, 0]));
+        let mut leon = ExModel::new(1);
+        let narrow = assets(15, 14);
+        leon.animate(Some(&narrow));
+        assert_eq!(leon.sort(&narrow).len(), 14);
     }
 }
