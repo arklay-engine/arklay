@@ -1,0 +1,276 @@
+# leon_a_302_303: Leon A from below the kennel's manhole through 302 and 30B to 303's G adult, killed with the magnum from beside door 1, out to 30B and back as it dies, the four plugs put in, and door 0 to 304
+# 302: west and north round the two spiders to door 1
+345 up run
+356 up run right
+357 up run
+375 up run right
+391 up run
+475 up run right
+493 up run
+509 up run right
+510 up run
+528 left
+542 up
+550 action
+552
+572 action
+574
+594 action
+596
+# 30B: north to door 0
+616 action
+618
+739 up run
+775 up run right
+776 up run
+800 up run left
+801 up
+809 action
+811
+831 action
+833
+853 action
+855
+# 303: the magnum equipped (slot 7), then east into cut 2, where `main_01` sets 4:57 and the G adult's scene runs
+875 action
+877
+998 start
+1000
+1040 down
+1043
+1058 down
+1061
+1076 down
+1079
+1094 right
+1097
+1112 action
+1115
+1130 action
+1133
+1148 cancel
+1151
+1166 cancel
+1169
+1209 right
+1213 up run left
+1214 up run
+1233 up run left
+1234 up run
+1236
+# back west to door 1, facing east, and seven magnum rounds into the G adult (dead on 2437, 6:98); then south to door 1 (an embryo's bite on 2459, 156 to 141)
+1952 left
+1975 up run left
+1978 up run
+1995 up run left
+1996 up run
+2008 left
+2031 aim
+2070 aim fire
+2072 aim
+2091
+2092 aim
+2131 aim fire
+2133 aim
+2152
+2153 aim
+2192 aim fire
+2194 aim
+2213
+2214 aim
+2253 aim fire
+2255 aim
+2274
+2275 aim
+2314 aim fire
+2316 aim
+2335
+2336 aim
+2375 aim fire
+2377 aim
+2396
+2397 aim
+2436 aim fire
+2438
+2439 right
+2545 action
+2547
+2567 action
+2569
+# 30B: straight back through door 0
+2589 action
+2591
+2611 action
+2613
+2633 action
+2635
+2655 action
+2657
+2717 left
+2743 action
+2745
+2765 action
+2767
+# 303 again, with 6:98 set: `main_0B` places only slot 1's embryo (6:99), at the adult's spot after the scene, where it stays, and not slots 2 and 3; east, north and west round to the plug panel, facing it
+2787 action
+2789
+2809 action
+2811
+2831 action
+2833
+2853 action
+2855
+2935 up run right
+2938 up run
+2946 up run right
+2947 up run
+2964 up run left
+2965 up run
+2966 up run right
+2967 up run left
+2985 up run
+2999 up run right
+3000 up run
+3001 up run left
+3002 up run
+3012 up run left
+3013 up run
+3019 up run left
+3033 up run
+3034 up run left
+3035 up run
+3036 up run left
+3037 up run
+3051 right
+3065 up
+3071 start
+# the four plugs from slot 3 each time (the list closes up), each description through on nine presses 30 ticks apart; the fourth plug sets 4:58 (on 4680, before its description)
+3073
+3113 down
+3116
+3131 right
+3134
+3149 action
+3152
+3167 action
+3170
+3230 action
+3232
+3260 action
+3262
+3290 action
+3292
+3320 action
+3322
+3350 action
+3352
+3380 action
+3382
+3410 action
+3412
+3440 action
+3442
+3470 action
+3472
+3560 start
+3562
+3602 down
+3605
+3620 right
+3623
+3638 action
+3641
+3656 action
+3659
+3719 action
+3721
+3749 action
+3751
+3779 action
+3781
+3809 action
+3811
+3839 action
+3841
+3869 action
+3871
+3899 action
+3901
+3929 action
+3931
+3959 action
+3961
+4049 start
+4051
+4091 down
+4094
+4109 right
+4112
+4127 action
+4130
+4145 action
+4148
+4208 action
+4210
+4238 action
+4240
+4268 action
+4270
+4298 action
+4300
+4328 action
+4330
+4358 action
+4360
+4388 action
+4390
+4418 action
+4420
+4448 action
+4450
+4538 start
+4540
+4580 down
+4583
+4598 right
+4601
+4616 action
+4619
+4634 action
+4637
+4697 action
+4699
+4727 action
+4729
+4757 action
+4759
+4787 action
+4789
+4817 action
+4819
+4847 action
+4849
+4877 action
+4879
+4907 action
+4909
+4937 action
+4939
+# west to door 0, to 304
+5027 up run left
+5044 right
+5056 up
+5062 action
+5064
+5084 action
+5086
+5106 action
+5108
+5128 action
+5130
+5150 action
+5152
+5172 action
+5174
+5194 action
+5196
