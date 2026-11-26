@@ -1,0 +1,144 @@
+# leon_a_112_219: leon_a_112_chute's input (112 through 117 and 111 to the dust chute's Yes), then 219's landing: the fall, Ben and the G1 (Em_30, Type 2) under the script, and one press up near its end
+345 up run left
+353 up run
+360 up run right
+361 up run
+362 up run left
+367 up run
+371 up run left
+372 up run
+380 up run left
+381 up run
+388 up run left
+390 up run
+391 up run left
+392 up run
+394 up run left
+395 up run
+402 up run left
+403 up run
+407 up run left
+408 up run
+411 up run left
+412 up run
+414 up run left
+415 right
+433 up run right
+434 right
+447 up run right
+448 right
+459 up run right
+460 right
+466 up run right
+467 left
+484 up run left
+485 right
+500
+501 left
+507 up action
+509 up
+573 up run left
+590 left
+593 up run left
+603 up run
+638 up run left
+639 up run right
+640 up run
+648 up run right
+649 up run
+660 up run left
+661
+663 right
+676 action
+678
+713 up
+1029 right
+1034 up run right
+1047 up run
+1063 up run right
+1064 up run
+1067 up run right
+1068 up run left
+1070 up run
+1090 up run left
+1091 up run
+1118 up run left
+1119 up run
+1121 up run left
+1122 up run right
+1125 up run
+1130 up run right
+1131 up run
+1137 up run right
+1140 right
+1144 up run right
+1145
+1147 right
+1153 action
+1155
+1190 up
+1504 up run left
+1513 up run
+1526 up run right
+1532 up run
+1536 up run right
+1537 up run
+1540 up run right
+1541 up run
+1542 up run right
+1543 up run
+1544 right
+1561 up run right
+1562
+1563 left
+1570 up action
+1572 up
+1636 up run right
+1649 right
+1651 up run right
+1652 right
+1654 up run right
+1656 right
+1658 up run right
+1660 right
+1663 up run right
+1665 right
+1669 up run right
+1670 up run left
+1673 up run
+1676 up run left
+1677 up run
+1684 up run right
+1685 up run
+1693 up run left
+1694 up run
+1695 up run left
+1696 right
+1702 up run right
+1714 up run
+1744 up run right
+1745 up run
+1752 up run right
+1761 right
+1763 up run right
+1764 right
+1766 up run right
+1767 right
+1771 up run right
+1773 up run
+1780 up run left
+1783 up run
+1788 up run left
+1789 up run
+1795 up run left
+1796 up run
+1797 up run left
+1799 up run
+1800
+1802 right
+1805 action
+1808
+1865 action
+1868
+2865 up
+2879

@@ -100,6 +100,7 @@ pub fn tick(
                 ));
             }
             spl_sca_ck_em(room, &mut character);
+            player2::latch_drawn(&mut character.work, &mut character.body, &tick);
         }
         game.re2.characters.0[slot] = Some(character);
     }
@@ -882,6 +883,9 @@ fn run_zombie(
                 be_flg: parent.be_flg,
             })
         });
+    let hung_on = zombie
+        .hung
+        .and_then(|hung| hung_on(&re2.characters.0, slot, hung));
     let works = (0..SPLAYER_SLOT)
         .map(|other| {
             if other == slot {
@@ -940,6 +944,7 @@ fn run_zombie(
         pack,
         lua,
         parent,
+        hung_on,
         works,
         spawns: Vec::new(),
         freed: Vec::new(),
@@ -1606,6 +1611,26 @@ fn run_load_stop_with(
         game.re2.characters.0[slot] = Some(character);
     }
     game.re2.set_enemies_stopped(was_stopped);
+}
+
+/// The part a hung part of the body in `slot` hangs on, another work's, as
+/// the frame draws it: a zombie's `drawn`, a scene character's `Workm`
+/// (`Work::parts`, latched after its move and the pushes). `None` for its
+/// own part, which [`crate::zombie2::Zombie::draw_hung`] takes from its own.
+fn hung_on(
+    characters: &[Option<Box<Character>>],
+    slot: usize,
+    hung: crate::zombie2::Hung,
+) -> Option<player2::Matrix> {
+    if usize::from(hung.on_slot) == slot {
+        return None;
+    }
+    let other = characters.get(usize::from(hung.on_slot))?.as_deref()?;
+    let part = usize::from(hung.on_part);
+    match &other.zombie {
+        Some(z) => z.drawn.get(part).copied().flatten(),
+        None => other.work.parts.get(part).copied().flatten(),
+    }
 }
 
 /// `Game_loop` and `Em_init_move` start at `splayer_work`.
@@ -2906,6 +2931,140 @@ mod tests {
         let (kept, mirror) = placed(1 | crate::zombie2::BE_NO_SCA);
         assert_eq!(kept, [-17950, 0, -24000]);
         assert_eq!(mirror, [-17950, -24000]);
+    }
+
+    /// Ben's part 8 at (1000, -500, 2000), turned a quarter round.
+    fn bens_part_8() -> player2::Matrix {
+        player2::Matrix {
+            m: player2::rot_matrix([0, 0x400, 0]),
+            t: [1000, -500, 2000],
+        }
+    }
+
+    fn hung_on_ben() -> crate::zombie2::Hung {
+        crate::zombie2::Hung {
+            part: 0x12,
+            on_slot: 0,
+            on_part: 8,
+            at: [0xF6, -0xFB, 0],
+            in_play: true,
+        }
+    }
+
+    /// What a hung part hangs on: a scene character's latched `Workm`
+    /// (`Work::parts`), a zombie's `drawn`, and
+    /// nothing for the body's own slot or an empty one.
+    #[test]
+    fn a_hung_part_hangs_on_the_other_works_drawn_part() {
+        let mut ben = ada(0);
+        ben.id = 0x44;
+        ben.work.parts = vec![None; 9];
+        ben.work.parts[8] = Some(bens_part_8());
+        let mut characters = vec![Some(Box::new(ben)), None];
+        assert_eq!(hung_on(&characters, 1, hung_on_ben()), Some(bens_part_8()));
+        assert_eq!(hung_on(&characters, 0, hung_on_ben()), None, "its own slot");
+        let off = crate::zombie2::Hung {
+            on_slot: 1,
+            ..hung_on_ben()
+        };
+        assert_eq!(hung_on(&characters, 2, off), None, "an empty slot");
+        let mut g1 = ada(0);
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.drawn = vec![None; 9];
+        zombie.drawn[8] = Some(bens_part_8());
+        g1.zombie = Some(zombie);
+        g1.work.parts = vec![None; 9];
+        characters[0] = Some(Box::new(g1));
+        assert_eq!(
+            hung_on(&characters, 1, hung_on_ben()),
+            Some(bens_part_8()),
+            "a zombie's drawn part"
+        );
+    }
+
+    /// `run_zombie` on the G1 in slot 1 composes its hung part 0x12 on Ben's
+    /// part 8 in slot 0 as Ben's tick latched it.
+    #[test]
+    fn run_zombie_draws_a_hung_part_on_the_scene_characters_part() {
+        let model = posable_model();
+        let pack = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap()).unwrap();
+        let mut ben = ada(0);
+        ben.id = 0x44;
+        ben.work.parts = vec![None; 9];
+        ben.work.parts[8] = Some(bens_part_8());
+        let mut g1 = sherry(0);
+        g1.id = 0x10;
+        g1.model = 0x10;
+        g1.partner = None;
+        g1.work.routine = [1, 0, 0, 0];
+        let mut zombie = crate::zombie2::Zombie::default();
+        zombie.hung = Some(hung_on_ben());
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![Some(Box::new(ben)), None];
+        let _ = run_zombie(
+            &mut game,
+            &RoomState::default(),
+            &pack,
+            None,
+            &mut g1,
+            &mut zombie,
+            1,
+            &model,
+            false,
+            false,
+        );
+        let drawn = zombie.drawn[0x12].unwrap();
+        assert_eq!(drawn.m, bens_part_8().m);
+        assert_eq!(drawn.t, [1000, -500 - 0xFB, 2000 - 0xF6]);
+    }
+
+    /// `Game_loop` runs `splayer_work`, then the enemy slots from 0: slot 0's
+    /// scene character latches its parts before slot 1's G1 hangs on them.
+    #[test]
+    fn the_partner_runs_first_then_the_slots_from_0() {
+        let order: Vec<usize> = run_order().take(3).collect();
+        assert_eq!(order, [SPLAYER_SLOT, 0, 1]);
+    }
+
+    /// After `Sca_ck_em` pushes a scene character out of a wall, the draw
+    /// (`latch_drawn`) composes its parts where it was pushed to.
+    #[test]
+    fn a_scene_characters_parts_are_drawn_where_the_pushes_leave_it() {
+        let wall = crate::state::ScaRect {
+            x: -19000,
+            z: -25000,
+            width: 2000,
+            depth: 2000,
+            id: crate::sca::CHARACTER_MASK,
+            kind: 0xF,
+            floor: 1,
+        };
+        let room = RoomState {
+            sca: Some(crate::state::Sca {
+                records: vec![wall],
+                ..Default::default()
+            }),
+            ..RoomState::default()
+        };
+        let model = posable_model();
+        let mut character = ada(0);
+        character.body.pos = [-17950, 0, -24000];
+        character.body.collision_mirror = [-17950, -24000];
+        let tick = spl_tick(&room, &model.skeleton);
+        let tick = Tick {
+            banks: Banks {
+                pld: (&model.clips, &model.keyframes),
+                ..tick.banks
+            },
+            ..tick
+        };
+        character.work.bank = player2::Bank::Pld;
+        spl_sca_ck_em(&room, &mut character);
+        let pushed = character.body.pos;
+        assert_ne!(pushed, [-17950, 0, -24000], "pushed out of the box");
+        player2::latch_drawn(&mut character.work, &mut character.body, &tick);
+        let part0 = character.work.parts[0].unwrap();
+        assert_eq!([part0.t[0], part0.t[2]], [pushed[0], pushed[2]]);
     }
 
     #[test]

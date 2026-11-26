@@ -27,7 +27,7 @@ pub const ROOM_ENTRY: &str = "esp.bin";
 pub const CORE_ENTRY: &str = "esp/core.bin";
 
 /// The size of a motion block, the part of a slot `Esp_01` overwrites.
-const BLOCK_LEN: usize = 24;
+pub(crate) const BLOCK_LEN: usize = 24;
 /// The size of a frame record.
 const FRAME_LEN: usize = 8;
 /// The size of a tile record.
@@ -658,6 +658,16 @@ impl Effects {
 
     pub fn bank(&self) -> &Arc<Bank> {
         &self.bank
+    }
+
+    /// Where each live slot was called at (`base`), for the callers' tests.
+    #[cfg(test)]
+    pub(crate) fn live_bases(&self) -> Vec<[i16; 3]> {
+        self.slots
+            .iter()
+            .filter(|slot| slot.flags != 0)
+            .map(|slot| slot.base)
+            .collect()
     }
 
     fn rnd(&mut self) -> u8 {
@@ -3032,7 +3042,7 @@ pub(crate) fn test_following_bank() -> Arc<Bank> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// A one-type bank: two frames, one tile, and a row with one group of
@@ -3041,7 +3051,7 @@ mod tests {
         bank_of(7, blocks)
     }
 
-    pub(super) fn bank_of(kind: u8, blocks: &[[u8; BLOCK_LEN]]) -> Arc<Bank> {
+    pub(crate) fn bank_of(kind: u8, blocks: &[[u8; BLOCK_LEN]]) -> Arc<Bank> {
         bank_rows(kind, &[(0, blocks)])
     }
 
