@@ -350,3 +350,25 @@ frame_max_mean = 0.8
 frame_windows = [[360, 560, 0.2], [929, 1700, 0.25], [2043, 2236, 0.35], [2574, 3518, 0.35]]
 expect = "match"
 record = "--start claire --warp 200:-3010:-1800:-24100:2048:9 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --life 200 --give 0:3:5 --give 2:0x5C:2 --give 3:0x2F:1 --give 4:0x27:1 --give 5:0x14:2 --give 6:0x4A:1 --give 7:0x3A:1 --box 2:0x1E:3 --box 3:0x33:1 --box 4:0x32:1"
+
+# Rooms 204, 205, 206, 205 and 207: from 203's door 0, the corridor of bodies to 206, the Lighter on its fireplace
+# and the second Red Jewel from it, and back through 205 to 207.
+[[run]]
+name = "claire_a_204_207"
+room = "204"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_204_207.lua"
+input = "claire_a_204_207.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3172
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3171]
+# 204 to door 1's press (469), 205 from its hand back (811) to door 1's press (1001), 206 from its hand back (1333) to door 0's press (2336), the status screen and the fireplace's
+# scene included, and 205 from its hand back (2688) to door 2's press (2823); the doors' frames count only in the whole run's mean (the worst, 1037 (5.4), 2372 and 505, are the 206 load and the two 205 loads, #672); 0.77 measured, the windows 0.14, 0.21, 0.08, 0.11
+frame_max_mean = 0.9
+frame_windows = [[360, 468, 0.25], [811, 1000, 0.35], [1333, 2335, 0.2], [2688, 2822, 0.25]]
+expect = "match"
+record = "--start claire --warp 204:-14423:0:-7289:2024:4 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --life 200 --give 0:3:5 --give 2:0x33:1 --give 3:0x2F:1 --give 4:0x4A:1 --give 5:0x3A:1 --give 6:0x43:1 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1"
