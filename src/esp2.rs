@@ -525,6 +525,13 @@ impl Slot {
         self.flags = 0;
     }
 
+    /// Whether `Esp_pos` places it by the matrix it was given, `+0x2c` being
+    /// [`Self::local`] on it; otherwise `+0x2c` is the world point
+    /// [`Self::base`].
+    fn on_matrix(&self) -> bool {
+        self.hand.is_some() && (self.flags & FLAG_NO_TURN != 0 || self.anchor.is_some())
+    }
+
     fn load_block(&mut self, block: &[u8]) {
         let word = |at: usize| u16::from_le_bytes([block[at], block[at + 1]]);
         self.anim = block[0];
@@ -588,6 +595,10 @@ pub struct Effects {
     /// `fg_common`'s 0x76, which turns room 407's steam off (`Esp_4B`): the
     /// caller sets it before a tick.
     pub steam_off: bool,
+    /// The slots the last `Esp_call` made, the first and those that die
+    /// with it, for what its caller writes over them: a slot whose `+0x1a`
+    /// names a reused slot isn't one.
+    made: Vec<usize>,
 }
 
 /// The player as `FUN_004d8260` tests them against an effect, and what the
@@ -709,6 +720,8 @@ impl Effects {
             slot.load_block(block);
         }
         self.slots[first] = slot;
+        self.made.clear();
+        self.made.push(first);
         let mut below = first;
         for &group in rest.iter().rev() {
             let Some(index) = self.free_below(below) else {
@@ -722,8 +735,22 @@ impl Effects {
                 other.load_block(block);
             }
             self.slots[index] = other;
+            self.made.push(index);
         }
         Some(first)
+    }
+
+    /// `f` on each slot the `Esp_call` that made `first` made.
+    fn each_made(&mut self, first: usize, mut f: impl FnMut(&mut Slot)) {
+        if self.made.first() != Some(&first) {
+            if let Some(slot) = self.slots.get_mut(first) {
+                f(slot);
+            }
+            return;
+        }
+        for &index in &self.made {
+            f(&mut self.slots[index]);
+        }
     }
 
     /// `Esp_call2`, `Esp_call3D` and `Esp_call3D2`: `Esp_call` with an id for
@@ -733,13 +760,10 @@ impl Effects {
             rotation, group, ..
         } = call;
         let first = self.call(call.kind, call.row, call.size, call.dir, call.at, false)?;
-        for (index, slot) in self.slots.iter_mut().enumerate() {
-            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
-            {
-                slot.rotation = rotation;
-                slot.group = group;
-            }
-        }
+        self.each_made(first, |slot| {
+            slot.rotation = rotation;
+            slot.group = group;
+        });
         Some(first)
     }
 
@@ -752,24 +776,18 @@ impl Effects {
         work: WorkMatrix,
     ) -> Option<usize> {
         let first = self.call_placed(call)?;
-        for (index, slot) in self.slots.iter_mut().enumerate() {
-            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
-            {
-                slot.work = Some(work);
-            }
-        }
+        self.each_made(first, |slot| {
+            slot.work = Some(work);
+        });
         Some(first)
     }
 
     /// `Esp_call3D`'s turn (`+0x44`), on a slot `Esp_call` just made and the
     /// slots that die with it.
     pub fn turn(&mut self, first: usize, rotation: [i16; 3]) {
-        for (index, slot) in self.slots.iter_mut().enumerate() {
-            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
-            {
-                slot.rotation = rotation;
-            }
-        }
+        self.each_made(first, |slot| {
+            slot.rotation = rotation;
+        });
     }
 
     /// What `FUN_004d6150` writes over a grenade's first block once
@@ -794,12 +812,9 @@ impl Effects {
         at: [i16; 3],
     ) -> Option<usize> {
         let first = self.call(kind, row, size, 0, at, false)?;
-        for (index, slot) in self.slots.iter_mut().enumerate() {
-            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
-            {
-                slot.object = Some(object);
-            }
-        }
+        self.each_made(first, |slot| {
+            slot.object = Some(object);
+        });
         Some(first)
     }
 
@@ -819,13 +834,10 @@ impl Effects {
         let first = self.call_anchored(
             call.kind, call.row, call.size, call.dir, anchor, matrix, call.at, false,
         )?;
-        for (index, slot) in self.slots.iter_mut().enumerate() {
-            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
-            {
-                slot.rotation = call.rotation;
-                slot.group = call.group;
-            }
-        }
+        self.each_made(first, |slot| {
+            slot.rotation = call.rotation;
+            slot.group = call.group;
+        });
         Some(first)
     }
 
@@ -862,14 +874,11 @@ impl Effects {
     ) -> Option<usize> {
         let at = apply_matrix(&matrix, point);
         let first = self.call(kind, row, size, dir, at, deferred)?;
-        for (index, slot) in self.slots.iter_mut().enumerate() {
-            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
-            {
-                slot.anchor = Some(anchor);
-                slot.hand = Some((matrix.m, matrix.t));
-                slot.local = point;
-            }
-        }
+        self.each_made(first, |slot| {
+            slot.anchor = Some(anchor);
+            slot.hand = Some((matrix.m, matrix.t));
+            slot.local = point;
+        });
         Some(first)
     }
 
@@ -886,13 +895,9 @@ impl Effects {
     ) -> Option<usize> {
         let Some(anchor) = parent.anchor else {
             let first = self.call(kind, row, size, dir, parent.base, true)?;
-            for (index, slot) in self.slots.iter_mut().enumerate() {
-                if index == first
-                    || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
-                {
-                    slot.work = parent.work;
-                }
-            }
+            self.each_made(first, |slot| {
+                slot.work = parent.work;
+            });
             return Some(first);
         };
         let matrix = self
@@ -922,12 +927,9 @@ impl Effects {
             }
             _ => self.call(kind, row, size, dir, parent.base, true),
         }?;
-        for (index, slot) in self.slots.iter_mut().enumerate() {
-            if index == first || slot.flags != 0 && first != 0 && usize::from(slot.parent) == first
-            {
-                slot.on_slot_copy = true;
-            }
-        }
+        self.each_made(first, |slot| {
+            slot.on_slot_copy = true;
+        });
         Some(first)
     }
 
@@ -1441,12 +1443,14 @@ impl Effects {
                 this.scale[0] = this.scale[0].wrapping_add(wider);
                 this.frame = frame;
                 this.delay = delay;
-                for (base, by) in this
-                    .base
-                    .iter_mut()
-                    .zip([this.start, this.count, this.step])
-                {
-                    *base = base.wrapping_add(i16::from(by as i8));
+                let by = [this.start, this.count, this.step];
+                let point = if this.on_matrix() {
+                    &mut this.local
+                } else {
+                    &mut this.base
+                };
+                for (point, by) in point.iter_mut().zip(by) {
+                    *point = point.wrapping_add(i16::from(by as i8));
                 }
             }
             // `Esp_09`: wider as it falls, gone on touching the ground.
@@ -3376,6 +3380,82 @@ pub(crate) mod tests {
         assert_eq!(effects.slots[flash].pos, [-15382, -2975, -11056]);
     }
 
+    /// `pl_w08_t2_move`'s flash (kind 1, row 3) in `special_ex_chris_f14`:
+    /// each group's first block is `Esp_08`, which scatters the point on the
+    /// matrix the call was given (`+0x2c`) by the next block's `+2`, `+3` and
+    /// `+0xb`, so `Esp_pos` turns the scatter with the gun.
+    #[test]
+    fn esp_08_scatters_the_point_on_the_calls_matrix() {
+        let mut first = [0u8; BLOCK_LEN];
+        first[0] = 8;
+        first[11] = 1;
+        first[18..20].copy_from_slice(&0xb203u16.to_le_bytes());
+        let mut second = [0u8; BLOCK_LEN];
+        second[1] = 9;
+        second[2] = 0x64;
+        second[3] = 0xc6;
+        second[11] = 0xec;
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[first, second]));
+        let anchor = Anchor {
+            body: Body::Player,
+            part: 11,
+        };
+        let gun = crate::player2::Matrix {
+            m: crate::player2::rot_matrix([0x400, 0x200, 0]),
+            t: [-500, -2000, -14700],
+        };
+        let point = [0x4e5, 0x852, 0];
+        let flash = effects
+            .call_on_part(7, 0, 0x5900, 0, anchor, gun, point)
+            .unwrap();
+        effects.tick(&mut Default::default(), None);
+        effects.tick(&mut Default::default(), None);
+        let scattered = [0x4e5 + 100, 0x852 - 58, -20];
+        assert_eq!(effects.slots[flash].local, scattered);
+        assert_eq!(effects.slots[flash].pos, apply_matrix(&gun, scattered));
+        // On the world's matrix, the point is the world's.
+        let world = effects.call(7, 0, 0x5900, 0, [10, 20, 30], false).unwrap();
+        effects.tick(&mut Default::default(), None);
+        effects.tick(&mut Default::default(), None);
+        assert_eq!(effects.slots[world].pos, [110, -38, 10]);
+    }
+
+    /// A slot keeps its own matrix when the slot it dies with is gone and
+    /// another `Esp_call` reuses its index: only the slots that call made
+    /// take the call's matrix (`special_ex_chris_f14`'s flash, whose last
+    /// three blocks outlive its first, when the shotgun's case takes its
+    /// slot).
+    #[test]
+    fn a_call_on_a_reused_slot_leaves_the_old_slots_children_alone() {
+        let mut effects = Effects::default();
+        effects.enter_room(bank(&[[0; BLOCK_LEN]]));
+        let anchor = Anchor {
+            body: Body::Player,
+            part: 11,
+        };
+        let gun = |t| crate::player2::Matrix {
+            m: crate::player2::rot_matrix([0; 3]),
+            t,
+        };
+        let first = effects
+            .call_on_part(7, 0, 0x800, 0, anchor, gun([0; 3]), [1, 2, 3])
+            .unwrap();
+        let child = first - 1;
+        effects.slots[child] = Slot {
+            parent: first as u8,
+            ..effects.slots[first]
+        };
+        effects.slots[first].kill();
+        let again = effects
+            .call_on_part(7, 0, 0x800, 0, anchor, gun([100, 0, 0]), [4, 5, 6])
+            .unwrap();
+        assert_eq!(again, first);
+        assert_eq!(effects.slots[again].local, [4, 5, 6]);
+        assert_eq!(effects.slots[child].local, [1, 2, 3]);
+        assert_eq!(effects.slots[child].hand.unwrap().1, [0; 3]);
+    }
+
     /// `Esp_29`'s splats are `Esp_call3`s on the blood's own matrix pointer
     /// (`+0x6c`) and point (`+0x2c`): on the part it was started on, where
     /// that part is now.
@@ -3586,14 +3666,15 @@ pub(crate) mod tests {
     fn a_turn_reaches_the_slot_and_its_children_only() {
         let mut effects = Effects::default();
         effects.enter_room(bank(&[fire_block()]));
-        let first = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
         let other = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
+        let first = effects.call(7, 0, 0x1000, 0, [0; 3], false).unwrap();
         // A slot of `first`'s row's further group dies with it.
-        let child = other - 1;
+        let child = first - 1;
         effects.slots[child] = Slot {
             parent: first as u8,
             ..effects.slots[first]
         };
+        effects.made.push(child);
         let turn = [0, 0, 0x400];
         effects.turn(first, turn);
         assert_eq!(effects.slots[first].rotation, turn);

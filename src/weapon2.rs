@@ -125,13 +125,25 @@ const fn hit_scan_data(weapon: u8) -> (i32, i32, [i32; 2]) {
     }
 }
 
+/// `pld_to_player_map` (`0x53A3F8`): which of a weapon's two shoulders in
+/// `hit_scan_data` a player id takes. Chris (0xB) takes the first, like
+/// Leon, and character 0xE the second.
+const PLD_TO_PLAYER_MAP: [u8; 15] = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1];
+
 /// `hit_scan_ck`: `Be_flg`'s level of the shot, as `BYTE_0053a520` has it: 0 for
 /// low, 1 level and 2 up. `y` is the hand's.
 pub fn hit_scan_ck(id: u8, weapon: u8, pos_y: i32, parts0_y: i32, y: i32) -> usize {
     let (low, high, shoulders) = hit_scan_data(weapon);
     // Character 0xE's own shoulder with the Colt (`DAT_0053a3c4`) is -1850,
-    // its even row's.
-    let shoulder = ((shoulders[usize::from(id & 1)] + pos_y) * parts0_y) >> 12;
+    // the first row's.
+    let row = if id == 0xE && weapon == COLT {
+        0
+    } else {
+        PLD_TO_PLAYER_MAP
+            .get(usize::from(id))
+            .map_or(usize::from(id & 1), |&row| usize::from(row))
+    };
+    let shoulder = ((shoulders[row] + pos_y) * parts0_y) >> 12;
     if y < low + shoulder {
         2
     } else if high + shoulder < y {
@@ -2268,6 +2280,17 @@ mod tests {
         assert_eq!(hit_scan_ck(0, SMG, 0, 0x1000, -1694), 1);
         assert_eq!(hit_scan_ck(0, SMG, 0, 0x1000, -1693), 0);
         assert_eq!(hit_scan_ck(1, SMG, 0, 0x1000, -1608), 0);
+        // `pld_to_player_map`: Chris (0xB) aims his custom shotgun from the
+        // first shoulder (-1813), not the second's 0, and character 0xE its
+        // handgun from the second (-2120) but for the Colt.
+        assert_eq!(hit_scan_ck(0xB, 8, 0, 0x1000, -2313), 1);
+        assert_eq!(hit_scan_ck(0xB, 8, 0, 0x1000, -2314), 2);
+        assert_eq!(hit_scan_ck(0xB, 8, 0, 0x1000, -1613), 1);
+        assert_eq!(hit_scan_ck(0xB, 8, 0, 0x1000, -1612), 0);
+        assert_eq!(hit_scan_ck(0xE, 2, 0, 0x1000, -2320), 1);
+        assert_eq!(hit_scan_ck(0xE, 2, 0, 0x1000, -2321), 2);
+        assert_eq!(hit_scan_ck(0xE, COLT, 0, 0x1000, -2250), 1);
+        assert_eq!(hit_scan_ck(0xE, COLT, 0, 0x1000, -2251), 2);
         // The shotguns aim from their own height.
         assert_eq!(hit_scan_ck(0, 7, 0, 0x1000, -1813), 1);
         assert_eq!(hit_scan_ck(0, 7, 0, 0x1000, -2400), 2);
