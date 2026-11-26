@@ -137,7 +137,7 @@ impl GameSession {
                 Effect::Voice { line, stage } => {
                     // `Xa_play(0, line)`: the bank of `scd_var_stage` + 1, by
                     // `fg_status`'s bit 31.
-                    let stage = stage.map_or(self.game.origin().stage, |stage| stage + 1);
+                    let stage = stage.map_or(self.game.origin().re2_stage(), |stage| stage + 1);
                     let re2 = &mut self.game.re2;
                     let player = u8::from(re2.flag(STATUS_BANK, STATUS_PLAYER));
                     re2.voice.request = Some(format!("voice/{player}/{stage:02}_{line:02x}.wav"));
