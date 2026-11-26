@@ -173,6 +173,18 @@ impl UserData for Api {
             let reverse = reverse.unwrap_or(false) || late & 0xFFFF_0000 != 0;
             Ok(em.mover.joint_move_late_reversed(late as u16, reverse))
         });
+        // `Joint_move2`: the step through `J_seq2`, which eases each part's
+        // matrix rather than its angles. A body that played through `J_seq`
+        // until now eases from the matrices its last draw had.
+        methods.add_method_mut("joint2", |_, e, late: i64| {
+            let em = e.em();
+            em.work().bank = Bank::Pld;
+            if em.work().jseq2.is_none() {
+                em.mover.start_jseq2_turned();
+            }
+            let reverse = late & 0xFFFF_0000 != 0;
+            Ok(em.mover.joint_move_late_reversed(late as u16, reverse))
+        });
         methods.add_method_mut("spd", |_, e, ()| {
             e.em().spd(Bank::Pld);
             Ok(())
@@ -7921,15 +7933,35 @@ mod tests {
     mod adult_death {
         use super::smg_flame_tyrant_ivy::{eval, run};
 
-        /// `Em_28` as `update`, with `joint` ending its clip when `w.ended`,
-        /// and its place at (1, 2, 3).
+        /// `Em_28` as `update`, with `joint` and `joint2` ending its clip when
+        /// `w.ended`, and its place at (1, 2, 3).
         fn adult() -> String {
             format!(
                 "function e:joint() return w.ended end
+                 function e:joint2() return w.ended end
                  function e:pos() return 1, 2, 3 end
                  {}",
                 include_str!("../../games/re2/enemy/28/enemy.lua")
             )
+        }
+
+        /// The fall (sub 1) and what follows it (sub 2) step through
+        /// `Joint_move2` (`J_seq2`), not the `Joint_move` of the adult's
+        /// other states.
+        #[test]
+        fn the_death_plays_its_clips_through_joint_move2() {
+            let script = format!(
+                "{}
+                 function e:joint2(late) LOG[#LOG + 1] = 'joint2(' .. late .. ')' return w.ended end",
+                adult()
+            );
+            for sub in [1, 2] {
+                let setup = format!(
+                    "w.r = {{ [0] = 3, 2, {sub}, 0 }} w.vars[26] = 1 w.timers = {{ [0] = 1, 0, 5, -1 }}"
+                );
+                let (_, log) = run(&script, &setup, 1, &["joint"]);
+                assert_eq!(log, ["joint2(64)"], "sub {sub}");
+            }
         }
 
         /// A death while the arm is off (`+0x21e` bit 1, the break-up's

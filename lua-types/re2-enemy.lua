@@ -370,6 +370,15 @@ function Re2EnemyApi:set_hokan(hokan) end
 ---@return boolean ended Whether the clip ended with this frame (also true for a clip that doesn't exist or has no frames).
 function Re2EnemyApi:joint(late, reverse) end
 
+---`Joint_move2` on the model's own bank: pose this tick's frame of the clip
+---through `J_seq2`, which eases each part's matrix toward the frame's
+---(`HMatrix`) rather than its angles, and advance `Move_cnt`. A body that played
+---through `joint` until now eases from the matrices its last draw had, the
+---neck's turn included; it plays every later step through `J_seq2` too.
+---@param late integer How fast the pose blends toward the frame.
+---@return boolean ended Whether the clip ended with this frame.
+function Re2EnemyApi:joint2(late) end
+
 ---`Joint_move` on any bank. Without `reverse` it plays backwards exactly when
 ---the original does: in a scripted motion (`Routine_0` the scenario mode)
 ---with `Sce_flg` bit `0x80`.

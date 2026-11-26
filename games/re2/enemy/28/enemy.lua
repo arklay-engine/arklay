@@ -1045,7 +1045,8 @@ local function throb(e, reload)
     return THROB[step]
 end
 
--- `FUN_0047b5b0`, `Routine_0` 3: the death. It falls (clip 7, then 0xe), its
+-- `FUN_0047b5b0`, `Routine_0` 3: the death, the adult's only `Joint_move2`
+-- (`J_seq2`, which eases the parts' matrices). It falls (clip 7, then 0xe), its
 -- boxes shrink and part 1 swells, then it lays the room's young (`Em_27`
 -- `Type` 3, up to four bodies in the room) and throbs for 500 ticks. Not
 -- ported: the weapons that start their own effects (`Routine_1` 9, 10, 14,
@@ -1087,7 +1088,7 @@ local function death(e)
     end
     if sub == 1 then
         e:spd()
-        if e:joint(0x40) then
+        if e:joint2(0x40) then
             e:set_routine(2, 2)
             e:clip(0xE, 0, 0x3F)
             e:set_timer(0, 0)
@@ -1098,7 +1099,7 @@ local function death(e)
         e:add_speed_xz()
         mask = 0xF
     elseif sub == 2 then
-        e:joint(0x40)
+        e:joint2(0x40)
         local shrunk = e:var(SHRINK)
         if 0x514 - 6 * shrunk > 300 then
             shrunk = shrunk + 1
