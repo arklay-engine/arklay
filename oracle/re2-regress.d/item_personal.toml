@@ -10,7 +10,7 @@ input = "item_gvirus_60c.txt"
 input_shift = 344
 voice_from_ref = true
 setup = { pos = [15109, 0, -18578], angle = 0, health = 200, rnd = 6114, camera = 0, flags = [[34, 14]] }
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat,ib"
 frames = [2800, 3199]
 expect = "match"
 record = "--warp 60C:15109:0:-18578:0 --flag 34:14 --life 200"
@@ -25,7 +25,7 @@ ticks = 800
 input = "item_vaccine_615.txt"
 input_shift = 344
 setup = { pos = [300, 0, -24208], angle = 1024, health = 200, rnd = 6114, camera = 0, flags = [[4, 157], [4, 158]] }
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,fgstat,ib"
 frames = [360, 799]
 expect = "match"
 record = "--start claire --warp 615:300:0:-24208:1024 --flag 4:157 --flag 4:158 --life 200"

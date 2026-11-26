@@ -6750,6 +6750,135 @@ mod tests {
         assert_eq!(game.re2_item_get_cut(3), 3);
     }
 
+    /// The window is the status screen's, whose page bytes the item box's
+    /// page shares: `Status` clears them (the box's cursor goes back to slot
+    /// 0), `St_init02` and `St_get_check` set routines 2 and 3, and
+    /// `St_get_item`'s subs and `St_main02`'s close step them a tick at a
+    /// time, as the original's `claire_a_200_201` (a take), `item_refuse`
+    /// and `item_vaccine_615` trace them; the count byte is 1 for an item
+    /// that joins a stack.
+    #[test]
+    fn the_get_item_window_steps_the_item_boxs_page_bytes_as_the_status_screen_does() {
+        use crate::game::status2::Input;
+        // Each state of routine, sub and count, with how many ticks it
+        // holds; `None` for one that waits on the message, or the last.
+        type States = Vec<(String, Option<usize>)>;
+        let states = |list: &[(&str, Option<usize>)]| -> States {
+            list.iter()
+                .map(|&(bytes, ticks)| (bytes.to_string(), ticks))
+                .collect()
+        };
+        let take = |count: u8| {
+            let c = count;
+            states(&[
+                (&format!("3,1,{c}"), None),
+                (&format!("3,2,{c}"), Some(18)),
+                (&format!("3,3,{c}"), Some(1)),
+                (&format!("3,0,{c}"), None),
+                (&format!("0,0,{c}"), Some(1)),
+                (&format!("1,0,{c}"), None),
+            ])
+        };
+        let mut refused = states(&[("3,1,0", None)]);
+        refused.extend((4..=18).map(|sub| (format!("3,{sub},0"), Some(1))));
+        refused.extend(states(&[("0,18,0", Some(1)), ("1,18,0", None)]));
+        let mut personal: States = (0..52)
+            .map(|count| (format!("3,19,{count}"), Some(1)))
+            .collect();
+        personal.extend(states(&[
+            ("3,20,52", Some(1)),
+            ("3,2,0", Some(18)),
+            ("3,3,0", Some(1)),
+            ("3,0,0", None),
+            ("0,0,0", Some(1)),
+            ("1,0,0", None),
+        ]));
+        let full = states(&[("3,0,0", None), ("0,0,0", Some(1)), ("1,0,0", None)]);
+        let spray = [(0x23, 1)];
+        let bullets = [(0x14, 15)];
+        let capacity = {
+            let mut game = GameState::default();
+            game.is_re2_room = true;
+            game.inventory_capacity()
+        };
+        let herbs = vec![(0x26, 1); capacity];
+        // The item, what is held, whether it is refused, and the states
+        // after `St_init02`'s.
+        type Case<'a> = (u8, &'a [(u8, u8)], bool, States);
+        let cases: [Case; 5] = [
+            (0x23, &spray, false, take(0)),
+            (0x14, &bullets, false, take(1)),
+            (0x14, &spray, true, refused),
+            (0x52, &spray, false, personal),
+            (0x23, &herbs, false, full),
+        ];
+        for (item, held, refuse, after) in cases {
+            let mut game = GameState::default();
+            game.is_re2_room = true;
+            game.inventory = stacks(held);
+            // As a box visit leaves them.
+            game.re2_box_bytes.routine = 1;
+            game.re2_box_bytes.sub = 5;
+            game.re2_box_bytes.count = 3;
+            game.re2_box_bytes.cursor = 2;
+            game.re2_box_bytes.top = 2;
+            let amount = if item == 0x14 { 15 } else { 1 };
+            let ops = [
+                8,
+                2,
+                49,
+                0,
+                0,
+                -100,
+                -100,
+                200,
+                200,
+                i64::from(item),
+                amount,
+                154,
+                1,
+                0,
+            ];
+            let mut host = GameHost { game: &mut game };
+            host.exec(0, crate::scd2::opcode::lookup(0x4E).unwrap(), &ops);
+            let action = game.room_actions[8].unwrap();
+            game.fire_re2_area(action);
+            let mut seen: Vec<(String, usize)> = Vec::new();
+            while game.re2_item_get.is_some() {
+                game.tick_re2_item_get(Input::default());
+                let trace = game.re2_box_bytes.trace();
+                let (bytes, rest) = trace
+                    .match_indices(',')
+                    .nth(2)
+                    .map(|(at, _)| trace.split_at(at))
+                    .unwrap();
+                match seen.last_mut() {
+                    Some((last, ticks)) if last == bytes => *ticks += 1,
+                    _ => seen.push((bytes.to_string(), 1)),
+                }
+                if seen.len() > 1 {
+                    assert_eq!(
+                        rest, ",0,1,2,0,0",
+                        "{item:#x}: the cursor at 0, the gate up"
+                    );
+                }
+                if game.message.active {
+                    game.message.set_menu_choice_id(u8::from(refuse));
+                    game.message.active = false;
+                }
+            }
+            let mut want = states(&[("1,5,3", Some(5)), ("2,0,0", Some(1))]);
+            want.extend(after);
+            assert_eq!(seen.len(), want.len(), "{item:#x}: {seen:?}");
+            for ((bytes, ticks), (want_bytes, want_ticks)) in seen.iter().zip(&want) {
+                assert_eq!(bytes, want_bytes, "{item:#x}: {seen:?}");
+                if let Some(want_ticks) = want_ticks {
+                    assert_eq!(ticks, want_ticks, "{item:#x}: {bytes}'s ticks");
+                }
+            }
+        }
+    }
+
     /// The get-item window for the item area `ops` sets, run until its
     /// check has shown the question or a refusal.
     fn item_window(game: &mut GameState, item: i64, amount: i64) {
