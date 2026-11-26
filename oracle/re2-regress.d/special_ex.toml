@@ -306,3 +306,19 @@ frames = [1397, 2049]
 voice_from_ref = true
 expect = { tick = 2046, fields = ["rng"], note = "at level 3 F14's `init_00` draws for `fg_common`'s 13 (from its random variable), which comes up in this game, so its `sce_em_set2` places one enemy 0x34 (`Em_34`, 0x49B5D0, Birkin's fourth form) in place of the zombies; arklay has no `Em_34`, and the original's work draws `Rnd` twice more on the room's first tick (4 draws to arklay's 2) (#946)" }
 record = ""
+
+# Leon's game as `special_ex_leon_door` plays it into room F14, then aiming down its corridor and firing every 16 ticks at the zombies `Sce_em_set2` places.
+[[run]]
+name = "special_ex_leon_f14"
+ui = "title"
+boot = true
+seed = 0
+offset = 0
+ticks = 7000
+compare_from = 1407
+input = "special_ex_leon_f14.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl,exo,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zd"
+frames = [1407, 6999]
+voice_from_ref = true
+expect = "match"
+record = ""
