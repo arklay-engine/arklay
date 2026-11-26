@@ -171,6 +171,28 @@ EXBATTLE_TEXT_DONE = 0x00689DB0
 EXBATTLE_TEXT = 0x006949EC
 EXBATTLE_WORKS = 0x0098A10C
 EXBATTLE_WORK = 0x248
+# Extreme Battle's opening (`Exbtl_Opening`, 0x446D50), task 1 from `Game_loop`'s second tick (its step 1 starts it)
+# until it ends, and its work: `Load_open5_7`'s wait (`0x6880E4`), the timeline's count and phase (`0x99D024`,
+# `0x99D03C`), the lines' state, line, column, count and delay index (`0x99DA84`, `0x99DA90`, `0x99D034`, `0x99D038`,
+# `0x99DA80`), fade 0's level and step (`0x99D01A`, `0x99D030`), the last page's flag and the page's first line
+# (`0x99D026`, `0x99D028`), the static's frame (`0x99D01D`) and the frames drawn (`0x99D02C`), and its 20 sprites
+# (`0x525668`, 8 bytes each, the first their shown flag).
+EXB_OPENING_TASK = 0x00446D50
+EXB_OPENING_WAIT = 0x006880E4
+EXB_OPENING_COUNT = 0x0099D024
+EXB_OPENING_PHASE = 0x0099D03C
+EXB_OPENING_STATE = 0x0099DA84
+EXB_OPENING_LINE = 0x0099DA90
+EXB_OPENING_COLUMN = 0x0099D034
+EXB_OPENING_TICKS = 0x0099D038
+EXB_OPENING_DELAY = 0x0099DA80
+EXB_OPENING_LEVEL = 0x0099D01A
+EXB_OPENING_STEP = 0x0099D030
+EXB_OPENING_LAST = 0x0099D026
+EXB_OPENING_PAGE = 0x0099D028
+EXB_OPENING_FRAME = 0x0099D01D
+EXB_OPENING_FRAMES = 0x0099D02C
+EXB_OPENING_SPRITES = 0x00525668
 # config.ini's GALLERY0 to GALLERY4: the bits of what play has opened in the gallery.
 GALLERY_FLAGS = 0x0068059C
 PROLOGUE_SCROLL_WAIT = 0x009800A4
@@ -2369,7 +2391,7 @@ def title_trace(game: Game) -> str:
         f"{game.u8(TITLE_EF2)},{game.u8(TITLE_EF2 + 1)},{game.u8(EX_LEVEL)},"
         f"{game.u32(FG_SYSTEM) & 0x01020009:x},{game.u32(FG_STATUS) & 0x02004000:x} "
         f"tfade2={fade_slot(game, 2)} tfade3={fade_slot(game, 3)} opt={option_trace(game)} {prologue_trace(game)} "
-        f"{exbattle_trace(game)}"
+        f"{exbattle_trace(game)} {exbattle_opening_trace(game)}"
     )
 
 
@@ -2404,6 +2426,26 @@ def exbattle_trace(game: Game) -> str:
     return (
         f"exb={steps[0]},{steps[1]},{state[0]},{state[2]},{flags[0]},{flags[1]},{flags[2]},{flags[3]},"
         f"{game.u32(EXBATTLE_TEXT_DONE)}/{text}/{';'.join(players) or '-'} exbm={';'.join(motions) or '-'}"
+    )
+
+
+def exbattle_opening_trace(game: Game) -> str:
+    """Extreme Battle's opening while its task runs (`Exbtl_Opening`, `0x446D50`). `exo`: the task's two steps, then
+    `Load_open5_7`'s wait, the timeline's count and phase, the lines' state, line, column, count and delay index, fade 0's
+    level and step, the last page's flag, the page's first line, the static's frame, the frames drawn and the sprites'
+    shown mask (bit n for sprite n)."""
+    task = TASKS + 0x24
+    if game.u32(task + 4) != EXB_OPENING_TASK:
+        return "exo=-"
+    steps = game.read(task + 8, 2)
+    records = game.read(EXB_OPENING_SPRITES, 20 * 8)
+    mask = sum(1 << n for n in range(20) if records[n * 8] & 1)
+    return (
+        f"exo={steps[0]},{steps[1]},{game.u16(EXB_OPENING_WAIT)},{game.u16(EXB_OPENING_COUNT)},"
+        f"{game.u16(EXB_OPENING_PHASE)},{game.u32(EXB_OPENING_STATE)},{game.u32(EXB_OPENING_LINE)},"
+        f"{game.u32(EXB_OPENING_COLUMN)},{game.u32(EXB_OPENING_TICKS)},{game.u32(EXB_OPENING_DELAY)},"
+        f"{game.u16(EXB_OPENING_LEVEL)},{game.u16(EXB_OPENING_STEP)},{game.u8(EXB_OPENING_LAST)},"
+        f"{game.u8(EXB_OPENING_PAGE)},{game.u8(EXB_OPENING_FRAME)},{game.u32(EXB_OPENING_FRAMES)},{mask:x}"
     )
 
 

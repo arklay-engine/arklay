@@ -1896,6 +1896,7 @@ pub struct ScaVolume {
 pub mod computer2;
 pub mod door2;
 mod entity;
+pub mod exb_opening2;
 pub mod hikidashi2;
 pub mod item_get2;
 pub mod itembox2;

@@ -23,6 +23,8 @@ pub const FLOORS: usize = 20;
 /// `fg_map` (`0x98EC04`, `Flg_addr`'s bank 9): the rooms' visited bits, by
 /// [`visited_index`]. The original's is five words long.
 pub const VISITED_BANK: u8 = 9;
+/// `fg_common`'s bit for an Extreme Battle room not yet visited.
+const EXTREME_NEW_ROOM: u8 = 0xFF;
 /// `fg_map_c` (`0x98EC18`, bank 32): a room's [`MapRoom::fill`] bit.
 pub const FILL_BANK: u8 = 32;
 /// `fg_map_i` (`0x98EC1C`, bank 33): a floor's map is held, [`Floor::held`].
@@ -573,6 +575,20 @@ impl GameState {
         self.re2.set_flag(FLOOR_BANK, floor, 1);
     }
 
+    /// `Sce_scheduler_set` (`0x4E40D0`) under Extreme Battle (`fg_system`'s
+    /// `0x1000000`): `fg_common`'s 0xFF up while this room's visited bit
+    /// is down, and down once it is up.
+    pub fn re2_extreme_new_room(&mut self) {
+        if !self.re2.flag(0, crate::scd2::host::FG_SYSTEM_EXTREME) {
+            return;
+        }
+        let stage = self.id.re2_stage().saturating_sub(1);
+        let visited = self
+            .re2
+            .flag(VISITED_BANK, visited_index(stage, self.id.room));
+        self.re2.set_flag(COMMON_BANK, EXTREME_NEW_ROOM, u8::from(!visited));
+    }
+
     /// The trace's `mapfg`: `fg_map`'s five words (`0x98EC04` to
     /// `0x98EC14`), then `fg_map_c`'s, `fg_map_i`'s and bank 35's first
     /// words, in hex.
@@ -928,6 +944,23 @@ mod tests {
         );
         game.is_re2_room = true;
         game
+    }
+
+    #[test]
+    fn extreme_battle_marks_a_room_not_yet_visited_in_fg_common() {
+        let mut game = re2_game("F120");
+        game.re2_extreme_new_room();
+        assert!(!game.re2.flag(COMMON_BANK, EXTREME_NEW_ROOM));
+        game.re2
+            .set_flag(0, crate::scd2::host::FG_SYSTEM_EXTREME, 1);
+        game.re2_extreme_new_room();
+        assert!(game.re2.flag(COMMON_BANK, EXTREME_NEW_ROOM));
+        // `special_ex_leon_open`'s `mapfg` on `Game_loop`'s first tick:
+        // room F12 is stage 5's room 0x12, bit 117.
+        game.re2_room_set();
+        assert!(game.re2.flag(VISITED_BANK, 117));
+        game.re2_extreme_new_room();
+        assert!(!game.re2.flag(COMMON_BANK, EXTREME_NEW_ROOM));
     }
 
     #[test]

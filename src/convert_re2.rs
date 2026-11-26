@@ -28,6 +28,7 @@
 //! | `Common/Data/spy_logo.tim`, `tofulogo.tim` | `ui/title/spy_logo.tim`, `ui/title/tofulogo.tim` |
 //! | `Common/Data/EXTITLE.adt`, `EXTITLE1.adt` (an ADT stream holding a TIM) | `ui/title/extitle.bmp`, `ui/title/extitle1.tim` |
 //! | `Common/Data/SELECT_B.adt`, `Select_i.tim`, `SELECT_W.TIM` | `ui/exbattle/select_b.bmp`, `ui/exbattle/select_i.tim`, `ui/exbattle/select_w.tim` |
+//! | `Common/Data/OPEN07a.tim`, `OPEN07b.tim` | `ui/exbattle/open07a.tim`, `ui/exbattle/open07b.tim` |
 //! | `Gallery/TITLE<n>.dat`, `Moji.dat` (each a TIM) | `ui/gallery/title<n>.tim`, `ui/gallery/moji.tim` |
 //! | `Gallery/ROUGH<nn>.dat`, `ILLUST<nn>.dat`, `LEFT01.dat`, `LEFT02.dat`, `GNUM2.dat`, `movie64.dat` (each a TIM) | `ui/gallery/<stem>.tim` |
 //! | `Common/Data/font0.tim` | `font/00.bmp`, `font/00.xml` (moved onto the Western cells, `convert_re2/font.rs`) |
@@ -800,7 +801,7 @@ fn copy_text(
 /// own code (the font's widths and colours, the message codes). A change to
 /// what [`packed_source_hash`] covers needs no bump. It carries on from the
 /// revision the two converters shared.
-pub const CONVERT_VERSION: u32 = 32;
+pub const CONVERT_VERSION: u32 = 33;
 
 /// The checked-in scripts the pack takes as they are: each entry and its
 /// source.
@@ -2128,6 +2129,23 @@ fn copy_title_art(
         } else if layout.common.is_some() {
             warnings.push(format!(
                 "no Common/Data/{entry}.tim; Extreme Battle's choice has no sheet"
+            ));
+        }
+    }
+    // Extreme Battle's opening (`Load_open5_7`): the static's two pictures
+    // (textures 0x13 and 0x14). `OPEN05.TIM`, the Japanese lines, isn't
+    // drawn by Classic REbirth's build.
+    for (stem, entry) in [("OPEN07A", "open07a"), ("OPEN07B", "open07b")] {
+        if let Some(path) = find(stem) {
+            tally.add(
+                writer,
+                "ui",
+                &format!("ui/exbattle/{entry}.tim"),
+                read(path)?,
+            )?;
+        } else if layout.common.is_some() {
+            warnings.push(format!(
+                "no Common/Data/{entry}.tim; Extreme Battle's opening has no static"
             ));
         }
     }
