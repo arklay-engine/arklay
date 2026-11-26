@@ -1,0 +1,315 @@
+# Leon's game as special_ex_leon_door plays it into room F14 (4716), then aiming down F14's corridor from 4760 and firing every 16 ticks while the zombies `Sce_em_set2` placed come (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+740 right
+743
+770 right
+773
+800 right
+803
+830 left
+833
+860 down
+863
+890 up
+893
+920 confirm
+923
+1220 right
+1223
+1260 left
+1263
+1265 right
+1268
+1330 confirm
+1333
+4420 left
+4431 up
+4572 right
+4579
+4590 confirm
+4593
+4760 aim fire
+4763 aim
+4776 aim fire
+4779 aim
+4792 aim fire
+4795 aim
+4808 aim fire
+4811 aim
+4824 aim fire
+4827 aim
+4840 aim fire
+4843 aim
+4856 aim fire
+4859 aim
+4872 aim fire
+4875 aim
+4888 aim fire
+4891 aim
+4904 aim fire
+4907 aim
+4920 aim fire
+4923 aim
+4936 aim fire
+4939 aim
+4952 aim fire
+4955 aim
+4968 aim fire
+4971 aim
+4984 aim fire
+4987 aim
+5000 aim fire
+5003 aim
+5016 aim fire
+5019 aim
+5032 aim fire
+5035 aim
+5048 aim fire
+5051 aim
+5064 aim fire
+5067 aim
+5080 aim fire
+5083 aim
+5096 aim fire
+5099 aim
+5112 aim fire
+5115 aim
+5128 aim fire
+5131 aim
+5144 aim fire
+5147 aim
+5160 aim fire
+5163 aim
+5176 aim fire
+5179 aim
+5192 aim fire
+5195 aim
+5208 aim fire
+5211 aim
+5224 aim fire
+5227 aim
+5240 aim fire
+5243 aim
+5256 aim fire
+5259 aim
+5272 aim fire
+5275 aim
+5288 aim fire
+5291 aim
+5304 aim fire
+5307 aim
+5320 aim fire
+5323 aim
+5336 aim fire
+5339 aim
+5352 aim fire
+5355 aim
+5368 aim fire
+5371 aim
+5384 aim fire
+5387 aim
+5400 aim fire
+5403 aim
+5416 aim fire
+5419 aim
+5432 aim fire
+5435 aim
+5448 aim fire
+5451 aim
+5464 aim fire
+5467 aim
+5480 aim fire
+5483 aim
+5496 aim fire
+5499 aim
+5512 aim fire
+5515 aim
+5528 aim fire
+5531 aim
+5544 aim fire
+5547 aim
+5560 aim fire
+5563 aim
+5576 aim fire
+5579 aim
+5592 aim fire
+5595 aim
+5608 aim fire
+5611 aim
+5624 aim fire
+5627 aim
+5640 aim fire
+5643 aim
+5656 aim fire
+5659 aim
+5672 aim fire
+5675 aim
+5688 aim fire
+5691 aim
+5704 aim fire
+5707 aim
+5720 aim fire
+5723 aim
+5736 aim fire
+5739 aim
+5752 aim fire
+5755 aim
+5768 aim fire
+5771 aim
+5784 aim fire
+5787 aim
+5800 aim fire
+5803 aim
+5816 aim fire
+5819 aim
+5832 aim fire
+5835 aim
+5848 aim fire
+5851 aim
+5864 aim fire
+5867 aim
+5880 aim fire
+5883 aim
+5896 aim fire
+5899 aim
+5912 aim fire
+5915 aim
+5928 aim fire
+5931 aim
+5944 aim fire
+5947 aim
+5960 aim fire
+5963 aim
+5976 aim fire
+5979 aim
+5992 aim fire
+5995 aim
+6008 aim fire
+6011 aim
+6024 aim fire
+6027 aim
+6040 aim fire
+6043 aim
+6056 aim fire
+6059 aim
+6072 aim fire
+6075 aim
+6088 aim fire
+6091 aim
+6104 aim fire
+6107 aim
+6120 aim fire
+6123 aim
+6136 aim fire
+6139 aim
+6152 aim fire
+6155 aim
+6168 aim fire
+6171 aim
+6184 aim fire
+6187 aim
+6200 aim fire
+6203 aim
+6216 aim fire
+6219 aim
+6232 aim fire
+6235 aim
+6248 aim fire
+6251 aim
+6264 aim fire
+6267 aim
+6280 aim fire
+6283 aim
+6296 aim fire
+6299 aim
+6312 aim fire
+6315 aim
+6328 aim fire
+6331 aim
+6344 aim fire
+6347 aim
+6360 aim fire
+6363 aim
+6376 aim fire
+6379 aim
+6392 aim fire
+6395 aim
+6408 aim fire
+6411 aim
+6424 aim fire
+6427 aim
+6440 aim fire
+6443 aim
+6456 aim fire
+6459 aim
+6472 aim fire
+6475 aim
+6488 aim fire
+6491 aim
+6504 aim fire
+6507 aim
+6520 aim fire
+6523 aim
+6536 aim fire
+6539 aim
+6552 aim fire
+6555 aim
+6568 aim fire
+6571 aim
+6584 aim fire
+6587 aim
+6600 aim fire
+6603 aim
+6616 aim fire
+6619 aim
+6632 aim fire
+6635 aim
+6648 aim fire
+6651 aim
+6664 aim fire
+6667 aim
+6680 aim fire
+6683 aim
+6696 aim fire
+6699 aim
+6712 aim fire
+6715 aim
+6728 aim fire
+6731 aim
+6744 aim fire
+6747 aim
+6760 aim fire
+6763 aim
+6776 aim fire
+6779 aim
+6792 aim fire
+6795 aim
+6808 aim fire
+6811 aim
+6824 aim fire
+6827 aim
+6840 aim fire
+6843 aim
+6856 aim fire
+6859 aim
+6872 aim fire
+6875 aim
+6888 aim fire
+6891 aim
+6900

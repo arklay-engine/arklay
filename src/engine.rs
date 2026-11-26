@@ -3040,6 +3040,18 @@ fn re2_demo_press(ui: &UiInput, input: &player::Input) -> bool {
         || input.target_step != 0
 }
 
+/// RE2's door skip: `Door_move` (`0x450120`) stops the door on any of
+/// `Pad_set`'s trigger word's `0x8D0` (START, the shot and confirm key, the
+/// run and cancel key, the map key), the shot key as much as confirm, as the
+/// original's one entry is both. An attract reel's door plays out, as
+/// [`door_skip_pressed`] has it.
+fn re2_door_skip(trigger: u16, attract: bool) -> bool {
+    !attract && trigger & RE2_DOOR_SKIP != 0
+}
+
+/// `Door_move`'s mask of the trigger word.
+const RE2_DOOR_SKIP: u16 = 0x08D0;
+
 fn door_skip_pressed(ui: &UiInput, input: &player::Input, attract: bool) -> bool {
     !attract && (input.action_pressed || input.run_pressed || ui.cancel)
 }
@@ -14715,6 +14727,13 @@ impl App {
                     let skip = session.transition_skip(&ui, &input);
                     session.step_re2_pad_repeat(&input);
                     session.step_re2_pad_trigger(&ui, &input);
+                    // RE2's `Door_move` reads `Pad_set`'s trigger word, which
+                    // the frame has just stepped.
+                    let skip = if session.game.is_re2_room {
+                        re2_door_skip(session.game.pad_repeat.trigger, session.in_demo())
+                    } else {
+                        skip
+                    };
                     session.tick_transition(pack, skip);
                 } else {
                     session.tick(pack, ui, input, action)?;
@@ -28175,6 +28194,20 @@ mod tests {
             "ROOM1001's init must run without placeholders: {:?}",
             game.placeholders
         );
+    }
+
+    /// `Door_move` skips on the shot key (0x80) as on confirm, and on START,
+    /// run, cancel and the map key; the aim key (0x08) and the directions
+    /// don't, nor anything in an attract reel.
+    #[test]
+    fn an_re2_door_skips_on_door_moves_mask_of_the_trigger_word() {
+        for bit in [0x0800, 0x0080, 0x0040, 0x0010] {
+            assert!(re2_door_skip(bit, false), "{bit:#x}");
+            assert!(!re2_door_skip(bit, true), "{bit:#x}");
+        }
+        for bit in [0x0008, 0x0004, 0x1000, 0x2000, 0x4000, 0x8000, 0] {
+            assert!(!re2_door_skip(bit, false), "{bit:#x}");
+        }
     }
 
     /// Extreme Battle's lift from F12 names stage 6's room 0x14
