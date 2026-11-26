@@ -1,0 +1,252 @@
+# claire_a_110_10a: Claire A from 112's door 0 in 110 with the Serpent Stone (#896): the Grenade Launcher equipped from
+# the status screen (START on 356, twelve ticks into the warp), up the west corridor to where the licker (8:119's) comes
+# round from the north corridor, the aim raised only once it is in the west corridor (raised earlier, it holds on the
+# licker round the corner and the grenades hit the wall) and two grenades kill it, round the north and east corridors to
+# door 0, 10F east to door 0, 10A's corridor to door 2, and in 10B a Red Jewel in each statue from the status screen
+# (4:18, 4:19), the Blue Stone (0x38, 8:96) from the middle, the two Blue Stones combined into the Jaguar Stone (0x37)
+# from the status screen, and door 1 into 10A's hand back
+344 up
+346
+356 start
+357
+392 down
+393
+412 down
+413
+432 right
+433
+452 confirm
+453
+472 confirm
+473
+532 cancel
+533
+572 start
+573
+612 left
+615 left up run
+628 up run
+633 left up run
+634 up run
+640 left up
+646 up
+675 left up
+676 up
+794 right up
+795 up
+804
+1223 aim
+1243 aim fire
+1263 aim
+1283 aim fire
+1289
+1349 right up run
+1352 up run
+1356 left up run
+1357 up run
+1359 right up run
+1376 up run
+1397 right up run
+1398 up run
+1419 right up run
+1420 up run
+1436 left up run
+1437 up run
+1440 right up run
+1441 up run
+1449 left up run
+1450 up run
+1464 right up run
+1465 up run
+1470 left up run
+1471 up run
+1472 right up run
+1484 up run
+1490 right up run
+1491 up run
+1492 right up run
+1496 up run
+1500 right up run
+1501 up run
+1535 left up run
+1536 up run
+1543 right up run
+1544 up run
+1551 left up run
+1552 right up run
+1553 up run
+1604 right up run
+1605 up run
+1615 left up run
+1616 up run
+1622 right up run
+1623 up run
+1627 left up run
+1631 up run
+1634 left up run
+1635 up run
+1641 right up run
+1642 up run
+1643 left up
+1648 up
+1654 left up
+1655 up
+1671 left up
+1672 up
+1673 left
+1682
+1688 action
+1689
+1725 up
+2041 left up run
+2046 up run
+2060 right up run
+2061 up run
+2075 right up run
+2076 up run
+2080 right up
+2086 up
+2091 right up
+2092 up
+2096 left
+2098
+2104 action
+2105
+2141 up
+2447 left
+2450 left up run
+2463 left
+2465 left up run
+2467 left
+2469 left up run
+2471 right up run
+2474 up run
+2487 right up run
+2492 up run
+2504 right up run
+2512 up run
+2518 right up run
+2527 up run
+2534 left up run
+2535 up run
+2537 right up run
+2539 up run
+2557 up
+2563 right up
+2564 up
+2583 right
+2591
+2597 action
+2598
+2634 up
+2940 right up run
+2943 up run
+2952 right up run
+2953 up run
+2958 right up run
+2959 up run
+2964 left up run
+2965 up run
+2977 right up run
+2979 up run
+2992 right up run
+2993 up run
+2997 right up run
+2998 left up
+3008 up
+3013 left up
+3014 up
+3019 left
+3022
+3026 start
+3027
+3062 down
+3063
+3082 confirm
+3083
+3102 confirm
+3103
+3262 left
+3271 left up run
+3282 right up run
+3290 up run
+3292 right up run
+3293 right
+3295 right up
+3311 right
+3313 right up
+3315 right
+3318 right up
+3319 right
+3321 right up
+3322 right
+3325 right up
+3326 right
+3330 right up
+3331 right
+3335 right up
+3336 left
+3353
+3357 start
+3358
+3393 down
+3394
+3413 right
+3414
+3433 confirm
+3434
+3453 confirm
+3454
+3613 right
+3624 right up run
+3633 up run
+3634 right up run
+3635 left up
+3639 up
+3642 left
+3659
+3663 action
+3664
+3843 action
+3844
+3943 action
+3944
+4163 start
+4164
+4199 down
+4200
+4219 down
+4220
+4239 confirm
+4240
+4259 down
+4260
+4279 down
+4280
+4299 confirm
+4300
+4319 down
+4320
+4339 confirm
+4340
+4459 cancel
+4460
+4499 start
+4500
+4539 left
+4557 left up run
+4575 right up run
+4586 up run
+4590 right up run
+4591 up run
+4592 right up run
+4593 up run
+4594 left up
+4597 up
+4641 left up
+4642 up
+4664 left
+4669
+4675 action
+4676
+5018
