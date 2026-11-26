@@ -243,3 +243,67 @@ frames = [1407, 4699]
 voice_from_ref = true
 expect = "match"
 record = ""
+
+# Leon's game as `special_ex_leon_open` plays it to the room's fade in, then his walk to room F12's lift (door 0, `Sce_Door` on the confirm of 4590) and its door into room F14 (placed on 4625, loaded on 4715, the room's first tick 4716).
+[[run]]
+name = "special_ex_leon_door"
+ui = "title"
+boot = true
+seed = 0
+offset = 0
+ticks = 4720
+compare_from = 1407
+input = "special_ex_leon_door.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl,exo"
+frames = [1407, 4719]
+voice_from_ref = true
+expect = { tick = 4716, fields = ["rng"], note = "room F14's init places its zombies with `sce_em_set2` (`Sce_em_set2`, 0x4E7CB0), which arklay doesn't model: the original draws `Rnd` for each one's chance on the room's first visit and in their inits, and has five 0x1F zombies on the room's first tick (48 draws in `special_ex_leon_door`), where arklay draws once (`Sce_rnd_set`) and places none (#946)" }
+record = ""
+
+# Claire's game as `special_ex_claire_play` plays it, the opening skipped on 1600, then the walk to room F12's lift (door 0, `Sce_Door` on the confirm of 1920) and its door into room F14.
+[[run]]
+name = "special_ex_claire_door"
+ui = "title"
+boot = true
+seed = 0
+offset = 0
+ticks = 2050
+compare_from = 1397
+input = "special_ex_claire_door.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl,exo"
+frames = [1397, 2049]
+voice_from_ref = true
+expect = { tick = 2046, fields = ["rng"], note = "room F14's init places its zombies with `sce_em_set2` (`Sce_em_set2`, 0x4E7CB0), which arklay doesn't model: the original draws `Rnd` for each one's chance on the room's first visit and in their inits, and has five 0x1F zombies on the room's first tick (48 draws in `special_ex_leon_door`), where arklay draws once (`Sce_rnd_set`) and places none (#946)" }
+record = ""
+
+# Chris's game as `special_ex_chris_play` plays it, the opening skipped on 1600, then the walk to room F12's lift (door 0, `Sce_Door` on the confirm of 1920) and its door into room F14.
+[[run]]
+name = "special_ex_chris_door"
+ui = "title"
+boot = true
+seed = 0
+offset = 0
+ticks = 2050
+compare_from = 1427
+input = "special_ex_chris_door.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl,exo"
+frames = [1427, 2049]
+voice_from_ref = true
+expect = { tick = 2046, fields = ["rng"], note = "room F14's init places its zombies with `sce_em_set2` (`Sce_em_set2`, 0x4E7CB0), which arklay doesn't model: the original draws `Rnd` for each one's chance on the room's first visit and in their inits, and has five 0x1F zombies on the room's first tick (48 draws in `special_ex_leon_door`), where arklay draws once (`Sce_rnd_set`) and places none (#946)" }
+record = ""
+
+# Ada's game as `special_ex_ada_play` plays it, the opening skipped on 1600, then the walk to room F12's lift (door 0, `Sce_Door` on the confirm of 1920) and its door into room F14.
+[[run]]
+name = "special_ex_ada_door"
+ui = "title"
+boot = true
+seed = 0
+offset = 0
+ticks = 2050
+compare_from = 1397
+input = "special_ex_ada_door.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,fgitem,esp,pl,exo"
+frames = [1397, 2049]
+voice_from_ref = true
+expect = { tick = 2046, fields = ["rng"], note = "room F14's init places its zombies with `sce_em_set2` (`Sce_em_set2`, 0x4E7CB0), which arklay doesn't model: the original draws `Rnd` for each one's chance on the room's first visit and in their inits, and has five 0x1F zombies on the room's first tick (48 draws in `special_ex_leon_door`), where arklay draws once (`Sce_rnd_set`) and places none (#946)" }
+record = ""

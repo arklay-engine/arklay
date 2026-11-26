@@ -9550,7 +9550,7 @@ impl GameState {
     /// The file stage of a door's `scd_var_stage`: `Set_door` keeps it as
     /// the script names it, and under Extreme Battle `Set_room` adds
     /// `DWORD_0098E798`'s 9 for the letter stage.
-    fn re2_door_stage(&self, stage: u8) -> u8 {
+    pub(crate) fn re2_door_stage(&self, stage: u8) -> u8 {
         if self.re2.flag(0, crate::scd2::host::FG_SYSTEM_EXTREME) {
             stage + RE2_EXTREME_STAGES
         } else {
@@ -12409,7 +12409,8 @@ impl GameState {
     pub fn re2_music_place(&self) -> crate::bgm2::Place {
         let origin = self.origin();
         crate::bgm2::Place {
-            stage: origin.stage.saturating_sub(1),
+            // `scd_var_stage`: a letter stage's room is its stage's.
+            stage: origin.re2_stage().saturating_sub(1),
             room: origin.room,
             cut: self.camera.current_cut,
             system: self.re2.banks[0][0],
@@ -12511,6 +12512,13 @@ mod tests {
             ..game.id
         };
         assert_eq!((to.stage_char(), to.re2_stage()), ('f', 6));
+        // The music's place is `scd_var_stage`'s: F14 is stage 5's room
+        // 0x14, as `Snd_bgm_ck` and `plays_once` read it.
+        game.id = to;
+        assert_eq!(
+            (game.re2_music_place().stage, game.re2_music_place().room),
+            (5, 0x14)
+        );
     }
     use crate::scd::ir::{Decoded, Insn, Scripts, Stream, StreamKind};
     use crate::scd::opcode::{actor_op, command_op, event_control_op, event_top_op, tween_op};

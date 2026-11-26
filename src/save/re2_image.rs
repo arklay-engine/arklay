@@ -364,7 +364,7 @@ fn script_var(game: &GameState, index: usize) -> u16 {
     const ROOM: usize = 25;
     const CUT: usize = 26;
     match index {
-        STAGE => u16::from(game.origin().stage.saturating_sub(1)),
+        STAGE => u16::from(game.origin().re2_stage().saturating_sub(1)),
         ROOM => u16::from(game.origin().room),
         CUT => game.camera.current_cut as u16,
         _ => game.re2.vars[index],

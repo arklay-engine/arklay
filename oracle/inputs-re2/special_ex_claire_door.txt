@@ -1,0 +1,37 @@
+# EX.BATTLE's START and Claire's choice, as special_ex_claire takes them, then the game in room F12 and Extreme Battle's opening, its skip on 1600, then Claire's walk to the room's lift (door 0): a turn, a walk, a turn to face it, and its door to room F14 (oracle/re2.md, "The title").
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+860 down
+863
+890 up
+893
+920 confirm
+923
+1250 right
+1253
+1320 confirm
+1323
+1600 confirm
+1603
+1700 up
+1750 left
+1761 up
+1902 right
+1909
+1920 confirm
+1923
