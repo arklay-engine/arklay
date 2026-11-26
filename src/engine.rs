@@ -21476,11 +21476,15 @@ fn seed_re2_music_table(pack: &Pack, game: &mut game::GameState, scenario_b: boo
     }
 }
 
-/// `Rbj_set` (`0x4B4480`), after each of `Set_room`'s load passes: in an
+/// `Rbj_set` (`0x4B4480`), after each of `Set_room`'s load passes, from the
+/// banks the load's `rbj_reset` left ([`RoomState::rbj_drop`]): in an
 /// extra mode's game (`fg_status`'s `0x2000000`, as the pass left it) the
 /// player takes the room's motion bank with mask bit 31, or none when the
 /// room has none, and otherwise the bank with bit 0.
 fn rbj_set(room: &mut RoomState, game: &game::GameState) {
+    if game.is_re2_room {
+        room.rbj_drop(game.re2.rbj_dropped.unwrap_or(0));
+    }
     room.use_extra_room_anim(
         game.is_re2_room
             && game.re2.flag(

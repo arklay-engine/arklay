@@ -109,6 +109,9 @@ pub struct Re2State {
     pub door_settling: bool,
     /// The same tick, as the enemy slots see it.
     pub door_stop: bool,
+    /// `fg_rbj_set` (bank 30) as this load's `rbj_reset` found it: the room
+    /// animation banks `Replace_rdt` dropped before `Rbj_set` chooses.
+    pub rbj_dropped: Option<u32>,
     /// The tick after: `fg_stop` (`0xEF000000`) comes down only after
     /// `Pad_set` has masked the pad with it.
     pub door_key_stop: bool,
@@ -765,6 +768,10 @@ pub const STATUS_HOLD: u8 = 25;
 /// 0 to 11 and 17. The scene, the voice line, the camera's lock and the
 /// quakes go.
 pub const SET_ROOM_STATUS_KEEP: u32 = 0xFFF0_4000;
+
+/// `Flg_addr[30]` is `fg_rbj_set` (`0x989E68`): the room animation banks
+/// `rbj_reset` drops, bank 0 on bit 31.
+pub const RBJ_BANK: u8 = 30;
 /// `fg_enemy_0`'s bank: stages below this keep theirs there, `Sce_em_set` says.
 const ENEMY_BANK: u8 = 6;
 /// The banks beside `fg_enemy_0` and `fg_enemy_1` (0x98EEB0 and 0x98EED0,
@@ -1055,6 +1062,7 @@ impl Default for Re2State {
             pending_flr: Vec::new(),
             door_settling: false,
             door_stop: false,
+            rbj_dropped: None,
             door_key_stop: false,
             objects_key_stop: false,
             script_door: false,
@@ -2230,10 +2238,12 @@ impl Re2State {
         }
     }
 
-    /// `Set_room`'s `fg_status &= 0xFFF04000`, on every room load. Only word
-    /// 0 of the bank is `fg_status`.
+    /// `Set_room`'s `fg_status &= 0xFFF04000` and `fg_rbj_set = 0`, on every
+    /// room load. Only word 0 of each bank is the global.
     pub fn enter_room_status(&mut self) {
         self.banks[usize::from(STATUS_BANK)][0] &= SET_ROOM_STATUS_KEEP;
+        self.banks[usize::from(RBJ_BANK)][0] = 0;
+        self.rbj_dropped = None;
     }
 }
 
@@ -3530,11 +3540,12 @@ impl Host for GameHost<'_> {
                 }
             }
             "sce_em_set" => self.sce_em_set(at),
-            // Neither is modelled; `Mem_top` stops being known
-            // (`crate::heap2`).
+            // `Replace_rdt` drops the banks `fg_rbj_set` names, for the load's
+            // `Rbj_set` to choose from what is left. The RDT's own compaction
+            // isn't modelled; `Mem_top` stops being known (`crate::heap2`).
             "rbj_reset" => {
                 self.game.re2_heap.rbj_reset();
-                log_unmodelled(op.mnemonic);
+                self.game.re2.rbj_dropped = Some(self.game.re2.banks[usize::from(RBJ_BANK)][0]);
             }
             "sce_em_set2" => self.sce_em_set2(at),
             "obj_model_set" => self.obj_model_set(at),

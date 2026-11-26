@@ -638,6 +638,18 @@ impl RoomSource {
         } else {
             None
         };
+        // The banks `rbj_reset` chooses between, from the room's RDT as the
+        // original loads it, when it came with the room.
+        let rbj_banks = if self.dialect == Dialect::Re2 {
+            let rdt = crate::heap2::rdt_entry(&id.code());
+            (pack.depth_of(&format!("{dir}/{XML_FILE}")) == pack.depth_of(&rdt))
+                .then(|| pack.read(&rdt).ok())
+                .flatten()
+                .map(|data| crate::rdt2::shared_rbj_banks(&data))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
 
         Ok(RoomState {
             stage: id.stage,
@@ -686,6 +698,7 @@ impl RoomSource {
             character_anims,
             extra_room_anim,
             extra_room_anim_used: false,
+            rbj_banks,
             model_warnings,
         })
     }

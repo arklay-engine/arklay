@@ -960,6 +960,12 @@ pub struct RoomState {
     pub extra_room_anim: Option<crate::model::RoomAnim>,
     /// [`Self::room_anim`] is the extra mode's bank.
     pub extra_room_anim_used: bool,
+    /// RE2's room animation banks with their index in the RDT's table and
+    /// their masks, kept only when two share a bit
+    /// ([`crate::rdt2::shared_rbj_banks`]): which of them the room's anims
+    /// are depends on the banks `rbj_reset` drops. They stay for every
+    /// `Rbj_set` of the load, a rerun init's too.
+    pub rbj_banks: Vec<(usize, u32, crate::model::RoomAnim)>,
 }
 
 impl RoomState {
@@ -971,6 +977,52 @@ impl RoomState {
             std::mem::swap(&mut self.room_anim, &mut self.extra_room_anim);
             self.extra_room_anim_used = extra;
         }
+    }
+
+    /// `Replace_rdt`'s drop of the banks whose bit is up in `dropped`
+    /// (`fg_rbj_set`, bank 0 on bit 31), then `Rbj_set`'s choice of the last
+    /// bank left for each body. A body with none left keeps the bank it had.
+    pub fn rbj_drop(&mut self, dropped: u32) {
+        if self.rbj_banks.is_empty() {
+            return;
+        }
+        let extra = self.extra_room_anim_used;
+        self.use_extra_room_anim(false);
+        let kept: Vec<_> = self
+            .rbj_banks
+            .iter()
+            .filter(|&&(index, ..)| {
+                0x8000_0000u32
+                    .checked_shr(index as u32)
+                    .is_none_or(|bit| dropped & bit == 0)
+            })
+            .map(|(_, mask, anim)| (*mask, anim.clone()))
+            .collect();
+        let last = |bit: u32| {
+            kept.iter()
+                .rev()
+                .find(|(mask, _)| mask & bit != 0)
+                .map(|(_, anim)| anim.clone())
+        };
+        if let Some(anim) = last(1) {
+            self.room_anim = Some(anim);
+        }
+        if let Some(anim) = last(0x8000_0000) {
+            self.extra_room_anim = Some(anim);
+        }
+        let slots = (0..crate::rdt2::ANIM_SLOTS)
+            .map(|slot| (slot, 1u32 << (slot + 2)))
+            .chain([(crate::scd2::host::SPLAYER_SLOT as u8, 2)]);
+        for (slot, bit) in slots {
+            let Some(anim) = last(bit) else {
+                continue;
+            };
+            match self.character_anims.iter_mut().find(|(at, _)| *at == slot) {
+                Some((_, held)) => *held = anim,
+                None => self.character_anims.push((slot, anim)),
+            }
+        }
+        self.use_extra_room_anim(extra);
     }
 
     /// `Hit_ck_point4` on the view quad `Ccut_searc` finds for the current cut.
@@ -1052,6 +1104,39 @@ mod tests {
             height: rows.len() as u32,
             rgba: rows.iter().flat_map(|&row| [row, 0, 0, 255]).collect(),
         }
+    }
+
+    /// Room 404 has two player banks: `main_02`'s `set(30, 2, 1)` and
+    /// `rbj_reset` from 403's lift drop the last, and `Rbj_set` gives the
+    /// player the one before it. Annette's bank (mask 4, slot 0) stays.
+    #[test]
+    fn rbj_reset_drops_the_banks_fg_rbj_set_names() {
+        let anim = |clips: usize| crate::model::RoomAnim {
+            clips: vec![crate::model::Clip::default(); clips],
+            ..Default::default()
+        };
+        let clips = |room: &RoomState| room.room_anim.as_ref().map(|anim| anim.clips.len());
+        let banks = vec![(0, 4, anim(1)), (1, 1, anim(2)), (2, 1, anim(3))];
+        let mut room = RoomState {
+            room_anim: Some(anim(3)),
+            character_anims: vec![(0, anim(1))],
+            rbj_banks: banks.clone(),
+            ..Default::default()
+        };
+        room.rbj_drop(0x8000_0000 >> 2);
+        assert_eq!(clips(&room), Some(2));
+        assert_eq!(room.character_anims, vec![(0, anim(1))]);
+        // A rerun init that drops nothing takes the last bank again, as the
+        // load did.
+        room.rbj_drop(0);
+        assert_eq!(clips(&room), Some(3));
+        // A bank the RDT's table couldn't give leaves the others' bits.
+        let mut room = RoomState {
+            rbj_banks: vec![banks[0].clone(), banks[2].clone()],
+            ..Default::default()
+        };
+        room.rbj_drop(0x8000_0000 >> 1);
+        assert_eq!(clips(&room), Some(3));
     }
 
     /// `Ccut_searc` stops at the first zone of the cut: its group's header.
