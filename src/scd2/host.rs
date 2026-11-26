@@ -785,6 +785,16 @@ const MESSAGE_BANK: u8 = 11;
 pub const ITEM_BANK: u8 = 8;
 /// `fg_scenario` (`0x98EB2C`).
 pub const SCENARIO_BANK: u8 = 3;
+
+/// Whether `Sce_fade_adjust` leaves the fade as it is in room `room` of the
+/// 1-based `stage`: rooms 609 to 60C, 60E to 610 and 616 while
+/// `fg_status`'s 0x80000 (`lit`) is up. Room 60D is held too when
+/// `FUN_00442e40` reads `Marni`'s 0x6000, which it doesn't under the
+/// recordings' renderer: `fade_60d`'s init adjusts fade 1 as arklay does.
+fn fade_adjust_held(stage: u8, room: u8, lit: bool) -> bool {
+    stage == 6 && lit && matches!(room, 0x09..=0x0C | 0x0E..=0x10 | 0x16)
+}
+
 /// `fg_item_2` (`0x98EBD4`), the item flags of the stages from `scd_var_stage`
 /// 4 up.
 pub const ITEM_BANK_2: u8 = 34;
@@ -3743,7 +3753,14 @@ impl Host for GameHost<'_> {
                     add: at(3) as i16,
                 },
             ),
-            "sce_fade_adjust" => self.fade_write(at(0) as u8, FadeWrite::Adjust(at(1) as i16)),
+            // `Sce_fade_adjust` (`0x4E83C0`): stage 6's lit rooms hold the
+            // fade while `fg_status`'s 0x80000 is up.
+            "sce_fade_adjust" => {
+                let origin = self.game.origin();
+                if !fade_adjust_held(origin.stage, origin.room, self.game.re2.flag(1, 12)) {
+                    self.fade_write(at(0) as u8, FadeWrite::Adjust(at(1) as i16));
+                }
+            }
             // `Sce_parts_bomb`: the pieces `Parts_bomb` flings about aren't drawn.
             "sce_parts_bomb" => {
                 let part = at(1) as u8;
@@ -5977,6 +5994,21 @@ mod tests {
         assert!(!game.re2.flag(ROOM_BANK, 33));
         game.re2.sce_work_clr();
         assert!(game.re2.flag(ROOM_BANK, 33));
+    }
+
+    /// `Sce_fade_adjust`'s holds: the lit rooms of stage 6 under
+    /// `fg_status`'s 0x80000 alone, never 60D (`fade_60d`), and no other
+    /// stage's rooms.
+    #[test]
+    fn sce_fade_adjust_holds_in_the_lit_rooms() {
+        assert!(!fade_adjust_held(6, 0x0D, false));
+        assert!(!fade_adjust_held(6, 0x0D, true));
+        assert!(!fade_adjust_held(6, 0x0A, false));
+        assert!(fade_adjust_held(6, 0x0A, true));
+        assert!(fade_adjust_held(6, 0x16, true));
+        assert!(!fade_adjust_held(6, 0x11, true), "611 fades");
+        assert!(!fade_adjust_held(6, 0x04, true), "604 fades");
+        assert!(!fade_adjust_held(5, 0x0D, true));
     }
 
     #[test]
