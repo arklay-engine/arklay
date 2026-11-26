@@ -421,6 +421,49 @@ fn the_command_menu_wraps_three_two_one() {
     assert_eq!(menu(10), "1");
 }
 
+/// The custom handgun's menu (`St_menu0_item` for item 4) has command 0
+/// below the others: the cursor goes 3, 2, 1, 0 and wraps both ways, and
+/// command 0 turns `fg_common`'s 0x7E over and goes back to the menu on
+/// it.
+#[test]
+fn the_custom_handguns_command_0_turns_its_flag_over() {
+    use crate::scd2::host::COMMON_BANK;
+    let mut run = Run::new(game(&[(0x04, 18)]), 0);
+    let presses = [
+        (1, CONFIRM),
+        (7, DOWN),
+        (8, DOWN),
+        (9, DOWN),
+        (10, DOWN),
+        (11, UP),
+        (12, CONFIRM),
+        (20, CONFIRM),
+    ];
+    run.until(13, &presses);
+    assert!(run.game.re2_items.unwrap().burst);
+    let menu = |run: &Run, tick| run.at(tick).0.split(',').nth(6).unwrap().to_string();
+    assert_eq!(
+        [7, 8, 9, 10, 11].map(|tick| menu(&run, tick)),
+        ["2", "1", "0", "3", "0"]
+    );
+    // The decide on 12, the command on 13: back to the menu (sub 1) on
+    // command 0, the flag up; and down again by the second.
+    assert_eq!(run.at(13).0, "1,0,0,0,0,0,0,0");
+    assert!(run.game.re2.flag(COMMON_BANK, BURST_FLAG));
+    // The command's tick draws the menu before the flag turns over
+    // (`status_burst_102`'s 561 and 621): its label changes on the next.
+    let label = |run: &Run| run.game.re2_items.unwrap().burst_label;
+    assert!(!label(&run));
+    run.until(14, &presses);
+    assert!(label(&run));
+    run.until(21, &presses);
+    assert_eq!(run.at(21).0, "1,0,0,0,0,0,0,0");
+    assert!(!run.game.re2.flag(COMMON_BANK, BURST_FLAG));
+    assert!(label(&run));
+    run.until(22, &presses);
+    assert!(!label(&run));
+}
+
 #[test]
 fn a_part_upgrades_the_equipped_weapon() {
     let mut start = game(&[(0x02, 9), (0x20, 1)]);

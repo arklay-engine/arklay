@@ -195,6 +195,11 @@ local MENU_PIECES = {
     { 104, 56, 21, 0, 189 },
     { 125, 56, 21, 0, 189 },
 }
+-- `St_disp_menu1`'s fifth piece and command 0's row, for the custom
+-- handgun's menu (`0x689DF4` 1): the frame's 21 rows more below and the
+-- label at the menu's top plus 0x4D.
+local BURST_PIECE = { 146, 56, 21, 0, 189 }
+local BURST_Y = 147
 local LABEL_LIT = { 64, 64, 128 }
 local LABEL_EQUIP, LABEL_USE, LABEL_CHECK, LABEL_COMBINE = 0, 16, 32, 48
 
@@ -799,13 +804,24 @@ local function draw_menu(api, d, page, x)
     for _, p in ipairs(MENU_PIECES) do
         sprite(api, d, ST, x, p[1], p[2], p[3], p[4], p[5])
     end
+    if page.burst then
+        sprite(api, d, ST, x, BURST_PIECE[1], BURST_PIECE[2], BURST_PIECE[3], BURST_PIECE[4], BURST_PIECE[5])
+    end
     -- The labels are the item's the menu opened on (a reload's slide moves
     -- the cursor onto the weapon under USE): EQUIP for the weapons, 1 to
     -- 0x13, USE for the rest.
     local item = s.menu_item
     local first = (item ~= 0 and item < FIRST_AMMO) and LABEL_EQUIP or LABEL_USE
     local lit = page.command_cursor
-    sprite(api, d, ST + 7, x + 4, 126, 48, 16, 0, 16)
+    -- Command 0's label (texture 0x19): the custom handgun's below the
+    -- others, its row as the menu last built it from `fg_common`'s 0x7E
+    -- (`burst_on`), lit as they are; any other
+    -- menu has it under COMBINE, at its second row.
+    if page.burst then
+        sprite(api, d, ST + 7, x + 4, BURST_Y, 48, 16, 0, page.burst_on and 0 or 16, lit == 0 and LABEL_LIT or nil)
+    else
+        sprite(api, d, ST + 7, x + 4, 126, 48, 16, 0, 16)
+    end
     sprite(api, d, ST + 6, x + 4, 126, 48, 16, 0, LABEL_COMBINE, lit == 1 and LABEL_LIT or nil)
     sprite(api, d, ST + 6, x + 4, 105, 48, 16, 0, LABEL_CHECK, lit == 2 and LABEL_LIT or nil)
     sprite(api, d, ST + 6, x + 4, 84, 48, 16, 0, first, lit == 3 and LABEL_LIT or nil)

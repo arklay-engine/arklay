@@ -73,11 +73,12 @@ local KEY, SPACE = 0x22, 0x24
 -- `ScreenInput.held`'s directions.
 local HELD_UP, HELD_DOWN, HELD_LEFT, HELD_RIGHT = 0x10, 0x20, 0x40, 0x80
 -- Where Classic REbirth stops the name scroll: right stops at 21 on a list
--- that fits on the screen (`save_200_scroll`, `title_load_game`) and at 25
--- on a longer one (`save_200_page`'s 16 rows, every row alike); End puts
--- it at 25 on any list. What decides between 21 and 25 is Classic
--- REbirth's own code, read here from those three lists alone.
+-- of two rows (`save_200_scroll`'s save screen with no save,
+-- `title_load_game`'s load screen with one) and at 25 on one of more, every
+-- row alike (`save_200_page_few`'s three and five rows, `save_200_page`'s
+-- 16); End puts it at 25 on any list.
 local SCROLL_MAX, SCROLL_LONG_MAX, SCROLL_END = 21, 25, 25
+local SCROLL_SHORT_ROWS = 2
 
 local s = {}
 M.state = s
@@ -310,7 +311,7 @@ local function browse(api, input)
         -- it on the rows the recordings show.
         local scroll = s.scroll + (held & HELD_RIGHT ~= 0 and 8 or -8)
         -- A step right never takes the scroll back from where End left it.
-        local last = total_rows() > s.rows and SCROLL_LONG_MAX or SCROLL_MAX
+        local last = total_rows() > SCROLL_SHORT_ROWS and SCROLL_LONG_MAX or SCROLL_MAX
         if last < s.scroll then
             last = s.scroll
         end

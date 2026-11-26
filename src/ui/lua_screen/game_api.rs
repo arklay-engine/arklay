@@ -93,7 +93,10 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
 
     // `re2_items()`: RE2's status screen as a table (`page`, `sub`,
     // `command`, `step`, `count`, `cursor`, `target`, `tab`,
-    // `command_cursor`, `result`, `follow`, the condition panel's
+    // `command_cursor`, whether the menu has the custom handgun's command
+    // 0 (`burst`) and whether its label shows `fg_common`'s 0x7E on
+    // (`burst_on`), `result`,
+    // `follow`, the condition panel's
     // `panel_mode`, `panel_sweep`, `panel_cure` and `panel_done`, whether
     // the player is `poisoned`, the screen's shared `blink` and
     // `blink_falling`, while a partner follows the player (`fg_status`'s
@@ -135,6 +138,8 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         table.set("target", page.target)?;
         table.set("tab", page.tab)?;
         table.set("command_cursor", page.command_cursor)?;
+        table.set("burst", page.burst)?;
+        table.set("burst_on", page.burst_label)?;
         table.set("blink", work.blink.level)?;
         table.set("blink_falling", work.blink.falling)?;
         table.set("binder", work.binder)?;
