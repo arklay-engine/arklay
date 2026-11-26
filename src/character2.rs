@@ -92,13 +92,7 @@ pub fn tick(
             if let Some(flag) = arrived {
                 game.re2.raise_room_flag(flag);
             }
-            // The ripples of her footfalls in water (`Snd_se_walk`).
-            let calls = std::mem::take(&mut character.work.effects);
-            esp_calls(game, calls);
-            if character.partner.is_some() && game.re2.partner_bit() {
-                partner_oba_ck_em(game, &mut character, old);
-            }
-            sce_blood(game, &mut character);
+            spl_after_routine(game, &mut character, old);
             // `Snd_se_walk` from the character's own walk. Their `Floor` isn't
             // modelled, so the zone is the one at the step's height.
             for step in character.body.take_footsteps() {
@@ -2216,10 +2210,24 @@ fn root_ck_sys(game: &GameState, room: &RoomState, character: &mut Character, lo
     );
 }
 
-/// The partner's `Oba_ck_em`: pushed out of the player's box as the player's
-/// last `Oba_ck_em2` left it, then out of the bodies in the enemy slots. It
-/// leaves `At_em_flg` alone.
-fn partner_oba_ck_em(game: &GameState, character: &mut Character, old: [i32; 3]) {
+/// What `_Spl` does after a character's routine, whoever it is: the
+/// ripples of its footfalls in water (`Snd_se_walk`), its push out of the
+/// bodies ([`spl_oba_ck_em`]) and the scene's blood.
+fn spl_after_routine(game: &mut GameState, character: &mut Character, old: [i32; 3]) {
+    let calls = std::mem::take(&mut character.work.effects);
+    esp_calls(game, calls);
+    spl_oba_ck_em(game, character, old);
+    sce_blood(game, character);
+}
+
+/// `_Spl`'s `Oba_ck_em`, after the routine of every character it runs, the
+/// partner or not: pushed out of the player's box as the player's last
+/// `Oba_ck_em2` left it, then out of the bodies in the enemy slots. It leaves
+/// `At_em_flg` alone. As `Game_loop` runs the enemy slots before
+/// `Player_move`, a character that lands on the player is pushed off it, and
+/// the player's own push then finds no body there: room 404's thrown Annette
+/// (`main_18`) lands beside Ada.
+fn spl_oba_ck_em(game: &GameState, character: &mut Character, old: [i32; 3]) {
     let height = player2::character_height(character.id);
     let width = character.body.radius as u16;
     let pos = character.body.pos;
@@ -4038,9 +4046,33 @@ mod tests {
         let at = player.pos;
         oba_ck_em2(&mut game, &mut player, at);
         let mut character = sherry(0x400);
-        partner_oba_ck_em(&game, &mut character, [0; 3]);
+        spl_oba_ck_em(&game, &mut character, [0; 3]);
         assert!(character.body.pos[0] > 0, "{:?}", character.body.pos);
         assert_eq!(character.body.pos[2], 0);
+    }
+
+    /// `_Spl` pushes every character it runs, not only the partner, and runs
+    /// before the player's move: a scene character on the player is pushed
+    /// off it, and the player's own `Oba_ck_em2` then stays where it is.
+    #[test]
+    fn a_scene_character_on_the_player_is_pushed_off_it_first() {
+        let mut game = GameState::default();
+        game.id = RoomId::parse("4040").unwrap();
+        let mut player = crate::player::spawn(game.id, &RoomState::default());
+        player.pos = [-400, 0, 0];
+        game.entities[0].pos = player.pos;
+        let at = player.pos;
+        oba_ck_em2(&mut game, &mut player, at);
+        let mut character = sherry(0x400);
+        character.id = 0x50;
+        character.model = 0x50;
+        character.partner = None;
+        spl_after_routine(&mut game, &mut character, [0; 3]);
+        assert!(character.body.pos[0] > 0, "{:?}", character.body.pos);
+        game.re2.characters.0 = vec![Some(Box::new(character))];
+        oba_ck_em2(&mut game, &mut player, at);
+        assert_eq!(player.pos, [-400, 0, 0]);
+        assert_eq!(game.re2.player.at_em_flg, 0);
     }
 
     #[test]
