@@ -30534,6 +30534,10 @@ mod tests {
                 "ui/exbattle.lua",
                 include_str!("../games/re2/ui/exbattle.lua"),
             ),
+            (
+                "ui/ex_result.lua",
+                include_str!("../games/re2/ui/ex_result.lua"),
+            ),
             ("ui/title.lua", include_str!("../games/re2/ui/title.lua")),
         ] {
             writer.add(path, source.as_bytes().to_vec()).unwrap();

@@ -47,6 +47,7 @@ local CrText = require("ui/cr_text")
 local Prologue = require("ui/prologue")
 local Gallery = require("ui/gallery")
 local ExBattle = require("ui/exbattle")
+local ExResult = require("ui/ex_result")
 
 local M = {}
 
@@ -3530,13 +3531,63 @@ function ex.choice(api, input)
     s.sleeping = true
 end
 
--- `FUN_00507AB0` (`title_mv_state` 7): RESULT's records (`Load_ex_result`
--- and its task, 0x4DD4F0) aren't ported; the title goes straight to what
--- follows them, Extreme Battle's title loaded again.
-function ex.result()
-    s.mv = 5
-    s.flash = 0
-    s.logo_count = 0
+-- The records' fades, as `ui/ex_result.lua` asks for them.
+local EX_RESULT_FADES = {
+    set = fade_set,
+    done = fade_done,
+    level = function(n, level)
+        fade_adjust(level, n)
+    end,
+}
+
+-- The records `FUN_004DE720` reads (0x689F60): arklay keeps none, so each
+-- level shows its dashes, as a game without Extreme Battle's records does.
+local function ex_records()
+    local records = {}
+    for level = 1, 3 do
+        records[level] = { character = 0, kept = false, times = { 0, 0, 0 } }
+    end
+    return records
+end
+
+-- `FUN_00507AB0` (`title_mv_state` 7): on its first tick it starts RESULT's
+-- records (`ui/ex_result.lua`) as task 2, which runs on that tick and
+-- suspends the title's task; on the tick after the records wake it, the
+-- title goes on to Extreme Battle's title loaded again (`title_mv_state`
+-- 5).
+function ex.result(api)
+    local c = s.exr
+    if c and c.ended then
+        -- `UnloadTexturePage(0x17)` and the background with it.
+        s.exr = nil
+        pages[ExResult.PAGE] = nil
+        s.exr_background = nil
+        s.sub = 0
+        s.mv = 5
+        s.flash = 0
+        s.logo_count = 0
+        return
+    end
+    if not c then
+        -- The title's task's +9: the records are running.
+        s.sub = 1
+        c = ExResult.new(EX_RESULT_FADES, ex_records(), s.levels)
+        s.exr = c
+    end
+    ExResult.tick(c, { edge = s.edge })
+    for _, load in ipairs(c.loads) do
+        if load == "background" and api:has_image("ui/exbattle/result") then
+            s.exr_background = api:picture("ui/exbattle/result")
+        elseif load == "sheet" and api:has_image("ui/exbattle/res_moji") then
+            pages[ExResult.PAGE] = api:indexed_page("ui/exbattle/res_moji")
+        end
+    end
+    c.loads = {}
+    s.background = c.background and s.exr_background or nil
+    for _, sp in ipairs(c.sprites) do
+        s.sprites[#s.sprites + 1] = sp
+    end
+    s.sleeping = true
 end
 
 -- ---------------------------------------------------------------- the screen
@@ -3954,7 +4005,7 @@ function M.update(api, input)
     elseif s.mv == 6 then
         ex.main(api)
     elseif s.mv == 7 then
-        ex.result()
+        ex.result(api)
     end
     if not s.sleeping and (s.mv == 2 or s.mv == 3) then
         title_image()
@@ -4211,7 +4262,7 @@ function M.draw(api)
     fade(3)
     local cache = M.cache or {}
     M.cache = cache
-    for k = 0, ExBattle.PAGE_I do
+    for k = 0, ExResult.PAGE do
         if pages[k] and (not cache[k] or cache[k].page ~= pages[k]) then
             cache[k] = { page = pages[k], palette = api:page_palette(pages[k], 0) or {} }
         end
