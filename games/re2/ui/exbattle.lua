@@ -110,12 +110,10 @@ local ICON_UV = {
     { 40, 30, 200, 60 },
     { 40, 30, 0, 90 },
 }
--- Pictures past the table's twelve read on into the bytes after it; none
--- of the cursors names one but 13, 14 and 15, whose records follow.
 ICON_UV[12] = { 40, 30, 40, 90 }
-ICON_UV[13] = { 40, 30, 80, 90 }
-ICON_UV[14] = { 40, 30, 120, 90 }
-ICON_UV[15] = { 40, 30, 160, 90 }
+ICON_UV[13] = { 80, 30, 80, 90 }
+ICON_UV[14] = { 40, 30, 160, 90 }
+ICON_UV[15] = { 40, 30, 200, 90 }
 
 -- The font's cells (`FUN_004EC080`): 8 by 10 from the sheet's top left,
 -- 32 to a row from the space, and the caret's cell.
@@ -436,19 +434,26 @@ local function draw(c)
             add(M.PAGE_I, ICON_AT[k][1], ICON_AT[k][2], uv[1], uv[2], uv[3], uv[4], 0x80, nil, 10)
         end
     end
-    -- The text (`FUN_004EC180`, depth 6, added): the caret, then the cells
-    -- that aren't spaces, 8 by 10 from (14, 166).
+end
+
+-- The text (`FUN_004EC180`, depth 6, opaque: it clears the code byte),
+-- after the tick's typing: the caret, then the cells that aren't spaces,
+-- 8 by 10 from (14, 166).
+local function draw_text(c)
+    local sprites = c.sprites
+    local function add(x, y, u, v)
+        sprites[#sprites + 1] = { page = M.PAGE_W, x = x, y = y, w = CELL_W, h = CELL_H, u = u, v = v, colour = 0x80, depth = 6 }
+    end
     local t = c.text
     if t then
         if t.caret_on ~= 0 then
-            add(M.PAGE_W, t.col * 8 + 0xE, t.row * 10 + 0xA8, CELL_W, CELL_H, CARET_U, CARET_V, 0x80, 1, 6)
+            add(t.col * 8 + 0xE, t.row * 10 + 0xA8, CARET_U, CARET_V)
         end
         for i = 0, COLUMNS * ROWS - 1 do
             local ch = t.cells[i]
             if ch ~= 0x20 then
                 local n = ch - 0x20
-                add(M.PAGE_W, 14 + (i % COLUMNS) * 8, 166 + (i // COLUMNS) * 10, CELL_W, CELL_H,
-                    (n & 0x1F) * 8, (n >> 5) * 10, 0x80, 1, 6)
+                add(14 + (i % COLUMNS) * 8, 166 + (i // COLUMNS) * 10, (n & 0x1F) * 8, (n >> 5) * 10)
             end
         end
     end
@@ -467,6 +472,7 @@ local function after(c)
     end
     draw(c)
     text(c)
+    draw_text(c)
 end
 
 -- One tick of the task. `input.confirm` is the confirm's edge (`Key_trg`

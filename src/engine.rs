@@ -19151,7 +19151,7 @@ impl Re2Sounds {
             return;
         }
         self.loaded = Some(key);
-        let folder = format!("room/{}{:02x}{}", id.stage, id.room, scenario);
+        let folder = format!("room/{}{:02x}{}", id.stage_char(), id.room, scenario);
         let edh = pack
             .read(&format!("{folder}/{}", se2::ROOM_EDH_NAME))
             .ok()
@@ -19163,7 +19163,7 @@ impl Re2Sounds {
             door2::vab::Vab::parse(&vab).ok()
         });
         self.banks
-            .load_room(pack, id.stage.saturating_sub(1), id.room, edh);
+            .load_room(pack, id.re2_stage().saturating_sub(1), id.room, edh);
         self.banks.load_core(pack, player);
         // `Snd_load_arms`: bare hands use the first bank.
         self.banks.load_arms(pack, weapon.max(1));
@@ -21573,7 +21573,7 @@ fn run_re2_init(
     // `Set_room` runs `Esp_init_R` and `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
     let origin = game.origin();
     let word = origin
-        .stage
+        .re2_stage()
         .checked_sub(1)
         .and_then(|stage| game.re2.bgm.get(stage, origin.room))
         .unwrap_or(crate::bgm2::RoomMusic::from_word(0xffff));

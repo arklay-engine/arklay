@@ -193,6 +193,8 @@ impl GameState {
         self.max_health = max_life(id);
         self.entities[0].health = self.max_health;
         self.set_health_copy(self.max_health);
+        // And a knife in the item box's third slot, whoever the character.
+        self.re2.item_box[2] = [0x01, 0x01, 0];
     }
 
     /// The start `Title_game_init`'s extras branch (`0x506750`, `fg_system`'s
@@ -455,6 +457,7 @@ mod tests {
         assert_eq!(exbattle_character(0xE), 2);
         assert_eq!(exbattle_character(0xB), 3);
         assert_eq!(exbattle_character(1), 1);
+        assert_eq!(game.re2.item_box[2], [0x01, 0x01, 0], "the knife");
     }
 
     fn leon() -> GameState {

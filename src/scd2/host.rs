@@ -2126,7 +2126,7 @@ impl Re2State {
     /// `Set_door`'s `scd_var_last_rdt`, as it places the player: the room
     /// the door leaves, `room`, its 1-based stage times 0x100 plus its room.
     pub fn leave_room(&mut self, room: crate::state::RoomId) {
-        self.vars[VAR_LAST_RDT] = u16::from(room.stage) << 8 | u16::from(room.room);
+        self.vars[VAR_LAST_RDT] = u16::from(room.re2_stage()) << 8 | u16::from(room.room);
     }
 
     /// The room's script set-up (`0x4E3F12`, from the room load's
