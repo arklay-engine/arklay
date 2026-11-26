@@ -1,0 +1,165 @@
+# leon_a_210_302: Leon A from 210's magnum back through 20F, 211, 216 and 219, through the kennel (21A) to its manhole, and down into 302
+# 210: east past the dead officer, north through the arch and round the lockers to door 0
+345
+365 left
+391 up
+399 up left
+400 up
+447 up left
+448 up
+455 left
+468 up right
+469 up
+499 up left
+500 up
+535 up left
+548 up
+549 up left
+550 up
+566 up run left
+567 up run
+577 up run left
+578 up run
+580 up run left
+581 up run
+582 up run left
+583 up run
+585 up run left
+586 up run
+593 up run left
+594 up run
+595 right
+606 up
+626 action
+628
+648 action
+650
+670 action
+672
+692 action
+694
+# 20F: east along the middle corridor and north to door 1 (zombies 0, 3 and 4 stay in the east and south corridors)
+815 right
+823 up run
+850 up run right
+851 up run
+858 up run right
+859 up run
+860 up run left
+958 up left
+989 right
+996 up
+1004 action
+1006
+1026 action
+1028
+1048 action
+1050
+1070 action
+1072
+# 211: south, west along the corridor, south down the west side to door 6 (slot 0 passed)
+1193 up run left
+1202 up run
+1205 up run left
+1206 up run
+1208 up run left
+1209 up run
+1211 up run left
+1213 up run
+1214 up run left
+1215 up run
+1216 up run left
+1217 up run
+1219 up run left
+1220 up run
+1223 up run left
+1225 up run
+1241 up run left
+1242 up run
+1245 up run right
+1246 up run
+1247 up run left
+1249 up run
+1297 up run left
+1298 up run
+1305 up run right
+1323 up run
+1324 up run right
+1325 up run
+1400 up run right
+1401 up run
+1420 up run left
+1439 up run
+1472 up
+1492 up left
+1493 up
+1496 right
+1510 up
+1518 action
+1520
+1540 action
+1542
+1562 action
+1564
+1584 action
+1586
+# 216: west along the corridor to door 1
+1707 up run
+1773 up run left
+1774 up run
+1781 up run right
+1782 up run
+1847 up run left
+1848 up run
+1868 up run right
+1869 up run
+1871 up run left
+1872 up
+1878 up right
+1879 up
+1888 action
+1890
+1910 action
+1912
+1932 action
+1934
+1954 action
+1956
+# 219: west along the south side, north and to door 2
+2077 up run left
+2082 up run
+2087 up run left
+2088 up run
+2092 up run right
+2093 up run
+2095 up run right
+2098 up run
+2126 up run left
+2127 up run
+2129 up run right
+2149 up run
+2154 up run right
+2155 up run
+2175 up left
+2185 up
+2189 up left
+2190 up
+2193 right
+2197 action
+2199
+# 21A: south to the wall, east along it to the manhole, and Yes to its question
+2354 up run
+2384
+2386 right
+2398
+2400 up run
+2452
+2454 left
+2467
+2469 up run
+2477
+2479 right
+2494 action
+2496
+2526 action
+2528
