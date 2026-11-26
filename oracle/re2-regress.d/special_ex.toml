@@ -45,18 +45,17 @@ frames = [189, 1299]
 expect = "match"
 record = ""
 
-# RESULT: the fade to black and `title_mv_state` 7 on 708, RESULT's records from 709 (`FUN_00507AB0`), which arklay doesn't port.
+# RESULT: the fade to black and `title_mv_state` 7 on 708, RESULT's records from 709 (`FUN_00507AB0`, `ui/ex_result.lua`): their background and sheet, slot 0's fade in, RESULT, the levels' labels and their times, the cancel on 900 and its fade out, and Extreme Battle's title again from 933.
 [[run]]
 name = "special_ex_result"
 ui = "title"
 offset = 189
-# recorded for 1100 ticks: the records' cancel on 900, Extreme Battle's title again from 933
-ticks = 709
+ticks = 1100
 input = "special_ex_result.txt"
 input_shift = 189
 input_drop_early = true
 fields = "ti,tlogo,tfade,tx,tfade2,tfade3,snd"
-frames = [189, 708]
+frames = [189, 1099]
 expect = "match"
 record = ""
 

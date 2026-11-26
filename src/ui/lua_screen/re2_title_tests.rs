@@ -40,6 +40,10 @@ fn build_pack(prologue_art: bool, gallery_art: GalleryArt) -> Pack {
             include_str!("../../../games/re2/ui/exbattle.lua"),
         ),
         (
+            "ui/ex_result.lua",
+            include_str!("../../../games/re2/ui/ex_result.lua"),
+        ),
+        (
             "ui/title.lua",
             include_str!("../../../games/re2/ui/title.lua"),
         ),
@@ -1307,6 +1311,116 @@ fn extreme_battles_placement_draws_four_of_eight_from_rnd() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `FUN_004DE430`: a level's three times in the small digits with their
+/// colons, its total in the large, dashes for none and the largest for 100
+/// hours or more.
+#[test]
+fn ex_results_times_are_hours_minutes_and_seconds() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-exr-time-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let screen = open_special(&cx, &dir, 15);
+    let string = |value: u32, id: u32| {
+        screen.test_eval::<Vec<i64>>(&format!(
+            "local R = require('ui/ex_result') local c = R.new({{}}, {{}}, 2) \
+             R.time_string(c.strings, {value}, {id}) return c.strings[{id}]"
+        ))
+    };
+    assert_eq!(
+        string(0, 0),
+        [0x40, 0x40, 0x3C, 0x40, 0x40, 0x3C, 0x40, 0x40]
+    );
+    assert_eq!(
+        string(0, 3),
+        [0x3F, 0x3F, 0x27, 0x3F, 0x3F, 0x27, 0x3F, 0x3F]
+    );
+    // 1:02:05 in seconds.
+    assert_eq!(
+        string(3725, 1),
+        [0x32, 0x33, 0x3C, 0x32, 0x34, 0x3C, 0x32, 0x37]
+    );
+    assert_eq!(
+        string(3725, 7),
+        [0x1A, 0x1B, 0x27, 0x1A, 0x1C, 0x27, 0x1A, 0x1F]
+    );
+    assert_eq!(
+        string(100 * 3600, 2),
+        [0x3B, 0x3B, 0x3C, 0x37, 0x3B, 0x3C, 0x37, 0x3B]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// RESULT's records (`FUN_004DD4F0`): two loading ticks drawing nothing,
+/// slot 0's fade in, then RESULT, the three labels on the count's 0x1E and
+/// the times on 0x3C, each fading in from black over 16 ticks, opaque; past 0x5A a
+/// press fades out, and once the fade is done the task ends black.
+#[test]
+fn ex_results_records_show_by_their_count_and_end_on_a_press() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-exr-tick-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let screen = open_special(&cx, &dir, 15);
+    let script = r#"
+        local R = require('ui/ex_result')
+        local fade = { level = -1 }
+        local fx = {
+            set = function(a0, add) fade.add = add; fade.level = add < 0 and add + 0x8000 or 0 end,
+            done = function() return fade.level < 0 end,
+            level = function(_, level) fade.level = level end,
+        }
+        local records = {}
+        for level = 1, 3 do records[level] = { character = 0, kept = false, times = { 0, 0, 0 } } end
+        local c = R.new(fx, records, 2)
+        local out = {}
+        local function step(edge)
+            R.tick(c, { edge = edge or 0 })
+            if fade.level >= 0 then fade.level = fade.level + fade.add end
+            if fade.level > 0x7FFF then fade.level = -1 end
+        end
+        step() out[#out + 1] = #c.sprites
+        step() out[#out + 1] = #c.sprites
+        step() out[#out + 1] = fade.add
+        local ticks = 0
+        while c.routine == 1 do step() ticks = ticks + 1 end
+        out[#out + 1] = ticks
+        step() step()
+        out[#out + 1] = #c.sprites
+        out[#out + 1] = c.sprites[1].colour
+        for _ = 1, 0x1E do step() end
+        local label = c.sprites[2]
+        out[#out + 1] = label.colour
+        out[#out + 1] = label.blend == nil and 1 or 0
+        for _ = 1, 15 do step() end
+        out[#out + 1] = c.sprites[2].colour
+        out[#out + 1] = c.sprites[2].blend == nil and 1 or 0
+        while c.count < 0x5B do step() end
+        out[#out + 1] = #c.sprites
+        step(0x80)
+        out[#out + 1] = c.routine
+        while not c.ended do step() end
+        out[#out + 1] = fade.level
+        out[#out + 1] = #c.sprites
+        return out
+    "#;
+    let out = screen.test_eval::<Vec<i64>>(script);
+    // Two loading ticks with nothing drawn, then the fade in from black.
+    assert_eq!(&out[..3], [0, 0, -0x200]);
+    // `FUN_004DD670` waits for it: from 0x7E00 by 0x200, 64 ticks to below
+    // 0.
+    assert_eq!(out[3], 64);
+    // RESULT alone, its glyph at full colour.
+    assert_eq!(&out[4..6], [1, 0x80]);
+    // A label's first tick: 8; 16 ticks on, 0x80; opaque throughout.
+    assert_eq!(&out[6..10], [8, 1, 0x80, 1]);
+    // Every glyph: RESULT (1), the labels (3 x 3), the times (3 x (3 x 8 +
+    // 1 + 8)).
+    assert_eq!(out[10], 1 + 9 + 3 * (3 * 8 + 1 + 8));
+    assert_eq!(out[11], 3);
+    // Black, and nothing drawn.
+    assert_eq!(&out[12..], [0x7FFF, 0]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn extreme_battles_level_page_exit_and_cancel_slide_back_to_start() {
     let dir = std::env::temp_dir().join(format!("arklay-re2-ex-back-{}", std::process::id()));
@@ -1384,10 +1498,16 @@ fn extreme_battles_result_loads_its_title_again() {
     assert_eq!(screen.value("ti_step"), 2);
     run(&mut screen, &cx, UiInput::default(), 1);
     assert_eq!(screen.value("ti_mv"), 7);
-    // RESULT's records aren't ported: `title_mv_state` 5 on the next tick,
-    // and the title loaded again on the one after.
+    // RESULT's records (`special_ex_result`: `title_mv_state` 7 on 708):
+    // the task's `+9` up from 709, the cancel on 900, the fade out to 932
+    // and `title_mv_state` 5 on 933, the title loaded again on the next.
+    run(&mut screen, &cx, UiInput::default(), 191);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_sub")), (7, 1));
+    run(&mut screen, &cx, press("cancel"), 1);
+    run(&mut screen, &cx, UiInput::default(), 32);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_sub")), (7, 1));
     run(&mut screen, &cx, UiInput::default(), 1);
-    assert_eq!(screen.value("ti_mv"), 5);
+    assert_eq!((screen.value("ti_mv"), screen.value("ti_sub")), (5, 0));
     run(&mut screen, &cx, UiInput::default(), 1);
     assert_eq!((screen.value("ti_mv"), screen.value("ti_disp")), (6, 0));
     let _ = std::fs::remove_dir_all(&dir);
