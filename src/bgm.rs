@@ -254,7 +254,7 @@ fn update_re2_room_bgm(game: &mut GameState, id: RoomId) {
     use crate::bgm2;
     let id = game.origins.of(id);
     let main = id
-        .stage
+        .re2_stage()
         .checked_sub(1)
         .and_then(|stage| game.re2.bgm.get(stage, id.room))
         .and_then(|music| music.main_id());

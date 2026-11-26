@@ -9875,7 +9875,7 @@ impl GameSession {
             let target = self.game.origins.of(session.target);
             if session.door.re2.is_some()
                 && let Some(word) = target
-                    .stage
+                    .re2_stage()
                     .checked_sub(1)
                     .and_then(|stage| self.game.re2.bgm.get(stage, target.room))
             {
@@ -11848,7 +11848,7 @@ pub fn room_entry_placement(
     let door = entry_door(&game.doors);
     if let Some((door, re2)) = door.and_then(|door| Some((door, door.re2?))) {
         let dest = RoomId {
-            stage: re2.stage,
+            stage: game.re2_door_stage(re2.stage),
             room: re2.room,
             ..target
         };
@@ -11858,7 +11858,7 @@ pub fn room_entry_placement(
             .flat_map(|state| state.doors.iter().flatten())
             .find(|back| {
                 back.re2
-                    .is_some_and(|re2| re2.stage == target.stage && re2.room == target.room)
+                    .is_some_and(|re2| re2.stage == target.re2_stage() && re2.room == target.room)
             });
         if let Some(back) = back {
             let cut = back.re2.map(|re2| usize::from(re2.cut));

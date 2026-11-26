@@ -608,7 +608,7 @@ impl GameState {
     /// `Check_room_no` (`0x4FAF80`) of the room the player is in.
     pub fn re2_player_floor(&self) -> u8 {
         let context = self.re2_map_context();
-        let stage = self.id.stage.saturating_sub(1);
+        let stage = self.id.re2_stage().saturating_sub(1);
         floor_of(stage, self.id.room, &context, |bank, index| {
             self.re2.flag(bank, index)
         })
