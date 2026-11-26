@@ -1,0 +1,543 @@
+# Claire A in 20D for the cog (#896): the licker (6:144) shot from the arrival with the aim held down as it comes (it dies on
+# the ninth round, two hits taken), east and up the middle passage round the table to the fireplace, the Lighter used on
+# it from the status screen (4:84), the three lamps in the script's order (the middle, the east, the west: each its press,
+# its question and Yes), the cog's fall (4:75), the Green Herb used from the status screen for the slot (200 life), the
+# cog (item 0x4A, 8:108) taken facing south, and door 0 back into 20C
+# made in arklay (steered by a script): 20C loads at 3174 and hands back on 3480; the steering script's grab check fired
+# while she turned on the spot, so she waits there on alternate left and right taps at 815-856, 904-945, 968-1010,
+# 1036-1078, 2511-2553, 2598-2640 and 2697-2738
+344 left
+348 aim down
+350 aim down fire
+352 aim down
+464 aim down fire
+466 aim down
+476 aim down fire
+478 aim down
+482 aim down fire
+484 aim down
+488 aim down fire
+490 aim down
+494 aim down fire
+496 aim down
+500 aim down fire
+502 aim down
+506 aim down fire
+508 aim down
+512 aim down fire
+514 aim down
+518 aim down fire
+520 aim down
+524 aim down fire
+526 aim down
+530 aim down fire
+532 aim down
+536 aim down fire
+538 aim down
+542 aim down fire
+544 aim down
+548 aim down fire
+550 aim down
+554 aim down fire
+556 aim down
+560 aim down fire
+562 aim down
+566 aim down fire
+568 aim down
+572 aim down fire
+574 aim down
+578 aim down fire
+580 aim down
+584 aim down fire
+586 aim down
+590 aim down fire
+592 aim down
+596 aim down fire
+598 aim down
+602 aim down fire
+604 aim down
+608 aim down fire
+610 aim down
+614 aim down fire
+616 aim down
+620 aim down fire
+622 aim down
+626 aim down fire
+628 aim down
+632 aim down fire
+634 aim down
+638 aim down fire
+640 aim down
+644 aim down fire
+646 aim down
+650 aim down fire
+652 aim down
+656 aim down fire
+658 aim down
+662 aim down fire
+664 aim down
+668 aim down fire
+670 aim down
+674 aim down fire
+676 aim down
+680 aim down fire
+682 aim down
+686 aim down fire
+688 aim down
+692 aim down fire
+694 aim down
+698 aim down fire
+700 aim down
+704 aim down fire
+706 aim down
+710 aim down fire
+712 aim down
+716 aim down fire
+718 aim down
+722 aim down fire
+724 aim down
+728 aim down fire
+730 aim down
+734 aim down fire
+736 aim down
+740 aim down fire
+742 aim down
+746 aim down fire
+748 aim down
+752 aim down fire
+754 aim down
+758 aim down fire
+760 aim down
+764 aim down fire
+766 aim down
+770 aim down fire
+772 aim down
+774
+794 left up run
+801 up run
+812 left up run
+813 left
+815 right
+816 left
+817 right
+818 left
+819 right
+820 left
+821 right
+822 left
+823 right
+824 left
+825 right
+826 left
+827 right
+828 left
+829 right
+830 left
+831 right
+832 left
+833 right
+834 left
+835 right
+836 left
+837 right
+838 left
+839 right
+840 left
+841 right
+842 left
+843 right
+844 left
+845 right
+846 left
+847 right
+848 left
+849 right
+850 left
+851 right
+852 left
+853 right
+854 left
+855 right
+856 left
+857 left up run
+869 up run
+898 right up run
+899 up run
+901 left up run
+902 right
+904 left
+905 right
+906 left
+907 right
+908 left
+909 right
+910 left
+911 right
+912 left
+913 right
+914 left
+915 right
+916 left
+917 right
+918 left
+919 right
+920 left
+921 right
+922 left
+923 right
+924 left
+925 right
+926 left
+927 right
+928 left
+929 right
+930 left
+931 right
+932 left
+933 right
+934 left
+935 right
+936 left
+937 right
+938 left
+939 right
+940 left
+941 right
+942 left
+943 right
+944 left
+945 right
+949 right up run
+966 up run
+968 left
+969 right
+970 left
+971 right
+972 left
+973 right
+974 left
+975 right
+976 left
+977 right
+978 left
+979 right
+980 left
+981 right
+982 left
+983 right
+984 left
+985 right
+986 left
+987 right
+988 left
+989 right
+990 left
+991 right
+992 left
+993 right
+994 left
+995 right
+996 left
+997 right
+998 left
+999 right
+1000 left
+1001 right
+1002 left
+1003 right
+1004 left
+1005 right
+1006 left
+1007 right
+1008 left
+1009 right
+1010 left
+1017 left up run
+1034 up run
+1036 left
+1037 right
+1038 left
+1039 right
+1040 left
+1041 right
+1042 left
+1043 right
+1044 left
+1045 right
+1046 left
+1047 right
+1048 left
+1049 right
+1050 left
+1051 right
+1052 left
+1053 right
+1054 left
+1055 right
+1056 left
+1057 right
+1058 left
+1059 right
+1060 left
+1061 right
+1062 left
+1063 right
+1064 left
+1065 right
+1066 left
+1067 right
+1068 left
+1069 right
+1070 left
+1071 right
+1072 left
+1073 right
+1074 left
+1075 right
+1076 left
+1077 right
+1078 left
+1080 left up run
+1095 up run
+1099 left up run
+1100 up run
+1104 up
+1108 right up
+1109 up
+1137 right up
+1138 up
+1139 right
+1141
+1147 start
+1148
+1183 down
+1184
+1203 down
+1204
+1223 right
+1224
+1243 confirm
+1244
+1263 confirm
+1264
+1383 right
+1400 right up
+1419 up
+1450 left
+1464
+1470 action
+1472
+1514 action
+1516
+1558 action
+1560
+1620 right
+1626 right up
+1643 up
+1655 right up
+1656 up
+1679 left
+1694
+1700 action
+1702
+1744 action
+1746
+1788 action
+1790
+1850 left
+1856 left up
+1872 up
+1912 left up
+1913 up
+1952 right
+1967
+1973 action
+1975
+2017 action
+2019
+2061 action
+2063
+2243 start
+2244
+2279 down
+2280
+2299 down
+2300
+2319 confirm
+2320
+2339 confirm
+2340
+2399 cancel
+2400
+2439 start
+2440
+2479 left up run
+2490 up run
+2503 left up run
+2504 up run
+2510 right up run
+2511 right
+2512 left
+2513 right
+2514 left
+2515 right
+2516 left
+2517 right
+2518 left
+2519 right
+2520 left
+2521 right
+2522 left
+2523 right
+2524 left
+2525 right
+2526 left
+2527 right
+2528 left
+2529 right
+2530 left
+2531 right
+2532 left
+2533 right
+2534 left
+2535 right
+2536 left
+2537 right
+2538 left
+2539 right
+2540 left
+2541 right
+2542 left
+2543 right
+2544 left
+2545 right
+2546 left
+2547 right
+2548 left
+2549 right
+2550 left
+2551 right
+2552 left
+2553 right
+2558 right up run
+2576 up run
+2577 right up run
+2596 up run
+2597 left up run
+2598 left
+2599 right
+2600 left
+2601 right
+2602 left
+2603 right
+2604 left
+2605 right
+2606 left
+2607 right
+2608 left
+2609 right
+2610 left
+2611 right
+2612 left
+2613 right
+2614 left
+2615 right
+2616 left
+2617 right
+2618 left
+2619 right
+2620 left
+2621 right
+2622 left
+2623 right
+2624 left
+2625 right
+2626 left
+2627 right
+2628 left
+2629 right
+2630 left
+2631 right
+2632 left
+2633 right
+2634 left
+2635 right
+2636 left
+2637 right
+2638 left
+2639 right
+2640 left
+2649 left up run
+2661 up run
+2695 left
+2697 right
+2698 left
+2699 right
+2700 left
+2701 right
+2702 left
+2703 right
+2704 left
+2705 right
+2706 left
+2707 right
+2708 left
+2709 right
+2710 left
+2711 right
+2712 left
+2713 right
+2714 left
+2715 right
+2716 left
+2717 right
+2718 left
+2719 right
+2720 left
+2721 right
+2722 left
+2723 right
+2724 left
+2725 right
+2726 left
+2727 right
+2728 left
+2729 right
+2730 left
+2731 right
+2732 left
+2733 right
+2734 left
+2735 right
+2736 left
+2737 right
+2738 left
+2739 left up
+2756 up
+2788 left up
+2789 up
+2797 right
+2809
+2815 confirm
+2818
+2915 confirm
+2918
+3015 confirm
+3018
+3058 right
+3065 right up run
+3079 up run
+3080 right up run
+3081 up run
+3089 left up run
+3090 up run
+3095 left up
+3111 up
+3122 left up
+3123 up
+3127 right
+3133
+3139 confirm
+3140
+3176 up
+3482
