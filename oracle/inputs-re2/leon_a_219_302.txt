@@ -1,0 +1,77 @@
+# leon_a_219_302: Leon A from 219 after the dust chute's landing to Ben's cell (301) and his death, as leon_a_219_ben; then the file reader on Ben's item (0x6E) closed with cancel and its question answered with action, out through 301's door 0, east along 219's north corridor to door 2, into the kennel (21A) south to the wall and east along it to the manhole, its question answered, and down into 302
+374 up run right
+378 up run
+404 up run right
+405 up run
+406 up run right
+423 up run
+429 up run right
+430 up run
+441 up run left
+442 up run
+445 up run right
+446 up run
+447 up run left
+468 up run
+499 up run left
+500 up run
+544 up run right
+545 up run
+550 up run right
+551 up run
+554 up left
+606 right
+619 action
+621
+641 action
+643
+# the file reader: cancel closes it and puts up a question (msg 0xC0), which the press on 5074 answers; the presses on 5042, 5106 and 5138 change nothing (the last two land in the scene that follows)
+5000 cancel
+5002
+5042 action
+5044
+5074 action
+5076
+5106 action
+5108
+5138 action
+5140
+# 301: after the scene's six voiced lines hand Leon back (5882 in the recording; the voices' pace moves it by some ticks between recordings, so a new recording may need these presses moved later), north out of the cell to door 0
+5950 up run right
+5959 up run
+5974 up run right
+5975 up run
+5985 up run left
+5990 up run
+5994 up run left
+5995 up run
+5996 right
+6000 action
+6002
+# 219: east along the north corridor to door 2
+6189 up run
+6200 up run left
+6201 up run right
+6221 up run
+6297 up run left
+6298 up left
+6337 right
+6344 action
+6346
+# 21A: south to the wall, then east along it to the manhole
+6501 up run
+6531
+6533 right
+6545
+6547 up run
+6599
+6601 left
+6614
+6616 up run
+6624
+6626 right
+# the manhole, and Yes to its question
+6641 action
+6643
+6673 action
+6675
