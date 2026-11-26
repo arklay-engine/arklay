@@ -787,7 +787,8 @@ pub const ITEM_BANK: u8 = 8;
 pub const SCENARIO_BANK: u8 = 3;
 
 /// Whether `Sce_fade_adjust` leaves the fade as it is in room `room` of the
-/// 1-based `stage`: rooms 609 to 60C, 60E to 610 and 616 while
+/// 1-based `scd_var_stage` `stage` (a letter stage's is its stage's,
+/// [`crate::state::RoomId::re2_stage`]): rooms 609 to 60C, 60E to 610 and 616 while
 /// `fg_status`'s 0x80000 (`lit`) is up. Room 60D is held too when
 /// `FUN_00442e40` reads `Marni`'s 0x6000, which it doesn't under the
 /// recordings' renderer: `fade_60d`'s init adjusts fade 1 as arklay does.
@@ -3757,7 +3758,7 @@ impl Host for GameHost<'_> {
             // fade while `fg_status`'s 0x80000 is up.
             "sce_fade_adjust" => {
                 let origin = self.game.origin();
-                if !fade_adjust_held(origin.stage, origin.room, self.game.re2.flag(1, 12)) {
+                if !fade_adjust_held(origin.re2_stage(), origin.room, self.game.re2.flag(1, 12)) {
                     self.fade_write(at(0) as u8, FadeWrite::Adjust(at(1) as i16));
                 }
             }
@@ -6009,6 +6010,9 @@ mod tests {
         assert!(!fade_adjust_held(6, 0x11, true), "611 fades");
         assert!(!fade_adjust_held(6, 0x04, true), "604 fades");
         assert!(!fade_adjust_held(5, 0x0D, true));
+        // Extreme Battle's stage F reads as the sixth.
+        let f0a = crate::state::RoomId::parse("F0A0").unwrap();
+        assert!(fade_adjust_held(f0a.re2_stage(), f0a.room, true));
     }
 
     #[test]

@@ -1240,6 +1240,17 @@ fn end_and_home_put_the_name_scroll_at_its_ends() {
     }
     let (_, cues) = tick(&mut screen, &dir, keys(&["key:End"]));
     assert!(cues.is_empty(), "at its end already");
+    // Right past End's 25 on a list that stops right at 21 leaves it.
+    let (_, cues) = tick(
+        &mut screen,
+        &dir,
+        UiInput {
+            held_right: true,
+            ..UiInput::default()
+        },
+    );
+    assert!(cues.is_empty());
+    assert_eq!(screen.value("sv_scroll"), 25);
     let (_, cues) = tick(&mut screen, &dir, keys(&["key:Home"]));
     assert_eq!(cues, [UiCue::Core(4)]);
     assert_eq!(screen.value("sv_scroll"), 0);

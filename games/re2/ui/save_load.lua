@@ -309,7 +309,11 @@ local function browse(api, input)
         -- move cue and waits as a cursor's move does; it draws nothing by
         -- it on the rows the recordings show.
         local scroll = s.scroll + (held & HELD_RIGHT ~= 0 and 8 or -8)
+        -- A step right never takes the scroll back from where End left it.
         local last = total_rows() > s.rows and SCROLL_LONG_MAX or SCROLL_MAX
+        if last < s.scroll then
+            last = s.scroll
+        end
         if scroll > last then
             scroll = last
         end
