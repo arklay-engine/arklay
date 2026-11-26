@@ -163,10 +163,24 @@ def lua_str(text: str) -> str:
 
 
 # The recorder's words for the keyboard's own arrows, which KEYCONFIG's page reads in place of the pad: arklay's
-# screens have one set of directions. A key by its name (`key:X`, a letter or a digit) is handed to arklay with
-# `press_key` on its line's first tick when the line before held another, as the recorder hands it to
-# `Kb_get_state`.
+# screens have one set of directions. A key by its name (`key:X`, a letter or a digit, or a paging key) is handed to
+# arklay with `press_key` on its line's first tick when the line before held another, as the recorder hands it to
+# `Kb_get_state` or `FUN_00432670`.
 KEYBOARD_BUTTONS = {"kbup": "up", "kbdown": "down", "kbleft": "left", "kbright": "right"}
+# The recorder's named keys (its `NAMED_KEYS`) by arklay's names for them, SDL's.
+NAMED_KEYS = {"pageup": "PageUp", "pagedown": "PageDown", "end": "End", "home": "Home", "delete": "Delete"}
+
+
+def key_button(word: str) -> str:
+    """An input word as arklay's button or key: `key:q` is `key:Q`, as the recorder's virtual key is one, and
+    `key:pageup` is `key:PageUp`."""
+    if word in KEYBOARD_BUTTONS:
+        return KEYBOARD_BUTTONS[word]
+    if word.startswith("key:") and len(word) == 5:
+        return "key:" + word[4:].upper()
+    if word.startswith("key:") and word[4:].lower() in NAMED_KEYS:
+        return "key:" + NAMED_KEYS[word[4:].lower()]
+    return word
 
 
 def input_entries(path: Path) -> dict[int, list[str]]:
@@ -179,9 +193,7 @@ def input_entries(path: Path) -> dict[int, list[str]]:
             continue
         if not words[0].isdigit():
             raise SystemExit(f"re2-regress: {path}:{number}: `{words[0]}` is not a tick number")
-        # `key:q` is `key:Q`, as the recorder's virtual key is one.
-        buttons = [KEYBOARD_BUTTONS.get(word, "key:" + word[4:].upper() if word.startswith("key:") and len(word) == 5 else word)
-                   for word in words[1:]]
+        buttons = [key_button(word) for word in words[1:]]
         if sum(":" in button for button in buttons) > 1:
             raise SystemExit(f"re2-regress: {path}:{number}: one key per line, as the recorder hands one over")
         held[int(words[0])] = buttons
@@ -200,7 +212,7 @@ while trace_ticks() < ticks and updates < bound do
         local buttons = held[index]
         if buttons then
             release()
-            -- A key by its name (`key:X`) is pressed on the line's first tick, as KEYCONFIG's page reads it,
+            -- A key by its name (`key:X`) is pressed on the line's first tick, as KEYCONFIG's page and the save screen read it,
             -- unless the line before held it already.
             local plain, keys = {}, {}
             for _, button in ipairs(buttons) do
@@ -830,7 +842,7 @@ def self_test() -> int:
     if starts != [(344, None), (1818, None)] or None in bad or kept != (1818, None):
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
-    problem = (self_test_fields() or self_test_gallery_hold() or self_test_pace() or self_test_pictures()
+    problem = (self_test_fields() or self_test_gallery_hold() or self_test_keys() or self_test_pace() or self_test_pictures()
                or self_test_save_images() or self_test_title_voice() or self_test_no_enemies())
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
@@ -1056,6 +1068,41 @@ def self_test_gallery_hold() -> str | None:
             got.append((held, write))
         if got != want:
             return f"a gallery word held at {start:#x} over {[f'{now:#x}' for now in memory]} gave {got}"
+    return None
+
+
+def self_test_keys() -> str | None:
+    """A key's word: the recorder's virtual key and the reader it patches for one tick (`KbPress`: a letter
+    `Kb_get_state`, a paging key `FUN_00432670`), the code put back on the next, and arklay's name for it."""
+    recorder = load_recorder()
+
+    class Game:
+        def __init__(self):
+            self.memory = {address: code for _, address, code, _ in recorder.KB_READERS}
+            self.writes = []
+
+        def read(self, address, length):
+            return self.memory[address][:length]
+
+        def write(self, address, data):
+            self.memory[address] = data
+            self.writes.append((address, data[:2]))
+
+    shift = recorder.KB_KEY_SHIFT
+    words = [recorder.key_word(word) for word in ("key:q", "key:PageUp", "key:pagedown", "key:End", "key:home")]
+    if words != [0x51, 0x21, 0x22, 0x23, 0x24]:
+        return f"the keys' words gave {words}"
+    game, press, held = Game(), recorder.KbPress(), 0
+    for pad in (0x51 << shift, 0x51 << shift, 0x22 << shift, 0, 0x24 << shift):
+        press.tick(game, pad, held)
+        held = pad
+    put = [(address, data[1]) for address, data in game.writes]
+    want = [(0x4354D0, 0x51), (0x4354D0, 0xEC), (0x432670, 0x22), (0x432670, 0xEC), (0x432670, 0x24)]
+    if put != want:
+        return f"the keys' patches gave {[(f'{a:#x}', f'{b:#x}') for a, b in put]}"
+    names = [key_button(word) for word in ("key:q", "key:pageup", "key:End", "kbup", "confirm")]
+    if names != ["key:Q", "key:PageUp", "key:End", "up", "confirm"]:
+        return f"arklay's names for the keys gave {names}"
     return None
 
 

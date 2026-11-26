@@ -275,15 +275,27 @@ BUTTONS = {
 # The keys of an input line that are the keyboard's own (`KEY_WORD`'s fixed keys), and the pad's.
 KEY_WORD_KEYS = 0xFE000000
 PAD_KEYS = 0x01FFFFFF
-# A key by its name (`key:X`, a letter or a digit), which KEYCONFIG's page binds (`Config_main`'s states 0xB and 0xF
-# read it from `Kb_get_state`): its virtual key, above the line's 32 bits of pad and key word.
+# A key by its name (`key:X`, a letter or a digit, or one of `NAMED_KEYS`): its virtual key, above the line's 32
+# bits of pad and key word.
 KB_KEY_SHIFT = 32
-# `Kb_get_state` (0x4354D0): `GetKeyboardState` over its table of 0x43 virtual keys, the first newly down returned.
-# On the tick a line's key goes down the recorder makes it return that key (`MOV EAX, vk; RET`) and puts the code
-# back on the next stop, so the page sees the key on that tick alone, as a real key's edge. Only `Config_main` calls
-# it.
-KB_GET_STATE = 0x004354D0
-KB_GET_STATE_BYTES = bytes.fromhex("81EC00010000")  # SUB ESP,0x100
+# The keys by the names arklay gives them (SDL's), which the save screen's paging reads (`FUN_00432670`'s table,
+# `0x522074`): Page Up, Page Down, End, Home and Delete.
+NAMED_KEYS = {"pageup": 0x21, "pagedown": 0x22, "end": 0x23, "home": 0x24, "delete": 0x2E}
+# The executable's two readers of the keyboard, each `GetKeyboardState` over its own table of virtual keys, the first
+# newly down returned, as `(name, address, its first bytes, the keys its table holds)`:
+# - `Kb_get_state` (0x4354D0), whose table of 0x43 keys has the letters and digits; only `Config_main` calls it
+#   (KEYCONFIG's states 0xB and 0xF bind the key);
+# - `FUN_00432670`, whose table of five keys is `NAMED_KEYS`'; only `Card_access`'s state 2 calls it (the save
+#   screen's paging).
+# On the tick a line's key goes down the recorder makes the reader whose table holds it return that key
+# (`MOV EAX, vk; RET`) and puts the code back on the next stop, so the screen sees the key on that tick alone, as a
+# real key's edge.
+KB_READERS = (
+    ("Kb_get_state", 0x004354D0, bytes.fromhex("81EC00010000"),  # SUB ESP,0x100
+     frozenset(range(0x30, 0x3A)) | frozenset(range(0x41, 0x5B))),
+    ("FUN_00432670", 0x00432670, bytes.fromhex("81EC00010000"),  # SUB ESP,0x100
+     frozenset(NAMED_KEYS.values())),
+)
 
 
 def key_word(word: str) -> int | None:
@@ -293,25 +305,36 @@ def key_word(word: str) -> int | None:
     name = word[4:]
     if len(name) == 1 and (name.isdigit() or "A" <= name.upper() <= "Z"):
         return ord(name.upper())
-    raise SystemExit(f"unknown key {word!r}: a letter or a digit")
+    if name.lower() in NAMED_KEYS:
+        return NAMED_KEYS[name.lower()]
+    raise SystemExit(f"unknown key {word!r}: a letter, a digit or one of {', '.join(sorted(NAMED_KEYS))}")
+
+
+def key_reader(vk: int) -> tuple[str, int, bytes]:
+    """The reader whose table holds virtual key `vk`."""
+    for name, address, code, keys in KB_READERS:
+        if vk in keys:
+            return name, address, code
+    raise SystemExit(f"no reader of the keyboard has virtual key {vk:#x}")
 
 
 class KbPress:
-    """An input line's key to `Kb_get_state`, on the tick it goes down."""
+    """An input line's key to the reader that has it, on the tick it goes down."""
 
     def __init__(self) -> None:
-        self.patched = False
+        self.patched: tuple[int, bytes] | None = None
 
     def tick(self, game: "Game", pad: int, held: int) -> None:
         vk = pad >> KB_KEY_SHIFT & 0xFF
+        if self.patched:
+            game.write(*self.patched)
+            self.patched = None
         if vk and vk != held >> KB_KEY_SHIFT & 0xFF:
-            if not self.patched and game.read(KB_GET_STATE, len(KB_GET_STATE_BYTES)) != KB_GET_STATE_BYTES:
-                raise SystemExit("Kb_get_state isn't the code the recorder expects")
-            game.write(KB_GET_STATE, bytes((0xB8, vk, 0, 0, 0, 0xC3)))
-            self.patched = True
-        elif self.patched:
-            game.write(KB_GET_STATE, KB_GET_STATE_BYTES)
-            self.patched = False
+            name, address, code = key_reader(vk)
+            if game.read(address, len(code)) != code:
+                raise SystemExit(f"{name} isn't the code the recorder expects")
+            game.write(address, bytes((0xB8, vk, 0, 0, 0, 0xC3)))
+            self.patched = (address, code)
 
 BOOT_TICKS = 3000
 # The ticks from the first with a live player to the first of play: `Pl_init`,
