@@ -304,3 +304,26 @@ frame_max_mean = 0.4
 frame_windows = [[360, 3138, 0.35]]
 expect = "match"
 record = "--start claire --warp 20D:-26510:0:-24891:3752:6 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --life 200 --give 0:3:1 --give 2:0x5A:1 --give 3:0x5C:2 --give 4:0x26:1 --give 5:0x2F:1 --give 6:0x27:1 --give 7:0x14:15 --box 2:0x1E:3 --box 3:0x33:1 --box 4:0x32:1"
+
+# Rooms 20C, 20E, 20C, 20A and 200: from 20D's door 0 up 20C's west arm to door 2 (the Diamond Key's last use), 20E's
+# north half for the Eagle Stone, area 2's licker, door 0 back into 20C, round past the crawler to door 0, 20A, and
+# 200's balcony.
+[[run]]
+name = "claire_a_20c_eagle"
+room = "20C"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_20c_eagle.lua"
+input = "claire_a_20c_eagle.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 3356
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 3355]
+# 20C to door 2's last press (706), 20E from its hand back (1048) to door 0's press (1479), 20C from its hand back (1821) to door 0's press (2430) and 20A from its hand back
+# (2723) to door 0's press (2997); the doors' frames count only in the whole run's mean (the worst, 742 (7.6), 1515 and 3033, are the 20E, 20C and 200 loads, #672); 0.53 measured, the windows 0.22, 0.19, 0.15, 0.29
+frame_max_mean = 0.65
+frame_windows = [[360, 705, 0.35], [1048, 1478, 0.3], [1821, 2429, 0.25], [2723, 2996, 0.4]]
+expect = "match"
+record = "--start claire --warp 20C:-23222:0:-24944:2568:11 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --life 200 --give 0:3:5 --give 2:0x5A:1 --give 3:0x5C:2 --give 4:0x2F:1 --give 5:0x27:1 --give 6:0x14:2 --give 7:0x4A:1 --box 2:0x1E:3 --box 3:0x33:1 --box 4:0x32:1"
