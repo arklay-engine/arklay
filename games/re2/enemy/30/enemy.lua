@@ -1663,6 +1663,49 @@ local function landing(e)
     morph_body(e)
 end
 
+-- Routine 12 (`0x48d710`): room 30A's lift (`Type` 3), as the room's script
+-- leads it with `Sce_free0`. It holds clip 1 (from its start, with `Timer0`
+-- 60 and the neck's flags cleared) until bit 0, plays clip 1 until bit 1,
+-- then plays the room's own clip 0 until bit 2, and from then on plays clip 1
+-- again. Every tick parts 1 and 2 swell by `BYTE_0052a350` on `+0x21e`'s
+-- count.
+local function lift(e)
+    local sub = e:routine(2)
+    local bit
+    if sub == 0 then
+        set_clip(e, 1)
+        e:set_timer(0, 0x3C)
+        e:set_neck_flags(0)
+        bit = 1
+    elseif sub == 1 then
+        play(e)
+        bit = 2
+    elseif sub == 2 or sub == 3 then
+        if sub == 2 then
+            set_clip(e, 0)
+            e:set_routine(2, 3)
+        end
+        e:spd_bank(2)
+        e:joint_bank(2, 0x80)
+        e:add_speed_xz()
+        bit = 4
+    elseif sub == 4 or sub == 5 then
+        if sub == 4 then
+            set_clip(e, 1)
+            e:set_timer(0, 0x3C)
+            e:set_routine(2, 5)
+        end
+        play(e)
+    end
+    if bit and e:sce_free(0) & bit ~= 0 then
+        e:set_routine(2, bit)
+    end
+    local weight = 0x1000 - SWELL[e:var(WAVE)] * 5
+    e:set_var(W1, weight)
+    e:set_var(W2, weight)
+    morph_body(e)
+end
+
 -- `funcs_48AB5B` (before the clip) and `funcs_48AB72` (after it), by
 -- `Routine_1`.
 local BEFORE <const> = { [1] = fight_ck, [5] = back_off_ck }
@@ -1678,6 +1721,7 @@ local AFTER <const> = {
     [9] = escape,
     [10] = scene,
     [11] = landing,
+    [12] = lift,
 }
 
 -- `FUN_0048ab30`.
