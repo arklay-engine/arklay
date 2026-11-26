@@ -892,6 +892,7 @@ impl UserData for Api<'_> {
         draw::add_methods(methods);
         game_api::add_methods(methods);
         option_model::add_methods(methods);
+        ex_models::add_methods(methods);
         bindings::add_methods(methods);
     }
 }

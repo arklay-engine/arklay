@@ -52,6 +52,7 @@ use sources::{Loader, Sources};
 
 mod bindings;
 mod draw;
+mod ex_models;
 mod game_api;
 mod option_model;
 mod sources;
@@ -151,6 +152,9 @@ struct Host {
     effects: Option<Box<crate::engine::EffectScene>>,
     /// RE 2's KEYCONFIG model (`api:option_model`).
     option_model: option_model::OptionModel,
+    /// Extreme Battle's four players on its character choice
+    /// (`api:ex_models`).
+    ex_models: ex_models::ExModels,
 }
 
 impl Host {
@@ -326,6 +330,7 @@ impl LuaScreen {
             assets: draw::Assets::default(),
             effects: None,
             option_model: Default::default(),
+            ex_models: Default::default(),
         };
         let vm = ScreenVm::load(entry, Loader::new(sources))?;
         host.plays_films = vm.has_function("on_film");

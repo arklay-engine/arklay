@@ -13,10 +13,10 @@
 -- runs `ExPl_animate`, `ExPl_move` (the stage's draw) and the text
 -- (`FUN_004EBDB0`) after it.
 --
--- What isn't drawn: the four players' models (`Ex_load_pld`'s
--- `PL<id>CH.PLD` and their weapons, `ExPl_animate`'s motions and
--- `ExPl_move`'s lights and sort). Their places and turns are run, and the
--- trace's `exb` has them.
+-- The four players' models (`Ex_load_pld`'s `PL<id>CH.PLD` with their
+-- weapons' texels, `ExPl_animate`'s motions, `ExPl_move`'s lights and
+-- sort) are the engine's (`api:ex_models`): the script gives it each
+-- work's place and turn on the stage, the cursor and the confirm.
 
 local M = {}
 
@@ -145,9 +145,10 @@ end
 -- `Task_execute(1, ExBattle)`: the task, which runs from the tick it is
 -- started on. `fx` holds the title's fades (`set`, `adjust`, `done`) and
 -- its cue.
-function M.new(fx)
+function M.new(fx, disc)
     return {
         fx = fx,
+        disc = disc or 0,
         task8 = 0,
         task9 = 0,
         routine = 0,
@@ -338,13 +339,10 @@ local function init(c, api)
             target = TURNS[1][slot + 1],
             facing = s.cdir,
             step = 0,
-            r2 = 0,
-            move_no = 0,
-            move_cnt = 0,
-            hokan = 0,
-            mplay = 0,
         }
     end
+    -- `Ex_load_pld` and `Ex_load_plw`, by `fg_status` bit 31's disc.
+    api:ex_models("load", c.disc)
     c.pulse = 0
     c.cursor = 1
     c.way = 0
@@ -460,16 +458,14 @@ local function draw_text(c)
 end
 
 -- `ExPl_animate`, `ExPl_move` and the text, after a routine that didn't
--- sleep.
-local function after(c)
+-- sleep: the works at their places on the stage, their motions and
+-- lights.
+local function after(c, api)
     for slot = 0, 3 do
         local w = c.works[slot]
-        -- `ExPl_animate`'s first pass: motion 0 from its start.
-        if w.r2 == 0 and w.id ~= 0xE then
-            w.move_no, w.move_cnt, w.hokan, w.mplay = 0, 0, 0, 0
-            w.r2 = 1
-        end
+        api:ex_models("place", slot, w.x, w.z, w.cdir & 0xFFFF)
     end
+    api:ex_models("tick", c.cursor)
     draw(c)
     text(c)
     draw_text(c)
@@ -500,19 +496,12 @@ function M.tick(api, c, input)
         keys(c, api, input)
     elseif c.routine == 3 then
         if c.task9 ~= 1 then
-            local w = c.works[c.cursor]
-            if c.cursor == 0 then
-                w.move_no = 1
-                w.r2 = 1
-            else
-                w.move_no = 2
-                w.r2 = 3
-            end
+            api:ex_models("confirm", c.cursor)
             c.fx.set(0x100, -0x400)
             c.task9 = 1
         end
         if not c.fx.done(0) then
-            after(c)
+            after(c, api)
             slept = true
         else
             c.fx.set(0x200, 0xC00)
@@ -535,7 +524,7 @@ function M.tick(api, c, input)
         return
     end
     if not slept then
-        after(c)
+        after(c, api)
     end
 end
 
@@ -571,24 +560,23 @@ function M.placement(rnd)
 end
 
 -- The trace's `exb` and `exbm`, as `scripts/oracle-re2.py` has them.
-function M.trace(c)
+function M.trace(api, c)
     if not c or c.ended then
         return nil, nil
     end
     local t = c.text
     local text = t and string.format("%d,%d,%d,%d", t.col, t.row, t.caret, t.wait) or "-"
-    local players, motions = {}, {}
+    local players = {}
     for slot = 0, 3 do
         local w = c.works[slot]
         if w then
             players[#players + 1] = string.format("%d,%d,%d,%d,%d,%d,%d", w.angle, w.target, w.x, w.z,
                 w.cdir & 0xFFFF, w.facing & 0xFFFF, w.step)
-            motions[#motions + 1] = string.format("%d,%02x%02x%02x%02x", w.r2, w.move_no, w.move_cnt, w.hokan, w.mplay)
         end
     end
     local exb = string.format("%d,%d,%d,%d,%d,%d,%d,%d,%d/%s/%s", c.task8, c.task9, c.routine, c.text_step,
         c.cursor, c.pulse, c.way, c.flags, c.done, text, #players > 0 and table.concat(players, ";") or "-")
-    return exb, #motions > 0 and table.concat(motions, ";") or "-"
+    return exb, #players > 0 and api:ex_models("trace") or "-"
 end
 
 return M

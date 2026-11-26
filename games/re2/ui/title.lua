@@ -3488,7 +3488,7 @@ function ex.choice(api, input)
         s.init, s.sub = 0, 2
         fade_off(0)
         s.background = nil
-        s.exb = ExBattle.new(ex.FX)
+        s.exb = ExBattle.new(ex.FX, s.claire and 1 or 0)
         pages[ExBattle.PAGE_W] = api:has_image("ui/exbattle/select_w") and api:indexed_page("ui/exbattle/select_w") or nil
         pages[ExBattle.PAGE_I] = api:has_image("ui/exbattle/select_i") and api:indexed_page("ui/exbattle/select_i") or nil
         if api:has_image("ui/exbattle/select_b") then
@@ -3859,7 +3859,7 @@ local function publish(api)
     -- The trace's `kcm`, the page's model, while the option task runs.
     s.kcm = o and api:option_model("trace") or nil
     -- The trace's `exb` and `exbm`, while Extreme Battle's choice runs.
-    s.exb_trace, s.exbm_trace = ExBattle.trace(s.exb)
+    s.exb_trace, s.exbm_trace = ExBattle.trace(api, s.exb)
 end
 
 local function any_saves(api, args)
@@ -4243,6 +4243,11 @@ function M.draw(api)
         else
             api:option_model("draw")
         end
+    end
+    -- Extreme Battle's four players (`ExPl_move`'s sort), over the stage's
+    -- picture and under the frame's sprites.
+    if s.exb and not s.exb.ended then
+        api:ex_models("draw")
     end
     local function fade(n)
         local f = s.drawn_fades[n]
