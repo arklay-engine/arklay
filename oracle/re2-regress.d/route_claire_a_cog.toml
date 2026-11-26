@@ -568,3 +568,24 @@ frame_max_mean = 1.2
 frame_windows = [[360, 744, 0.2], [745, 1459, 1.5], [1460, 1700, 1.0], [1701, 2580, 0.85]]
 expect = "match"
 record = "--start claire --warp 309:-8880:-5400:-16974:3072:0 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 8:18 --flag 8:145 --flag 31:2 --flag 3:1 --flag 3:2 --flag 3:3 --flag 3:4 --flag 3:6 --flag 3:7 --flag 3:10 --flag 6:143 --flag 6:112 --flag 3:9 --flag 3:5 --flag 8:201 --life 200 --give 0:3:5 --give 2:0x09:1 --give 3:0x19:6 --give 4:0x14:15 --give 5:0x1A:6 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"
+
+# Rooms 30A, 309, 300, 308, 21B and 308: back up Irons's lift, where Sherry joins Claire, and down again with her.
+[[run]]
+name = "claire_a_30a_308"
+room = "30A"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_30a_308.lua"
+input = "claire_a_30a_308.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 5151
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 5150]
+# 30A 0.23, 309 0.16, 300 0.51, 308 0.19, 21B's lift down and Sherry's scene 0.60, and 21B from Sherry joining to the lift 0.70; the doors, loads
+# and 21B's lift ride count only in the whole run's mean, 1.01 measured
+frame_max_mean = 1.15
+frame_windows = [[360, 459, 0.35], [833, 1165, 0.3], [1539, 1673, 0.65], [2001, 2239, 0.3], [2400, 4540, 0.7], [4541, 4711, 0.8]]
+expect = "match"
+record = "--start claire --warp 30A:-16707:-1800:-17064:3136:0 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 8:18 --flag 8:145 --flag 31:2 --flag 3:1 --flag 3:2 --flag 3:3 --flag 3:4 --flag 3:6 --flag 3:7 --flag 3:10 --flag 6:143 --flag 6:112 --flag 3:9 --flag 3:5 --flag 8:201 --flag 4:57 --flag 4:58 --flag 6:98 --life 200 --give 0:3:5 --give 2:0x0B:1 --give 3:0x19:6 --give 4:0x14:15 --give 5:0x18:1 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"
