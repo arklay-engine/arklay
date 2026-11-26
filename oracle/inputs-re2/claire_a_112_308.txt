@@ -1,0 +1,241 @@
+# claire_a_112_308: Claire A from 113's door 1 in 112 with 113's flame rounds and bullets (#896): 112's ground floor
+# north and east to door 0, 110 up the west corridor, east along the north and down the east to door 0, 10F east to door
+# 0, 10A's corridor to door 3, and 21B as claire_a_10a_308 takes it: Irons's scene from the arrival (event 30, 3:6),
+# round the desk by the south to the stones' wall, its press (area 12, 3:1) and its two-page message, the Eagle, Jaguar
+# and Serpent Stones from the status screen (3:2, 3:4, 3:3; the third moves the shelf, event 27), south-west through the
+# shelf's gap and north up the west side to door 3's area: a press puts up message 30 (3:10), and a second starts
+# Irons's scene by the lift (event 31, 3:7), which takes Claire down into 308's hand back
+344 up
+346 up run
+348 left up run
+349 up run
+360 right up run
+361 up run
+371 left up run
+372 up run
+377 right up run
+378 right
+382 right up run
+399 left up
+406 up
+467 left up
+468 up
+481 left up
+482 up
+483 right
+485
+491 action
+492
+528 up
+860 left
+863 left up run
+876 up run
+881 left up run
+882 up run
+887 left up run
+891 up run
+905 left up run
+906 up run
+915 right up run
+916 up run
+938 right up run
+939 up run
+949 left up run
+950 up run
+956 right up run
+957 up run
+959 right up run
+976 up run
+997 right up run
+998 up run
+1033 right up run
+1034 up run
+1041 right up run
+1042 left up run
+1044 up run
+1072 right up run
+1085 up run
+1089 left up run
+1090 up run
+1092 right up run
+1097 up run
+1098 right up run
+1099 up run
+1128 left up run
+1129 up run
+1139 right up run
+1140 up run
+1146 left up run
+1147 up run
+1152 right up run
+1153 up run
+1219 right up run
+1220 up run
+1223 left up run
+1224 up run
+1227 left up run
+1230 up run
+1241 left up run
+1242 up run
+1243 left up
+1247 up
+1250 left up
+1251 up
+1270 left up
+1271 up
+1272 left
+1280
+1286 action
+1287
+1323 up
+1639 left up run
+1644 up run
+1658 right up run
+1659 up run
+1674 right up run
+1675 up run
+1678 right up
+1684 up
+1688 right up
+1689 up
+1694 left
+1696
+1702 action
+1703
+1739 up
+2045 left
+2048 left up run
+2061 left
+2063 left up run
+2065 left
+2067 left up run
+2069 left
+2071 left up run
+2072 right up run
+2078 up run
+2080 right up run
+2081 up run
+2088 right up run
+2092 up run
+2105 right up run
+2113 up run
+2118 right up run
+2126 up run
+2137 left up run
+2143 up run
+2151 left
+2153 left up run
+2166 up run
+2171 right up run
+2173 up run
+2197 left up run
+2198 up run
+2199 right up run
+2201 up run
+2202 right up run
+2203 up run
+2218 left up run
+2219 up run
+2224 right up run
+2225 up run
+2226 up
+2238 left
+2252
+2258 action
+2259
+2835 left up run
+2838 up run
+2841 left up run
+2850 right
+2852 right up run
+2858 right
+2860 right up run
+2876 up run
+2880 right up run
+2891 right
+2893 right up run
+2894 right
+2896 right up run
+2897 left up
+2899 up
+2907 left up
+2908 up
+2910 left
+2926
+2930 action
+2931
+3080 confirm
+3081
+3140 confirm
+3141
+3180 start
+3181
+3216 down
+3217
+3236 confirm
+3237
+3256 confirm
+3257
+3416 start
+3417
+3452 down
+3453
+3472 right
+3473
+3492 confirm
+3493
+3512 confirm
+3513
+3672 start
+3673
+3708 down
+3709
+3728 right
+3729
+3748 confirm
+3749
+3768 confirm
+3769
+3948 left up run
+3952 up run
+3953 left up run
+3954 up run
+3959 right
+3962 right up run
+3969 right
+3971 right up run
+3973 right
+3975 right up run
+3977 right
+3979 right up run
+3980 right
+3983 right up run
+3984 right
+3986 right up run
+3987 right
+3991 right up run
+3992 left up run
+4002 left
+4005 left up run
+4006 left
+4008 left up run
+4009 left
+4013 left up run
+4014 right
+4027 right up run
+4040 up run
+4041 right up run
+4042 up run
+4050 left up run
+4051 up run
+4053 right up
+4061 left
+4067
+4073 action
+4074
+4135 confirm
+4136
+4195 action
+4196
+5014 up
+5318
