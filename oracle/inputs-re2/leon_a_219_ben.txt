@@ -1,0 +1,27 @@
+# leon_a_219_ben: Leon A after the dust chute's landing in 219: west along the cells' south side, north at their end and west along the north corridor to door 3, its presses, and Ben's death in 301 (main_04, 3:64 and 3:66 set) with no input
+374 up run right
+378 up run
+404 up run right
+405 up run
+406 up run right
+423 up run
+429 up run right
+430 up run
+441 up run left
+442 up run
+445 up run right
+446 up run
+447 up run left
+468 up run
+499 up run left
+500 up run
+544 up run right
+545 up run
+550 up run right
+551 up run
+554 up left
+606 right
+619 action
+621
+641 action
+643

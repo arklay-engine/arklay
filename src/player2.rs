@@ -48,6 +48,8 @@ pub(crate) const MODE_SCENARIO: u8 = 4;
 /// `Pl_Em_damage` and `Pl_Em_die`: an enemy has hold of the player.
 pub(crate) const MODE_HELD: u8 = 5;
 pub(crate) const MODE_HELD_DIE: u8 = 6;
+/// `_Spl`'s `Spl_Sp_Move`: a scene character's own scene, by its `Id`.
+pub(crate) const MODE_SPECIAL: u8 = 8;
 /// `Be_flg`'s 8, which keeps `Sca_ck_em` from running.
 pub(crate) const BE_NO_SCA: u32 = 8;
 /// `Be_flg`'s 4: `Oba_ck_hit` doesn't push this body out of the others (the
@@ -487,6 +489,14 @@ pub struct Work {
     /// Where the body stood when `parts` were composed, so they can follow
     /// what moves it before the draw ([`move_parts`]).
     parts_at: Option<[i32; 3]>,
+    /// `parts` as the last frame's `Joint_trans2` left them, before this
+    /// tick's move: what another work reads at its `pSin_parts_ptr`.
+    pub(crate) drawn_parts: Vec<Option<Matrix>>,
+    /// `Spl_sp44_00`'s weight of part 0 (its `pSa_dat_head`'s word 3), kept
+    /// for `Timer3` though not drawn.
+    pub(crate) sp_weight: i16,
+    /// `Spl_sp44_00`'s `Timer3` (`+0x16b`): part 0 has swollen to 0x1000.
+    pub(crate) sp_timer3: u8,
     /// `Kage_ofs`: how far along the body `Game_loop` probes the shadow's ground.
     kage_ofs: i16,
     /// The point `pl_mv_07` aims `pKage_work->pPos` at in place of part 0.
@@ -1309,6 +1319,9 @@ impl Default for Work {
             hidden_parts: 0,
             root_turn: 0,
             parts_at: None,
+            drawn_parts: Vec::new(),
+            sp_weight: 0,
+            sp_timer3: 0,
             part_rgb: [DEFAULT_PART_RGB; 32],
             joint_offsets: Vec::new(),
             parts0_y: 0x1000,
@@ -8042,6 +8055,27 @@ pub(crate) fn spl_auto(
     run(&mut mover);
     mover.rot_neck();
     mover.work.neck.body = Some(mover.player.pos);
+}
+
+/// `_Spl`'s `Spl_Sp_Move` (`Routine_0` 8), a character's own scene: `run`
+/// on its mover, then `Rot_neck`, and the parts as this tick leaves them.
+pub(crate) fn spl_special<T>(
+    work: &mut Work,
+    player: &mut PlayerState,
+    tick: &Tick<'_>,
+    run: impl FnOnce(&mut Mover<'_, '_>) -> T,
+) -> T {
+    let mut mover = Mover::new(work, player, tick);
+    let out = run(&mut mover);
+    mover.rot_neck();
+    mover.work.neck.body = Some(mover.player.pos);
+    mover.latch_parts();
+    out
+}
+
+/// Whether `_Spl`'s routine is `Spl_Sp_Move`'s.
+pub fn in_special(work: &Work) -> bool {
+    work.routine[0] == MODE_SPECIAL
 }
 
 /// Whether `_Spl`'s routine is `Spl_Auto`'s.

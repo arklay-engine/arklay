@@ -996,6 +996,15 @@ function Re2EnemyApi:distance_now() end
 ---@param w integer Its half-width for the walls.
 function Re2EnemyApi:set_atd(which, ofs_x, ofs_y, at_w, at_h, w) end
 
+---Set `nOba`, how many boxes the body has (`Atd[0]` and on); only 0 and
+---any other count differ. At 0 `Oba_set_ofs` leaves `Atd[0]` where it
+---last was (arklay puts it, as it turns 0, where `Oba_set_ofs` would put
+---it then), so the room's walls are tested there and push the body only
+---by what they push it; the others have no box of it to push against, and
+---it has none to be pushed out of theirs.
+---@param count integer
+function Re2EnemyApi:set_oba_count(count) end
+
 ---Drop a licker's back box, which only counts on a wall or the ceiling.
 function Re2EnemyApi:clear_back_atd() end
 
@@ -1695,6 +1704,28 @@ function Re2EnemyApi:pull_part(part, behind) end
 ---@param id integer
 ---@return integer? slot `nil` if none.
 function Re2EnemyApi:other_of(id) end
+
+---A point on `enemy_work[0]`'s part, as its last draw left it: the point
+---turned by the part (`ApplyMatrixSV`) plus the part's place. Only the G
+---embryo (0x27) sees slot 0.
+---@param part integer
+---@param x integer
+---@param y integer
+---@param z integer
+---@return integer? x `nil` without the part.
+---@return integer? y
+---@return integer? z
+function Re2EnemyApi:work0_point(part, x, y, z) end
+
+---`enemy_work[0]`'s facing (`Cdir_y`), or `nil` where the body doesn't see it.
+---@return integer?
+function Re2EnemyApi:work0_angle() end
+
+---Write `enemy_work[0]`'s `Routine_0` to `Routine_2`, which it reads on its next run.
+---@param zero integer
+---@param one integer
+---@param two integer
+function Re2EnemyApi:set_work0_routines(zero, one, two) end
 
 ---`enemy_work[slot]`'s id, whether the body is in play or not.
 ---@param slot integer
