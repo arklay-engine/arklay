@@ -485,3 +485,86 @@ frame_max_mean = 1.25
 frame_windows = [[360, 476, 0.25], [882, 2413, 1.25]]
 expect = "match"
 record = "--start claire --warp 10A:-14347:0:-7806:3136:12 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 6:143 --flag 6:112 --life 200 --give 0:3:5 --give 2:0x3A:1 --give 3:0x09:1 --give 4:0x37:1 --give 5:0x36:1 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"
+
+# Rooms 10A, 10F, 110, 112 and 113: back for 113's flame rounds and handgun bullets before 309's G adult.
+[[run]]
+name = "claire_a_10a_113"
+room = "10A"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_10a_113.lua"
+input = "claire_a_10a_113.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 4378
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 4377]
+# Each room from its hand back to the press that leaves it: 10A 0.14, 10F 0.09, 110 0.07, 112 0.20 and 113 0.10; 0.52 measured over the run
+frame_max_mean = 0.65
+frame_windows = [[360, 509, 0.25], [850, 951, 0.2], [1304, 1745, 0.2], [2114, 2220, 0.3], [2561, 4028, 0.2]]
+expect = "match"
+record = "--start claire --warp 10A:-14347:0:-7806:3136:12 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 6:143 --flag 6:112 --life 200 --give 0:3:5 --give 2:0x3A:1 --give 3:0x09:1 --give 4:0x37:1 --give 5:0x36:1 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"
+
+# Rooms 112, 110, 10F, 10A, 21B and 308: back from 113 to 21B's stones and down Irons's lift, armed for 309's G adult.
+[[run]]
+name = "claire_a_112_308"
+room = "112"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_112_308.lua"
+input = "claire_a_112_308.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 5324
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 5323]
+# Each room from its hand back to the press that leaves it: 112 0.15, 110 0.06, 10F 0.16, 10A 0.12 and 21B 1.15 (Irons is in 21B throughout, as in
+# claire_a_10a_308); the lift's scene, its ride and 308's load count only in the whole run's mean, 1.07 measured
+frame_max_mean = 1.2
+frame_windows = [[360, 490, 0.25], [859, 1285, 0.2], [1638, 1701, 0.3], [2044, 2257, 0.25], [2663, 4194, 1.25]]
+expect = "match"
+record = "--start claire --warp 112:-17484:0:-26200:3128:1 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 8:18 --flag 8:145 --flag 31:2 --flag 6:143 --flag 6:112 --life 200 --give 0:3:5 --give 2:0x3A:1 --give 3:0x09:1 --give 4:0x37:1 --give 5:0x36:1 --give 6:0x19:6 --give 7:0x14:15 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"
+
+# Rooms 308, 300 and 309: 308's and 300's scenes, 300's acid rounds and its ladder down to 309.
+[[run]]
+name = "claire_a_308_309"
+room = "308"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_308_309.lua"
+input = "claire_a_308_309.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 5631
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 5630]
+# 308 before and after its scene 0.19 and 0.16; the scene 4.22, G1 drawn unlike the original (#985); 300 from its hand back, Irons's scene
+# included, 0.97 and after it 0.50; 308's door, the ladder and 309's load count only in the whole run's mean, 1.39 measured
+frame_max_mean = 1.5
+frame_windows = [[360, 383, 0.3], [384, 950, 4.35], [951, 1172, 0.3], [1499, 4660, 1.1], [4661, 5250, 0.6]]
+expect = "match"
+record = "--start claire --warp 308:1475:0:-15201:1472:0 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 8:18 --flag 8:145 --flag 31:2 --flag 3:1 --flag 3:2 --flag 3:3 --flag 3:4 --flag 3:6 --flag 3:7 --flag 3:10 --flag 6:143 --flag 6:112 --life 200 --give 0:3:5 --give 2:0x09:1 --give 3:0x19:6 --give 4:0x14:15 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"
+
+# Rooms 309 and 30A: the G adult killed with the launcher's acid rounds, the platform raised and door 3 to 30A.
+[[run]]
+name = "claire_a_309_30a"
+room = "309"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_309_30a.lua"
+input = "claire_a_309_30a.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 2961
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
+frames = [360, 2960]
+# 309 before the scene 0.03, the G adult's scene 1.36, the fight and its death 0.89, and from after it to door 3 0.72, the acid kill's pool and
+# dissolving embryos not drawn (#985); door 3 and 30A's load count only in the whole run's mean, 1.10 measured
+frame_max_mean = 1.2
+frame_windows = [[360, 744, 0.2], [745, 1459, 1.5], [1460, 1700, 1.0], [1701, 2580, 0.85]]
+expect = "match"
+record = "--start claire --warp 309:-8880:-5400:-16974:3072:0 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 8:18 --flag 8:145 --flag 31:2 --flag 3:1 --flag 3:2 --flag 3:3 --flag 3:4 --flag 3:6 --flag 3:7 --flag 3:10 --flag 6:143 --flag 6:112 --flag 3:9 --flag 3:5 --flag 8:201 --life 200 --give 0:3:5 --give 2:0x09:1 --give 3:0x19:6 --give 4:0x14:15 --give 5:0x1A:6 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"

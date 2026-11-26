@@ -1,0 +1,366 @@
+# claire_a_309_30a: Claire A from the foot of 300's ladder in 309 to 30A (#896): the status screen, the acid rounds
+# combined into the Grenade Launcher (its grenade round goes back to their slot) and the launcher equipped, north into
+# camera 1 for the G adult's scene (event 10, 4:57), five acid rounds into the G adult (Em_28, 600 life, 121 a direct
+# hit) as it comes south, its death (6:98), north and west past the embryos it spat along the walkway to area 4 (event
+# 4: message 1, the platform raised, 4:58; an embryo bites her once there, 185 life), and door 3: event 20's message
+# turns it on and closing it takes Claire through into 30A's hand back
+354 start
+355
+390 down
+391
+410 confirm
+411
+430 down
+431
+442 down
+443
+454 confirm
+455
+474 down
+475
+486 right
+487
+498 confirm
+499
+558 confirm
+559
+578 confirm
+579
+638 cancel
+639
+678 start
+679
+718 left up run
+720 up run
+739 right up run
+740 up run
+744 left up run
+745
+1459 aim
+1479 aim fire
+1499 aim
+1519 aim fire
+1539 aim
+1559 aim fire
+1579 aim
+1599 aim fire
+1619 aim
+1639 aim fire
+1648 up run
+1650 left
+1651 right
+1652 left
+1653 right
+1654 left
+1655 right
+1656 left
+1657 right
+1658 left
+1659 right
+1660 left
+1661 right
+1662 left
+1663 right
+1664 left
+1665 right
+1666 left
+1667 right
+1668 left
+1669 right
+1670 left
+1671 right
+1672 left
+1673 right
+1674 left
+1675 right
+1676 left
+1677 right
+1678 left
+1679 right
+1680 left
+1681 right
+1682 left
+1683 right
+1684 left
+1685 right
+1686 left
+1687 right
+1688 left
+1689 right
+1690 left
+1691 right
+1692 left up run
+1694 up run
+1709 left up run
+1710 up run
+1716 left up run
+1717 up run
+1719 left up run
+1720 up run
+1722 left up run
+1723 up run
+1725 left up run
+1726 up run
+1729 left up run
+1730 up run
+1731 left up run
+1732 up run
+1733 left up run
+1734 up run
+1735 left up run
+1738 up run
+1739 left up run
+1741 up run
+1743 right up run
+1762 left
+1763 right
+1764 left
+1765 right
+1766 left
+1767 right
+1768 left
+1769 right
+1770 left
+1771 right
+1772 left
+1773 right
+1774 left
+1775 right
+1776 left
+1777 right
+1778 left
+1779 right
+1780 left
+1781 right
+1782 left
+1783 right
+1784 left
+1785 right
+1786 left
+1787 right
+1788 left
+1789 right
+1790 left
+1791 right
+1792 left
+1793 right
+1794 left
+1795 right
+1796 left
+1797 right
+1798 left
+1799 right
+1800 left
+1801 right
+1802 left
+1803 right
+1804 left
+1814 left up run
+1828 up run
+1837 left up run
+1838 up run
+1842 right
+1847 right up
+1862 right
+1864 right up
+1868 right
+1870 right up
+1872 right
+1874 right up
+1876 right
+1879 right up
+1881 right
+1884 right up
+1885 right
+1887 right up
+1888 right
+1892 right up
+1893 right
+1897 right up
+1898 left
+1921
+1925 action
+1926
+1985 confirm
+1986
+2285 left
+2287 right
+2288 left
+2289 right
+2290 left
+2291 right
+2292 left
+2293 right
+2294 left
+2295 right
+2296 left
+2297 right
+2298 left
+2299 right
+2300 left
+2301 right
+2302 left
+2303 right
+2304 left
+2305 right
+2306 left
+2307 right
+2308 left
+2309 right
+2310 left
+2311 right
+2312 left
+2313 right
+2314 left
+2315 right
+2316 left
+2317 right
+2318 left
+2319 right
+2320 left
+2321 right
+2322 left
+2323 right
+2324 left
+2325 right
+2326 left
+2327 right
+2328 left
+2329 right
+2330 left
+2331 right
+2332 left
+2333 right
+2334 left
+2335 right
+2336 left
+2337 right
+2338 left
+2339 right
+2340 left
+2341 right
+2342 left
+2343 right
+2344 left
+2345 right
+2346 left
+2347 right
+2348 left
+2349 right
+2350 left
+2351 right
+2352 left
+2353 right
+2354 left
+2355 right
+2356 left
+2357 right
+2358 left
+2359 right
+2360 left
+2361 right
+2362 left
+2363 right
+2364 left
+2365 right
+2366 left
+2367 right
+2368 left
+2369 right
+2370 left
+2371 right
+2372 left
+2373 right
+2374 left
+2375 right
+2376 left
+2377 right
+2378 left
+2379 right
+2380 left
+2381 right
+2382 left
+2383 right
+2384 left
+2385 right
+2386 left
+2387 right
+2388 left
+2389 right
+2390 left
+2391 right
+2392 left
+2393 right
+2394 left
+2395 right
+2396 left
+2397 right
+2398 left
+2399 right
+2400 left
+2401 right
+2402 left
+2403 right
+2404 left
+2405 right
+2406 left
+2407 right
+2408 left
+2409 right
+2410 left
+2411 right
+2412 left
+2413 right
+2414 left
+2415 right
+2416 left
+2417 right
+2418 left
+2419 right
+2420 left
+2421 right
+2422 left
+2423 right
+2424 left
+2425 right
+2426 left
+2427 right
+2428 left
+2429 right
+2430 left
+2431 right
+2432 left
+2433 right
+2434 left
+2435 right
+2436 left
+2437 right
+2438 left
+2439 right
+2440 left
+2441 right
+2442 left
+2443 right
+2444 left
+2445 right
+2446 left
+2447 right
+2448 left
+2449 right
+2450 left
+2451 right
+2452 left
+2453 right
+2454 left
+2462 left up
+2481 up
+2494 left up
+2495 up
+2499 right
+2517
+2521 action
+2522
+2581 confirm
+2582
+2671 up
+2955

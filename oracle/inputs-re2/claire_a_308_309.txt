@@ -1,0 +1,95 @@
+# claire_a_308_309: Claire A from the foot of Irons's lift in 308 to 309 (#896): west into area 2 for 308's scene (event
+# 6, 3:9; Irons and G1, whose routine 11 is the scene's and never fights), round the north to door 1, 300's scene with
+# Irons on arrival (event 6, 3:5), the 6 acid rounds on the crate east of the middle (8:201), through the gap between
+# the middle block and the south-west one to door 1's north edge, its message (event 5) and a second press, and down the
+# ladder into 309's hand back
+344 right up run
+358 right
+360 right up run
+361 right
+363 right up run
+364 right
+367 right up run
+368 left up run
+373 left
+375 left up run
+379
+949 up run
+954 left up run
+955 up run
+960 right
+968 right up run
+980 up run
+1017 left up run
+1018 up run
+1021 right up run
+1022 up run
+1024 right up run
+1025 up run
+1026 left
+1032 left up run
+1045 up run
+1082 right up run
+1083 up run
+1088 right up run
+1089 up run
+1090 left
+1095 left up
+1105 left
+1107 left up
+1110 left
+1112 left up
+1114 left
+1116 left up
+1118 left
+1121 left up
+1122 left
+1124 left up
+1125 left
+1127 left up
+1128 left
+1131 left up
+1132 left
+1136 left up
+1137 left
+1142 left up
+1143 right
+1167
+1173 action
+1174
+4660 right
+4664 right up
+4681 up
+4684 right up
+4685 up
+4709 right up
+4710 right
+4720
+4724 action
+4725
+4824 action
+4825
+4924 action
+4925
+5044 right
+5058 right up
+5059 right
+5061 right up
+5062 right
+5064 right up
+5065 right
+5068 right up
+5069 right
+5073 right up
+5074 right up run
+5076 up run
+5093 left
+5107
+5111 action
+5112
+5191 confirm
+5192
+5251 action
+5252
+5331 up
+5625

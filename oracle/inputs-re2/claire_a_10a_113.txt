@@ -1,0 +1,208 @@
+# claire_a_10a_113: Claire A from 10B's door 1 in 10A, back for 113's rounds before the G adult in 309 (#896): west and
+# south down 10A's corridor to door 1, 10F west to door 1, 110 (its licker dead, 6:112) up the east corridor, west along
+# the north and down the west to door 4, 112's ground floor west and south to door 1, and in 113 the drawer north of
+# door 1 (area 3; its lock, fg_key 2, opens to the lockpick on a yes, then a press opens it and one takes the 6 flame
+# rounds, 8:18), the 15 handgun bullets on the desk in the north-west (8:145), taken from its east side, and door 1 back
+# into 112's hand back
+344 up
+346 left
+352 left up run
+363 up run
+374 left up run
+375 up run
+382 left up run
+383 up run
+397 left up run
+398 up run
+400 left up run
+407 up run
+411 left up run
+412 up run
+413 left up run
+420 up run
+429 left up run
+432 up run
+446 right up run
+447 up run
+449 right up
+453 up
+487 right up
+488 up
+492 right
+504
+510 action
+511
+547 up
+851 left up run
+858 up run
+875 up
+878 left up
+879 up
+941 right up
+942 right
+946
+952 action
+953
+989 up
+1305 right up run
+1306 up run
+1309 right up run
+1315 up run
+1321 right up run
+1322 up run
+1323 right up run
+1325 up run
+1334 right up run
+1335 up run
+1386 left up run
+1387 up run
+1397 right up run
+1398 up run
+1409 left up run
+1410 up run
+1439 right up run
+1440 up run
+1451 left up run
+1452 up run
+1457 right up run
+1458 up run
+1459 left up run
+1467 up run
+1468 left up run
+1469 up run
+1477 right up run
+1478 left up run
+1489 up run
+1502 right up run
+1503 up run
+1505 left up run
+1506 up run
+1508 right up run
+1509 up run
+1553 left up run
+1555 up run
+1572 left up run
+1573 up run
+1577 right up run
+1578 up run
+1583 left up run
+1601 up run
+1634 right up run
+1635 left up run
+1636 up run
+1656 right up run
+1657 up run
+1661 right up run
+1662 right up
+1670 up
+1691 right up
+1692 up
+1731 right
+1740
+1746 action
+1747
+1783 up
+2115 left up run
+2117 up run
+2139 left up run
+2140 up run
+2141 right up run
+2142 up run
+2153 right up run
+2154 up run
+2155 left up run
+2156 up run
+2157 left
+2161 left up run
+2176 up run
+2184 right up
+2187 up
+2191 right up
+2192 up
+2213 left up
+2214 up
+2215
+2221 action
+2222
+2258 up
+2562 left
+2567 left up
+2573 left
+2575 left up
+2579 left
+2581 left up
+2583 left
+2585 left up
+2587 left
+2589 left up
+2590 left
+2592 left up
+2593 left
+2595 left up
+2596 left
+2599 left up
+2600 left
+2603 left up
+2604 left
+2608 left up
+2609 right
+2635
+2639 action
+2640
+2739 action
+2740
+2839 action
+2840
+2939 action
+2940
+3039 action
+3040
+3179 action
+3180
+3279 action
+3280
+3359 right
+3366 right up run
+3384 left up run
+3394 up run
+3416 right
+3419 right up run
+3433 up run
+3445 left up run
+3446 up run
+3449 right up run
+3452 up run
+3483 up
+3504 right up
+3505 left
+3519
+3523 action
+3524
+3623 action
+3624
+3723 action
+3724
+3843 left
+3849 left up run
+3860 up run
+3888 left up run
+3891 up run
+3894 left up run
+3895 up run
+3905 right up run
+3906 up run
+3911 left up run
+3912 up run
+3916 left
+3918 left up run
+3932 up run
+3952 right up
+3954 up
+3963 right up
+3964 up
+4009 left
+4023
+4029 action
+4030
+4066 up
+4372
