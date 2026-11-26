@@ -1,0 +1,175 @@
+# claire_a_20c_eagle: Claire A from 20D's door 0 back in 20C with the cog (#896): along 20C's west arm by its west wall
+# once zombie 2 comes south from the north (a wait at the arm's foot), door 2 (the Diamond Key's last use, the key
+# discarded), 20E's north half: the Eagle Stone (8:56) taken facing west, back east across area 2 (its event sends the
+# licker through the window, 4:69) to door 0, and 20C again: a wait at the north corridor's west end, then by its south
+# wall past the crawler, down the east arm by its east wall, door 0 into 20A, round its zombies to door 0 as
+# claire_a_20c_110 does, and 200's balcony
+# made in arklay (steered by a script): no enemy reaches her; 20E loads at 741 and hands back on 1047, 20C at 1514 (back
+# on 1820), 20A at 2465 (back on 2722), 200 at 3032, which hands back on 3348
+344 up
+346 right up run
+352 up run
+369 right
+372
+467 left up run
+475 right up run
+480 up run
+482 left up run
+483 up run
+494 left up run
+495 up run
+497 right up run
+501 up run
+528 up
+543 right up
+544 up
+554 left
+568
+574 action
+575
+618 action
+619
+662 action
+663
+706 action
+707
+750 up
+1049 left
+1051 left up run
+1066 up run
+1076 right
+1079 right up run
+1099 left up
+1106 up
+1118 left up
+1119 up
+1131 right up
+1132 left
+1134
+1140 confirm
+1143
+1240 confirm
+1243
+1340 confirm
+1343
+1383 right
+1393 right up run
+1401 right
+1403 right up run
+1405 right
+1407 right up run
+1408 right
+1410 right up run
+1411 right
+1413 right up run
+1414 right
+1417 right up run
+1418 up run
+1423 left up run
+1424 up run
+1435 left up run
+1442 up run
+1443 left up run
+1445 up run
+1447 left up run
+1451 up run
+1462 left up run
+1463 right
+1473
+1479 action
+1480
+1516 up
+1822 left up run
+1823 up run
+1826 left up run
+1827 right up run
+1833 up run
+1835 right up run
+1836 up run
+1841 left
+1846
+2247 right up run
+2252 up run
+2268 left up run
+2271 up run
+2272 left up run
+2273 up run
+2278 right up run
+2279 up run
+2283 left up run
+2293 up run
+2306 right
+2315 right up run
+2330 up run
+2339 left up run
+2340 up run
+2344 left up run
+2345 right up run
+2349 up run
+2352 right up run
+2353 up run
+2375 left up run
+2376 up run
+2388 left up run
+2390 up run
+2394 left up run
+2395 up run
+2408 right up
+2411 up
+2421 right up
+2422 up
+2424
+2430 confirm
+2431
+2717 right up run
+2729 up run
+2731 right up run
+2733 up run
+2756 right up run
+2757 up run
+2766 left up run
+2767 right up run
+2768 up run
+2792 right up run
+2793 up run
+2799 right up run
+2812 up run
+2814 right up run
+2815 up run
+2818 right up run
+2819 up run
+2823 left up run
+2824 up run
+2825 left up run
+2842 up run
+2859 right up run
+2860 left up run
+2866 up run
+2867 left up run
+2878 up run
+2883 left up run
+2884 up run
+2886 left up run
+2887 up run
+2898 right up run
+2899 left up run
+2911 up run
+2912 left up run
+2913 up run
+2915 right up run
+2916 up run
+2918 right up run
+2931 up run
+2944 left up run
+2945 up run
+2949 right up run
+2956 up run
+2966 right up
+2972 up
+2981 right up
+2982 left
+2991
+2997 confirm
+2998
+3034 up
+3350

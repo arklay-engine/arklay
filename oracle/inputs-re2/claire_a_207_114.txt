@@ -1,0 +1,195 @@
+# claire_a_207_114: Claire A from 205's door 2 in 207 with both Red Jewels (#896): door 2 into 208, its item box (the
+# Lighter goes in, for a free slot), door 0 back into 207, door 3 into 10C, up its stairs (up and action held), door 2
+# into 114, door 1 into 115, the desk drawer's Grenade Launcher (item 0x09 with 6 rounds, 8:103), and door 0 back into
+# 114
+# made in arklay (steered by a script): 208 loads at 514 and hands back on 820, 207 at 1364 (back on 1668), 10C at 1910
+# (back on 2084), 114 at 2471 (back on 2777), 115 at 2946 (back on 3250), 114 again at 3845, which hands back on 4151
+344 up
+346 left
+350 left up run
+363 up run
+370 left up run
+371 up run
+378 right
+384 right up run
+397 up run
+414 right up run
+415 right up
+419 up
+463 right
+473
+479 action
+480
+516 up
+860 left up
+861 up
+868 left up
+871 right
+874
+880 confirm
+881
+970 down
+973
+1000 right
+1003
+1030 confirm
+1033
+1060 down
+1063
+1090 down
+1093
+1120 down
+1123
+1150 confirm
+1153
+1180 cancel
+1183
+1250 left
+1268 left up
+1282 up
+1295 right up
+1296 up
+1301 right up
+1302 up
+1306 right up
+1307 up
+1319 left
+1323
+1329 action
+1330
+1366 up
+1670 left up run
+1675 up run
+1677 left up run
+1678 up run
+1682 right up run
+1683 up run
+1685 up
+1705 right up
+1706 up
+1728 right up
+1729 up
+1735 right up
+1736 up
+1742 right up
+1743 up
+1748 right up
+1749 up
+1753 right up
+1754 up
+1759 right up
+1760 up
+1764 right up
+1765 up
+1770 right up
+1771 up
+1776 right up
+1777 up
+1782 right up
+1783 up
+1788 right up
+1789 up
+1796 right up
+1797 up
+1806 right up
+1807 up
+1812 right up
+1813 up
+1817 right up
+1818 up
+1821 right up
+1822 up
+1825 right up
+1826 up
+1829 right up
+1830 up
+1836 right up
+1837 up
+1856 right up
+1857 right
+1869
+1875 action
+1876
+1914 up
+2086 right
+2088 up action
+2144 right up run
+2154 right
+2156 right up run
+2166 right
+2168 right up run
+2169 right
+2171 right up run
+2172 right
+2174 right up run
+2175 left up run
+2179 up run
+2200 left up run
+2202 up run
+2209 right up run
+2210 up run
+2223 right up run
+2224 up run
+2247 right up run
+2248 up run
+2260 left up run
+2261 up run
+2266 right up run
+2267 up run
+2283 right up run
+2284 up run
+2317 left up run
+2318 up run
+2323 right up run
+2324 up run
+2350 left up run
+2369 right up
+2372 up
+2397 right up
+2398 up
+2417 right
+2430
+2436 action
+2437
+2473 up
+2779 left
+2785 left up run
+2799 up run
+2807 left up run
+2808 up run
+2813 right up
+2820 up
+2850 right up
+2851 up
+2891 left
+2905
+2911 action
+2912
+2948 up
+3252 right
+3259 right up
+3280 up
+3284 right up
+3285 up
+3293 right up
+3294 left
+3299
+3305 action
+3306
+3405 action
+3406
+3505 action
+3506
+3605 action
+3606
+3725 left
+3742 left up
+3762 up
+3790 left up
+3791 up
+3792 left
+3804
+3810 action
+3811
+3847 up
+4153

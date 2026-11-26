@@ -1,0 +1,253 @@
+# claire_a_114_111: Claire A from 115's door 0 in 114 with the Grenade Launcher (#896): the launcher equipped from the
+# status screen (START on 356, twelve ticks into the warp, since a press on its first ticks diverges), door 0 into 113
+# (no enemies for Claire), door 1 into 112: its scene of the zombies at the windows (4:153), the stairs by the south
+# wall (up and action held), the balcony to door 2 into 117, a walk south to the corridor's middle and the licker
+# (6:143) shot from there as it comes (three grenades, the second missing; the third kills it), door 2 into 111, the
+# Square Crank used at area 7 from the status screen (its scene lowers the stairs, 4:74, and reopens the screen), the
+# west stairs up (up and action held), round to the clock, the cog used at area 6 from the status screen (4:76; its
+# message closed, the switch scene follows, 4:55), and the Blue Stone (item 0x39, 8:55) taken at the west end
+# made in arklay (steered by a script): 113 loads at 829 and hands back on 1135, 112 at 1342 (back on 1648), 117 at 2462
+# (back on 2778), 111 at 3772, which hands back on 4088
+344 up
+346
+356 start
+357
+392 down
+393
+412 down
+413
+432 down
+433
+452 right
+453
+472 confirm
+473
+492 confirm
+493
+552 cancel
+553
+592 start
+593
+632 left
+636 left up run
+651 up run
+654 left up run
+655 up run
+662 right up run
+665 up run
+669 right up run
+670 up run
+679 left up run
+680 up run
+684 left up run
+685 up run
+686 left up run
+701 up run
+714 left up
+716 up
+729 left up
+730 up
+781 left up
+782 up
+786 right
+788
+794 action
+795
+831 up
+1137 left
+1141 left up run
+1154 up run
+1167 left up run
+1168 up run
+1172 right up run
+1173 up run
+1175 right
+1178 right up run
+1194 up run
+1201 left up
+1204 up
+1258 left up
+1259 up
+1284 left up
+1285 up
+1288 left
+1301
+1307 action
+1308
+1344 up
+1650 right
+1653 right up run
+2198 right
+2200 right up run
+2205 right
+2207 right up run
+2209 right
+2211 right up run
+2212 right
+2214 right up run
+2217 right
+2219 right up run
+2220 left
+2230 up action
+2296 left
+2312 left up run
+2326 up run
+2341 right up run
+2342 up run
+2366 right up
+2368 up
+2378 right up
+2379 up
+2406 right up
+2407 up
+2409 right
+2421
+2427 action
+2428
+2464 up
+2780 right
+2785 right up
+2805 up
+2825 right up
+2826 up
+2830 left
+2833 aim
+3453 aim fire
+3466 aim
+3495 aim fire
+3498 aim
+3500 aim fire
+3513 aim
+3533 aim fire
+3538
+3598 up run
+3605 left up run
+3606 up run
+3611 right up run
+3612 up run
+3624 left up run
+3625 up run
+3634 right up run
+3635 up run
+3641 left up run
+3642 up run
+3647 right up run
+3648 up run
+3649 right up run
+3650 up run
+3677 left up run
+3678 up run
+3682 right up
+3691 right
+3694 right up
+3696 right
+3699 right up
+3700 right
+3702 right up
+3703 right
+3706 right up
+3707 right
+3711 right up
+3712 right
+3717 right up
+3718 left
+3731
+3737 action
+3738
+3774 up
+4090 right up run
+4106 left up
+4108 up
+4111 left up
+4112 up
+4154 right up
+4155 up
+4159 right
+4162
+4170 start
+4171
+4206 down
+4207
+4226 down
+4227
+4246 right
+4247
+4266 confirm
+4267
+4286 confirm
+4287
+4606 cancel
+4607
+4666 start
+4667
+4706 left
+4723 left up run
+4736 up run
+4743 left up run
+4744 up run
+4754 right up
+4776 up
+4780 right up
+4781 up
+4787 right up
+4788 up
+4793 right up
+4794 up
+4802 right up
+4803 up
+4819 right up
+4820 up
+4835 right
+4849 up action
+4915 right up run
+4928 right
+4931 right up run
+4933 right
+4935 right up run
+4947 up run
+4957 left up run
+4958 up run
+4964 right
+4968 right up run
+4983 left up run
+4984 up run
+5018 right up run
+5028 right up
+5040 right
+5042 right up
+5043 right
+5046 right up
+5047 right
+5051 right up
+5052 right
+5057 right up
+5058 right
+5083
+5091 start
+5092
+5127 down
+5128
+5147 right
+5148
+5167 confirm
+5168
+5187 confirm
+5188
+5307 action
+5308
+5309 up
+5409 right
+5450 right up
+5545 up
+5546 right up
+5547 up
+5592 right up
+5593 up
+5600 left
+5603
+5609 action
+5610
+5729 action
+5730
+5829 action
+5830

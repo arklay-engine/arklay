@@ -1,0 +1,153 @@
+# claire_a_204_207: Claire A from 203's door 0 in 204 with the Square Crank (#896): door 1 into 205, the corridor of
+# bodies (4:48) to door 1 into 206, the Lighter used on the fireplace from the status screen (4:36) and the fireplace
+# checked again for the second Red Jewel (8:31), door 0 back into 205, and door 2 into 207
+# made in arklay (steered by a script): 205 loads at 504 and hands back on 810, 206 at 1036 (back on 1332), 205 again at
+# 2371 (back on 2687), 207 at 2858, which hands back on 3164
+344 up
+346 right
+349 right up run
+368 left up
+376 up
+461 right
+463
+469 confirm
+470
+506 up
+812 up run
+850 right up run
+851 up run
+854 left up run
+855 up run
+880 right up run
+881 up run
+888 right up run
+889 up run
+890 right up run
+905 up run
+906 right up run
+907 up run
+914 right up
+923 up
+943 right up
+944 up
+948 right up
+949 up
+952 right up
+953 up
+964 right up
+965 up
+987 right
+995
+1001 confirm
+1002
+1038 up
+1334 up run
+1341 left up run
+1342 up run
+1344 left up run
+1345 up run
+1354 left up run
+1355 up run
+1361 left up run
+1362 up run
+1366 left up run
+1367 up run
+1375 left up run
+1376 up run
+1378 right up run
+1379 up run
+1386 right up run
+1387 up run
+1398 right up run
+1399 up run
+1405 right up run
+1406 up run
+1411 right up run
+1412 up run
+1429 right up run
+1430 up run
+1442 right up
+1460 up
+1469 right up
+1470 up
+1501 right up
+1502 up
+1503 left
+1513
+1521 start
+1522
+1557 down
+1558
+1577 right
+1578
+1597 confirm
+1598
+1617 confirm
+1618
+1867 up
+1903
+1911 confirm
+1914
+2034 confirm
+2037
+2137 confirm
+2140
+2180 left
+2191 left up run
+2204 up run
+2207 right up run
+2208 up run
+2211 left up run
+2225 up run
+2230 left up run
+2231 up run
+2233 left up run
+2234 up run
+2237 left up run
+2238 up run
+2242 right up run
+2244 up run
+2255 right up run
+2256 up run
+2259 right up run
+2260 up run
+2265 right up run
+2266 up run
+2274 left up run
+2275 up run
+2276 right up
+2281 up
+2285 right up
+2286 up
+2323 right up
+2324 up
+2328 left
+2330
+2336 confirm
+2337
+2373 up
+2689 right up run
+2698 up run
+2699 right up run
+2709 up run
+2730 right
+2732 right up run
+2747 up run
+2755 left up run
+2766 up run
+2778 left up run
+2779 up run
+2783 right up run
+2784 up run
+2785 left up
+2790 up
+2791 left up
+2792 up
+2811 left up
+2812 up
+2814 left
+2817
+2823 confirm
+2824
+2860 up
+3166

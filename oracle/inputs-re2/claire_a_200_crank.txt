@@ -1,0 +1,204 @@
+# claire_a_200_crank: Claire A on 200's balcony from 20A's door 0 with the Eagle Stone (#896): the jump down by the
+# stairs, door 1 into 201, the item box (the Club Key goes in for the Red Jewel, then the Red Herb and the 2 rounds go
+# in), door 1 into 204, round to door 2 into 203, its box pushed south to the shelf and climbed, the Square Crank
+# (8:188) taken from the top, the jump down, and door 0 back into 204
+# made in arklay (steered by a script): 201 loads at 596 and hands back on 928, 204 at 1736 (back on 2042), 203 at 2272
+# (back on 2573), 204 again at 3554, which hands back on 3860
+344 up
+346 up run
+373 left up run
+374 up run
+376 right up run
+378 up run
+387 right up run
+388 up run
+390 left up run
+391 up run
+393 right up run
+395 right
+397 right up run
+398 right
+400 right up run
+401 right
+405 right up run
+406 right
+410 right up run
+411 left
+413
+419 confirm
+420
+479 left up run
+480 left
+482 left up run
+501 up run
+502 left up run
+503 right up run
+508 up run
+515 right up run
+516 up run
+529 left up run
+530 up run
+534 right up run
+535 up run
+538 right up run
+539 up run
+540 left up
+545 up
+549 left up
+550 up
+555
+561 confirm
+562
+598 up
+930 left
+939 left up
+967 right
+978
+984 confirm
+985
+1074 down
+1077
+1104 confirm
+1107
+1134 down
+1137
+1164 confirm
+1167
+1194 down
+1197
+1224 confirm
+1227
+1254 up
+1257
+1284 up
+1287
+1314 up
+1317
+1344 confirm
+1347
+1374 confirm
+1377
+1404 down
+1407
+1434 confirm
+1437
+1464 cancel
+1467
+1534 right
+1543 right up run
+1555 up run
+1568 right up run
+1569 up run
+1580 right up run
+1581 up run
+1589 left up run
+1590 up run
+1596 right up run
+1597 up run
+1602 left
+1613 left up run
+1630 left
+1633 left up run
+1635 right up
+1636 right
+1638 right up
+1655 up
+1660 right up
+1661 up
+1684 right
+1695
+1701 confirm
+1702
+1738 up
+2044 up run
+2070 left up run
+2071 up run
+2074 right up run
+2076 up run
+2102 right up run
+2103 up run
+2107 left up run
+2108 up run
+2110 right up run
+2111 up run
+2131 right up run
+2132 up run
+2138 right
+2141 right up
+2157 up
+2194 right up
+2195 up
+2217 right up
+2218 up
+2219 right
+2231
+2237 confirm
+2238
+2274 up
+2575 left up run
+2590 up run
+2603 right
+2606 right up run
+2624 up run
+2626 right up
+2630 up
+2632 right up
+2633 up
+2646 left up
+2647 right
+2655
+2661 up
+2857
+2877 action
+2878
+2937 up
+2957
+2967 action
+2968
+3203 action
+3204
+3267 action
+3268
+3297 right
+3323
+3327 up
+3340
+3349 action
+3350
+3409 left up run
+3415 up run
+3416 left up run
+3417 up run
+3421 right up run
+3422 up run
+3426 left up run
+3427 up run
+3432 left up run
+3433 up run
+3435 left up run
+3436 up run
+3437 left up run
+3438 up run
+3439 left up run
+3440 up run
+3442 left up run
+3443 up run
+3444 left up run
+3446 up run
+3447 left up run
+3448 up run
+3451 left up run
+3452 up run
+3453 left
+3456 left up run
+3472 up run
+3482 right up
+3502 up
+3505 right up
+3506 up
+3511 right
+3513
+3519 confirm
+3520
+3556 up
+3862
