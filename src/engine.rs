@@ -17492,6 +17492,13 @@ impl DoorStepper for DoorAnimation {
 /// the oracle's runs with sound load rooms 101, 118 and 200 90 ticks later.
 const RE2_SOUND_HOLD_TICKS: u8 = 90;
 
+/// Whether an RE2 door leaves its stage: the record names `scd_var_stage`,
+/// which a letter stage's room shares with its stage (Extreme Battle's F12
+/// to F14 is stage 6's room 0x12 to its 0x14).
+fn re2_door_changes_stage(door: crate::scd2::host::Re2Door, source: RoomId) -> bool {
+    door.stage != source.re2_stage()
+}
+
 /// Start a transition for `record`'s destination: resolve and parse its
 /// `.dor`, create the VM and load the destination room behind the black.
 fn start_transition(
@@ -17517,7 +17524,7 @@ fn start_transition(
     // A destination byte of 0x20 and up changes stage: `init_room` yields a
     // frame before its `room_set`.
     let stage_change = match (record.re2, record.target) {
-        (Some(re2), _) => re2.stage != source.stage,
+        (Some(re2), _) => re2_door_changes_stage(re2, source),
         // A `<doors>` target changes stage when it names another.
         (None, Some(target)) => target.stage != source.stage,
         (None, None) => record.next_room >= 0x20,
@@ -28164,6 +28171,24 @@ mod tests {
             "ROOM1001's init must run without placeholders: {:?}",
             game.placeholders
         );
+    }
+
+    /// Extreme Battle's lift from F12 names stage 6's room 0x14
+    /// (`scd_var_stage` 5): a door within F12's stage, loaded on the next
+    /// tick as any such door is (`special_ex_leon_door`'s 4715).
+    #[test]
+    fn an_re2_door_from_a_letter_stage_stays_in_its_stage() {
+        let door = |stage, room| crate::scd2::host::Re2Door {
+            stage,
+            room,
+            cut: 0,
+        };
+        let f12 = RoomId::parse("f120").unwrap();
+        assert!(!re2_door_changes_stage(door(6, 0x14), f12));
+        assert!(re2_door_changes_stage(door(5, 0x14), f12));
+        let r100 = RoomId::parse("1000").unwrap();
+        assert!(!re2_door_changes_stage(door(1, 0x01), r100));
+        assert!(re2_door_changes_stage(door(2, 0x00), r100));
     }
 
     #[test]
