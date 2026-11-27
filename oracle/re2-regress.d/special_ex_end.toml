@@ -1,19 +1,22 @@
 # Extreme Battle's end (`Result` under `fg_system`'s `0x1000000`, `Result_4B7B00`): Leon's game as `special_ex_leon_door` chooses
 # it, with the results' `0x200000` raised when play begins (the record's `--flag 0:10`, the driver's `play_flags`). `Game_loop`
 # chains `Result` once Extreme Battle's opening has given the room back (4301): `FUN_004B7910`'s wait, the two pages of
-# `ptr_ex_battle_end` typed and faded, then `Result_exit` on 7024, whose title runs from 7025 and isn't compared (arklay's title writes no `exe`).
+# `ptr_ex_battle_end` typed and faded, then `Result_exit` on 7024, whose title opens the RESULT records page from 7025 (`title_mv_state` 7, arklay's title writes no `exe`),
+# the confirm on 7400 fades it out and Extreme Battle's title is back on 7493. The page's frames differ by the character's name: the
+# recorded build (Classic REbirth) draws "Leon" in English letters where `RES_MOJI.TIM` has the Japanese ones arklay draws.
 [[run]]
 name = "special_ex_leon_end"
 ui = "title"
 boot = true
 seed = 0
 offset = 0
-ticks = 7024
+ticks = 7700
 compare_from = 4301
 input = "special_ex_leon_end.txt"
-fields = "room,rng,exe,snd,rmus"
-frames = [4301, 7023]
-frame_max_mean = 0.05
+fields = "room,rng,exe,snd,rmus,ti,tfade"
+frames = [4301, 7699]
+ignore = [[4301, 7024, "ti"], [4301, 7024, "tfade"], [7024, 7699, "exe"], [7024, 7699, "rmus"]]
+frame_max_mean = 0.45
 voice_from_ref = true
 expect = "match"
 record = "--flag 0:10"

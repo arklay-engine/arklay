@@ -1354,6 +1354,80 @@ fn ex_results_times_are_hours_minutes_and_seconds() {
 /// slot 0's fade in, then RESULT, the three labels on the count's 0x1E and
 /// the times on 0x3C, each fading in from black over 16 ticks, opaque; past 0x5A a
 /// press fades out, and once the fade is done the task ends black.
+/// After an Extreme Battle game (`FUN_004DDFF0`, `special_ex_leon_end`):
+/// the page counts to 0xC9; at 0xB4 a level opens when the game's is past
+/// those open, and a run better than the level's record (or the first)
+/// takes it with NEW RECORD, which pulses; a press past the count fades the
+/// music and slot 0, 0x5A ticks pass, and the task ends black.
+#[test]
+fn ex_results_after_a_game_take_the_record_and_open_a_level() {
+    let dir = std::env::temp_dir().join(format!("arklay-re2-exr-after-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let cx = context(&dir);
+    let screen = open_special(&cx, &dir, 15);
+    let script = r#"
+        local R = require('ui/ex_result')
+        local fade = { level = -1 }
+        local fx = {
+            set = function(a0, add) fade.add = add; fade.level = add < 0 and add + 0x8000 or 0 end,
+            done = function() return fade.level < 0 end,
+            level = function(_, level) fade.level = level end,
+        }
+        local records = {}
+        for level = 1, 3 do records[level] = { character = 0, kept = false, times = { 0, 0, 0 } } end
+        local c = R.new(fx, records, 1, { level = 2, character = 3, times = { 0, 0, 0 } })
+        local out = {}
+        local function step(edge)
+            R.tick(c, { edge = edge or 0 })
+            if fade.level >= 0 then fade.level = fade.level + fade.add end
+            if fade.level > 0x7FFF then fade.level = -1 end
+        end
+        while c.routine < 2 do step() end
+        step()
+        out[#out + 1] = c.sub
+        while c.count < 0xB5 do step() end
+        out[#out + 1] = c.levels
+        out[#out + 1] = records[2].kept and 1 or 0
+        out[#out + 1] = records[2].character
+        local record
+        for _, slot in pairs(c.slots) do if slot.id == 0x15 then record = slot end end
+        out[#out + 1] = record.colour
+        local peak, low = 0, 0x100
+        for _ = 1, 60 do
+            step()
+            if record.colour > peak then peak = record.colour end
+            if peak >= 0x80 and record.colour < low then low = record.colour end
+        end
+        out[#out + 1] = peak >= 0x80 and 1 or 0
+        out[#out + 1] = low < 0x80 and low >= 0x34 and 1 or 0
+        step(0x80)
+        out[#out + 1] = c.sub
+        step(0x80)
+        out[#out + 1] = c.sub
+        out[#out + 1] = c.count
+        local ticks = 0
+        while c.routine == 2 do step() ticks = ticks + 1 end
+        out[#out + 1] = ticks
+        while not c.ended do step() end
+        out[#out + 1] = fade.level
+        return out
+    "#;
+    let out = screen.test_eval::<Vec<i64>>(script);
+    // The after-game page, not the title's.
+    assert_eq!(out[0], 2);
+    // Level 2 opens past level 1, and the first record is the run's, Chris's.
+    assert_eq!(&out[1..4], [2, 1, 3]);
+    // NEW RECORD fades in slowly from black, then pulses below full.
+    assert_eq!(out[4], 4);
+    assert_eq!(&out[5..7], [1, 1]);
+    // A press past 0xC9 (the count is already past it): sub-step 3 waits
+    // 0x5A ticks and one more, then routine 3 ends black.
+    assert_eq!(out[7], 3);
+    assert_eq!(&out[8..10], [3, 0x59]);
+    assert_eq!(out[10], 0x5A);
+    assert_eq!(out[11], 0x7FFF);
+}
+
 #[test]
 fn ex_results_records_show_by_their_count_and_end_on_a_press() {
     let dir = std::env::temp_dir().join(format!("arklay-re2-exr-tick-{}", std::process::id()));

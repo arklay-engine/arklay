@@ -18,8 +18,15 @@
 -- Every tick that doesn't sleep in its routine draws the sprites
 -- (`FUN_004DD8D0`).
 --
--- The after-game page (`FUN_004DDFF0`, routine 2's sub-step 2, under
--- `BYTE_00989E90`) isn't reached from the title.
+-- After an Extreme Battle game (`BYTE_00989E90`, which `Result_exit`
+-- raises and `Title`'s step 0 sends here) routine 2's sub-step 2 is the
+-- after-game page (`FUN_004DDFF0`) in place of `FUN_004DDB40`: the level's
+-- record against the run, a count a tick to 0xC9, with NEW RECORD and the
+-- record taken from the run at 0xB4 when the run's total is the lower or
+-- the level has none. Past 0xC9 a press of 0x8E0 fades the music
+-- (`Snd_bgm_fade_ON(0x5A)`) and slot 0 out, sub-step 3 waits 0x5A ticks,
+-- and routine 3 hands back as above (`FUN_004DE650`'s new game from
+-- `INIT_TBL.DAT` is the game's, not the screen's).
 
 local M = {}
 
@@ -73,6 +80,8 @@ local ROWS = { [0] = { 18, 36, 48, 58 }, { 15, 30, 40, 48 }, { 12, 24, 32, 38 } 
 -- `FUN_004DDB90`'s flags: shown, and fading in from black.
 local SHOWN = 1
 local FADE_IN = 4
+local FADE_OUT = 8
+local PULSE = 0x10
 local DONE = 0x80
 -- The sprites' slots (0x695EA0 to 0x696014, 12 bytes each).
 local SLOTS = 32
@@ -121,7 +130,10 @@ end
 -- `records`: per level (1 to 3), `{ character, kept, times = { a, b, c } }`
 -- (0x989E94, 16 bytes a level), as `FUN_004DE720` reads them from
 -- 0x689F60; `levels` the levels open (`BYTE_00989E91`, 0 to 2).
-function M.new(fx, records, levels)
+-- `after`: the game just ended, `{ level, character, times = { a, b, c } }`
+-- (`BYTE_00989E92`, `BYTE_00989E93` and 0x989EC4), or nil from the title's
+-- RESULT row.
+function M.new(fx, records, levels, after)
     local strings = {}
     for id = 0, 11 do
         strings[id] = { table.unpack(TIME_START) }
@@ -131,6 +143,7 @@ function M.new(fx, records, levels)
     end
     return {
         fx = fx,
+        after = after,
         records = records,
         levels = levels,
         strings = strings,
@@ -146,14 +159,24 @@ function M.new(fx, records, levels)
     }
 end
 
--- `FUN_004DDB90`: the first free slot shows `id` at x, y.
+-- `FUN_004DDB90`: the first free slot shows `id` at x, y. Of `flags`'s
+-- low byte, 2 fades it in, 4 out, and 8 fades it in slowly and then pulses
+-- (`PULSE`).
 local function show(c, x, y, id, flags)
     for i = 1, SLOTS do
         if not c.slots[i] then
             local slot = { id = id, x = x, y = y, flags = SHOWN, colour = 0x80 }
+            if flags & 1 ~= 0 then
+                slot.flags = slot.flags | 2
+            end
             if flags & 2 ~= 0 then
                 slot.colour = 0
                 slot.flags = slot.flags | FADE_IN
+            elseif flags & 4 ~= 0 then
+                slot.flags = slot.flags | FADE_OUT
+            elseif flags & 8 ~= 0 then
+                slot.colour = 0
+                slot.flags = slot.flags | FADE_IN | PULSE
             end
             c.slots[i] = slot
             return
@@ -225,20 +248,41 @@ local function reveal(c)
     return true
 end
 
--- `FUN_004DD8D0`: each slot's fade in a step, and its glyphs drawn. A
+-- `FUN_004DD8D0`: each slot's fade a step, and its glyphs drawn. A
 -- fading slot's code is semi-transparent (0x2E), but the draw zeroes the
 -- primitive's code before `AddPolyFT4` (0x4DDAE6), so every glyph is
--- opaque, its texels scaled by the colour.
+-- opaque, its texels scaled by the colour. A fade out goes by 0x10 a step
+-- and frees the slot under 8; a pulsing slot comes in by 4 to full, goes
+-- out by 0xC to under 0x40 and in again.
 local function draw(c)
     local sprites = {}
     for i = 1, SLOTS do
         local slot = c.slots[i]
+        if slot and slot.flags & FADE_OUT ~= 0 then
+            if slot.flags & PULSE == 0 then
+                slot.colour = slot.colour - 0x10
+                if slot.colour < 8 then
+                    c.slots[i] = nil
+                    slot = nil
+                end
+            else
+                slot.colour = slot.colour - 0xC
+                if slot.colour < 0x40 then
+                    slot.flags = (slot.flags & ~FADE_OUT) | FADE_IN
+                end
+            end
+        end
         if slot then
             if slot.flags & FADE_IN ~= 0 then
-                slot.colour = slot.colour + 8
+                local pulse = slot.flags & PULSE ~= 0
+                slot.colour = slot.colour + (pulse and 4 or 8)
                 if slot.colour > 0x7F then
-                    slot.flags = (slot.flags & ~FADE_IN) | DONE
-                    slot.colour = 0x80
+                    if pulse then
+                        slot.flags = (slot.flags & ~FADE_IN) | DONE | FADE_OUT
+                    else
+                        slot.flags = (slot.flags & ~FADE_IN) | DONE
+                        slot.colour = 0x80
+                    end
                 end
             end
             local x = slot.x
@@ -253,6 +297,73 @@ local function draw(c)
         end
     end
     c.sprites = sprites
+end
+
+-- `FUN_004DDFF0`: the after-game page's count. The level's record shows
+-- on the first rows and the run on the second; at 0xB4 a level opens
+-- (or, at level 3, the last), and the record goes to the run when it is
+-- better. Whether the count is past its end.
+local function after_page(c)
+    local a = c.after
+    local level = a.level
+    local record = c.records[level]
+    local first = 0
+    local run = a.times[1] + a.times[2] + a.times[3]
+    local best = record.times[1] + record.times[2] + record.times[3]
+    local label = level + 0x10
+    local character = (a.character >= 0 and a.character <= 3) and a.character + 0x0C or (level - 1) & 0xFF
+    if c.count == 0 then
+        show(c, 0x6C, 8, 0x14, 0x100)
+    elseif c.count == 0x1E then
+        show(c, 0x20, 0x30, 0x18, 0x102)
+        show(c, 0x20, 0x40, label, 0x102)
+        if record.kept then
+            show(c, 0x60, 0x40, record.character + 0x0C, 0x102)
+        end
+        M.time_string(c.strings, record.times[1], first)
+        show(c, 0xAC, 0x30, first, 0x102)
+        show(c, 0x20, 0x84, 0x19, 0x102)
+        show(c, 0x20, 0x94, label, 0x102)
+        show(c, 0x60, 0x94, character, 0x102)
+        M.time_string(c.strings, a.times[1], 4)
+        show(c, 0xAC, 0x84, 4, 0x102)
+    elseif c.count == 0x3C then
+        M.time_string(c.strings, record.times[2], 1)
+        show(c, 0xAC, 0x40, 1, 0x102)
+        M.time_string(c.strings, a.times[2], 5)
+        show(c, 0xAC, 0x94, 5, 0x102)
+    elseif c.count == 0x5A then
+        M.time_string(c.strings, record.times[3], 2)
+        show(c, 0xAC, 0x50, 2, 0x102)
+        M.time_string(c.strings, a.times[3], 6)
+        show(c, 0xAC, 0xA4, 6, 0x102)
+    elseif c.count == 0x78 then
+        show(c, 0x90, 0x5A, 0x16, 0x102)
+        show(c, 0x90, 0xAE, 0x16, 0x102)
+    elseif c.count == 0x96 then
+        M.time_string(c.strings, best, 3)
+        show(c, 0xA0, 0x62, 3, 0x102)
+        M.time_string(c.strings, run, 7)
+        show(c, 0xA0, 0xB6, 7, 0x10A)
+    elseif c.count == 0xB4 then
+        if level == 3 then
+            show(c, 0x60, 0xCC, 0x1A, 0x109)
+        elseif c.levels < level then
+            show(c, 0x40, 0xCC, 0x17, 0x109)
+            c.levels = c.levels + 1
+        end
+        if run < best or not record.kept then
+            show(c, 0x28, 0xB0, 0x15, 0x109)
+            record.character = a.character
+            record.kept = true
+            record.times = { a.times[1], a.times[2], a.times[3] }
+        end
+    end
+    if c.count < 0xC9 then
+        c.count = c.count + 1
+        return false
+    end
+    return true
 end
 
 -- One tick of the task: `input.edge` is the raw pad's newly pressed bits
@@ -283,16 +394,41 @@ function M.tick(c, input)
         end
     elseif c.routine == 2 then
         if c.sub == 0 then
-            c.sub = 1
-        elseif reveal(c) and input.edge & 0x8E0 ~= 0 then
-            fx.set(0x200, 0x400)
-            c.routine = 3
+            c.sub = c.after and 2 or 1
+        elseif c.sub == 1 then
+            if reveal(c) and input.edge & 0x8E0 ~= 0 then
+                fx.set(0x200, 0x400)
+                c.routine = 3
+            end
+        elseif c.sub == 2 then
+            if after_page(c) and input.edge & 0x8E0 ~= 0 then
+                c.music = "fade"
+                fx.set(0x200, 0x400)
+                c.sub = 3
+                c.count = 0x5A
+            end
+        else
+            if fx.done(0) then
+                clear(c)
+                c.background = false
+            end
+            local over = c.count < 1
+            c.count = c.count - 1
+            if over then
+                c.music = "stop"
+                c.routine = 3
+            end
         end
     elseif c.routine == 3 then
         if fx.done(0) then
+            if c.after then
+                c.background = false
+            end
             fx.set(0x200, 0)
             fx.level(0, 0x7FFF)
-            clear(c)
+            if not c.after then
+                clear(c)
+            end
             c.routine = 4
         end
     end

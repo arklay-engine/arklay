@@ -13571,6 +13571,22 @@ impl App {
                         args.push(("task_sub", ScreenArg::Int(i64::from(sub))));
                         // `Result_init` chose the title's limiter (0).
                         args.push(("limiter", ScreenArg::Int(0)));
+                        if result.extreme() {
+                            // `Result_exit`'s `BYTE_00989E90`, and what
+                            // `Result_init` copied of the game: the level
+                            // (`BYTE_00989E92`, the work's `0x98EB22`) and
+                            // the character's index (`BYTE_00989E93`,
+                            // `0x98EB20`). The run's times (`0x989EC4`..)
+                            // are 0: arklay's play doesn't keep them.
+                            use crate::scd2::host::{VAR_EX_CHARACTER, VAR_EX_LEVEL};
+                            let vars = &session.game.re2.vars;
+                            args.push(("ex_end", ScreenArg::Bool(true)));
+                            args.push(("ex_level", ScreenArg::Int(i64::from(vars[VAR_EX_LEVEL]))));
+                            args.push((
+                                "ex_character",
+                                ScreenArg::Int(i64::from(vars[VAR_EX_CHARACTER])),
+                            ));
+                        }
                         self.re2_result_title = true;
                         i64::from(result.fade().add)
                     }
