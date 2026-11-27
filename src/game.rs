@@ -7351,11 +7351,19 @@ impl GameState {
         // passive pass and the other callers' run on that tick too (a flag
         // area set on it outlives the room change).
         self.sce_at_check(player, PLAYER_AREA_MASK, false);
-        // Then each enemy in play, each room object in play and the partner.
+        // Then each enemy in play, a script character's `Water` cleared
+        // before its walk (a zombie keeps its own, `YOUNG_WATER`), each room
+        // object in play and the partner.
         for slot in 0..self.re2.characters.0.len() {
-            if slot != crate::scd2::host::SPLAYER_SLOT {
-                self.sce_at_check(AreaCaller::Character(slot), ENEMY_AREA_MASK, false);
+            if slot == crate::scd2::host::SPLAYER_SLOT {
+                continue;
             }
+            if let Some(character) = self.re2.characters.0[slot].as_deref_mut()
+                && character.be_flg & 1 != 0
+            {
+                character.work.water = 0;
+            }
+            self.sce_at_check(AreaCaller::Character(slot), ENEMY_AREA_MASK, false);
         }
         for index in 0..self.objects.records.len() {
             self.sce_at_check(AreaCaller::Object(index), OBJECT_AREA_MASK, false);
@@ -7475,7 +7483,7 @@ impl GameState {
     /// back. With `press`, the first hit whose kind isn't `SCE_AUTO` is
     /// recorded, runs and ends the walk. The handlers that act on the caller
     /// itself (`Sce_Water`, `Sce_Move`, `Sce_Damage`) run only for the
-    /// player, but for `Sce_Water` the partner's too. Returns whether a press area fired.
+    /// player, but `Sce_Water` for a character too. Returns whether a press area fired.
     fn sce_at_check(&mut self, caller: AreaCaller, mask: u8, press: bool) -> bool {
         use crate::scd2::host::{
             SCE_AUTO, SCE_DAMAGE, SCE_MOVE, SCE_WATER, VAR_BODY_AREA, VAR_FORWARD_AREA,
@@ -7542,12 +7550,11 @@ impl GameState {
                 self.fire_re2_area(room_action);
             } else if room_action.sce == SCE_WATER
                 && let AreaCaller::Character(index) = caller
-                && index == crate::scd2::host::SPLAYER_SLOT
-                && let Some(partner) = self.re2.characters.0[index].as_deref_mut()
+                && let Some(character) = self.re2.characters.0[index].as_deref_mut()
             {
-                // `Sce_Water` writes the caller's `Water`. Only the partner's
-                // is modelled.
-                partner.work.water =
+                // `Sce_Water` writes the caller's `Water`: a script
+                // character's footfalls in it splash (`Snd_se_walk`).
+                character.work.water =
                     i16::from_le_bytes([room_action.params[0], room_action.params[1]]);
             }
             // Only the action pass returns on its hit: the other walk goes on
@@ -21813,6 +21820,55 @@ mod tests {
         state.sce_at_check(player, PLAYER_AREA_MASK, false);
         assert_eq!(state.state_bytes[usize::from(STATE_BYTE_ENT_ACTION)], 3);
         assert_eq!(state.re2.player.water, -180);
+    }
+
+    /// `Sce_Water` sets a script character's `Water` from the enemies'
+    /// pass, as room 405's area 4 does Leon's on his walk through the water
+    /// while Ada is the player (`Snd_se_walk` then splashes).
+    #[test]
+    fn a_script_character_in_a_water_area_takes_its_level() {
+        let mut state = game();
+        state.is_re2_room = true;
+        state.room_actions[4] = Some(RoomAction {
+            slot: 4,
+            kind: RoomActionKind::Other,
+            zone: [-1000, -1000, 2000, 2000],
+            sce: crate::scd2::host::SCE_WATER,
+            handler: 1,
+            flags: 0x4F,
+            params: [240, 251, 0, 0, 0, 0, 0, 0],
+            item_data: None,
+            room_items_flag: 0xFF,
+            reach_animation: false,
+        });
+        let body = crate::player::spawn(crate::state::RoomId::default(), &RoomState::default());
+        let leon = crate::scd2::host::Character {
+            id: 0x47,
+            model: 0x47,
+            em_set: (0, 0, crate::scd2::host::NO_ENEMY_FLAG),
+            arms: crate::scd2::host::Arms::default(),
+            be_flg: 1,
+            work: crate::player2::Work::default(),
+            body,
+            kind: 0,
+            kage: None,
+            l_spl: 0,
+            dir_spl: 0,
+            start: (0, 0),
+            sound_type: 0,
+            distance: 0,
+            area: crate::scd2::host::NO_AREA,
+            with_room: false,
+            held_bank: None,
+            partner: None,
+            zombie: None,
+        };
+        state.re2.characters.0 = vec![Some(Box::new(leon))];
+        state.sce_at_check(AreaCaller::Character(0), ENEMY_AREA_MASK, false);
+        let leon = state.re2.characters.0[0].as_ref().unwrap();
+        assert_eq!(leon.area, 4);
+        assert_eq!(leon.work.water, -1040);
+        assert_eq!(state.re2.player.water, 0, "the caller's, not the player's");
     }
 
     #[test]

@@ -59,7 +59,6 @@ impl GameSession {
             && !self.in_demo()
             && !game.re2.flag(0, FG_SYSTEM_RESULT)
             && !game.scene_bars()
-            && !self.re2_cut_loaded
             // The bits themselves, where a script writes them: `fg_system`'s
             // door, results, demo and film, `fg_status`'s bars and load.
             && game.re2.banks[0][0] & 0x0220_2200 == 0
