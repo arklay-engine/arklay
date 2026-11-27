@@ -10666,6 +10666,10 @@ impl GameState {
             // `Tama_reload_ck` never reloads the rocket launcher.
             spare: id != crate::player2::ROCKET && self.item_count(re2_ammo(id).0) != 0,
             rounds: rounds.min(u32::from(u8::MAX)) as u8,
+            manual: self.re2.flag(
+                crate::scd2::host::COMMON_BANK,
+                crate::game::status2::BURST_FLAG,
+            ),
         }
     }
 

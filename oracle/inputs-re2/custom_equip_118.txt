@@ -1,0 +1,44 @@
+# room 118: EQUIP the custom handgun from slot 2 as play begins, wait out the zombie's hold, aim at the zombies and fire: held 20 ticks, tapped 2, held 40, between pauses of 20, until the magazine runs out and reloads (oracle/re2.md, "Weapons")
+346 start
+350
+382 down
+386
+402 confirm
+406
+422 confirm
+426
+462 start
+466
+620 aim
+640 aim fire
+660 aim
+700 aim fire
+702 aim
+742 aim fire
+762 aim
+802 aim fire
+804 aim
+844 aim fire
+884 aim
+924 aim fire
+944 aim
+984 aim fire
+986 aim
+1026 aim fire
+1046 aim
+1086 aim fire
+1088 aim
+1128 aim fire
+1168 aim
+1208 aim fire
+1228 aim
+1268 aim fire
+1288 aim
+1328 aim fire
+1348 aim
+1388 aim fire
+1408 aim
+1448 aim fire
+1468 aim
+1488 aim
+1528

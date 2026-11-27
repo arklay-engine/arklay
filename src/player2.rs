@@ -718,6 +718,16 @@ pub struct EffectCall {
 
 /// `Type & 0xFFF` of the grenade launcher with each of its rounds.
 const GRENADES: u8 = 9;
+/// The custom handgun, whose stance is `pl_mv05_w1`'s but which fires on its
+/// own step (`pl_mv05_w4_t2`): a burst of three while the trigger is held,
+/// or one shot with `fg_common`'s 0x7E up ([`Weapon::manual`]).
+pub const CUSTOM_HANDGUN: u8 = 4;
+/// The frames `pl_mv05_w4_t2` fires again on while the trigger is held,
+/// and the frame it goes to when it doesn't.
+const CUSTOM_REFIRE: [u8; 2] = [3, 6];
+const CUSTOM_BURST_END: u8 = 10;
+/// The hokan it goes there with.
+const CUSTOM_BURST_END_BLEND: u8 = 3;
 /// The Colt S.A.A. and the Beretta, which `pl_mv05_w1` fires as it does the
 /// handguns.
 pub const COLT: u8 = 0xD;
@@ -1687,6 +1697,9 @@ pub struct Weapon {
     /// it: `Tama_ck_i` finds it loaded and `Tama_decrease_i` takes nothing,
     /// the bursts' counter (`WORD_00691f8c`) untouched.
     pub infinite: bool,
+    /// `fg_common`'s 0x7E (the status screen's MANUAL): the custom handgun
+    /// fires one shot a press, not a burst.
+    pub manual: bool,
 }
 
 impl Weapon {
@@ -1698,9 +1711,7 @@ impl Weapon {
         matches!(
             self.id,
             KNIFE
-                | 2
-                | 3
-                | 5..=8
+                | 2..=8
                 | GRENADES..=crate::bow2::BOW
                 | COLT
                 | SPARK
@@ -1780,6 +1791,10 @@ impl Weapon {
             // `0x539DBC`'s bytes `00 02 ff 01 fe ff`: it looks on two
             // ticks in three.
             &[(0, 2), (0xFF, 1), (0xFE, 0xFF)]
+        } else if self.id == CUSTOM_HANDGUN {
+            // The handguns' `0x539B24`, `00 01 00 ff`: it looks on the
+            // shot's first tick, then waits.
+            &[(0, 1), (0, 0xFF)]
         } else {
             &[(0, 0xFF)]
         }
@@ -1814,6 +1829,7 @@ impl Weapon {
             SPARK => [0x9E, 0x9E, 0x1E],
             ROCKET => [0x9E, 0x9E, 0x5A],
             GATLING => [0x5A, 0x5A, 0x5A],
+            CUSTOM_HANDGUN => [0x85, 0x87, 15],
             // The handguns' and the Beretta's.
             _ => [0x85, 0x87, 8],
         }
@@ -1907,6 +1923,20 @@ impl Weapon {
             ],
             (2 | BERETTA, 3) => &[ShotEffect {
                 point: [0x15E, 0x28, -15],
+                calls: &[
+                    (0x308_0900, None),
+                    (0x308_0900, None),
+                    (0x200_0700, Some(0x514)),
+                ],
+            }],
+            // `pl_w04_t2_move`: the flash on each shot's frame, the case on
+            // each shot's third.
+            (CUSTOM_HANDGUN, 1 | 4 | 7) => &[ShotEffect {
+                point: [0x78, 600, -0x8A],
+                calls: &[(0x30A_0D00, None), (0x100_0D00, None)],
+            }],
+            (CUSTOM_HANDGUN, 3 | 6 | 10) => &[ShotEffect {
+                point: [0xA0, 200, 0x3C],
                 calls: &[
                     (0x308_0900, None),
                     (0x308_0900, None),
@@ -3334,6 +3364,7 @@ impl Mover<'_, '_> {
             2 if self.tick.weapon.bursts() => self.aim_burst(key, &drawn),
             2 if self.tick.weapon.sparks() => self.aim_spark(key, &drawn),
             2 if self.tick.weapon.id == GATLING => self.aim_gatling(key, &drawn),
+            2 if self.tick.weapon.id == CUSTOM_HANDGUN => self.aim_custom(key, &drawn),
             2 => self.aim_fire(key, &drawn),
             3 => self.aim_lower(key),
             4 => self.aim_reload(),
@@ -4189,6 +4220,95 @@ impl Mover<'_, '_> {
         }
         if kicks {
             self.add_speed_xz();
+        }
+    }
+
+    /// `pl_mv05_w4_t2` (`0x4d8ea0`): the custom handgun's shots. `hit_scan_ck`
+    /// looks at the hand on every tick. It fires on frame 0, and again on
+    /// frames 3 and 6 while the trigger is held and the gun has a round;
+    /// otherwise, or on frame 3 with [`Weapon::manual`], it goes to frame 10,
+    /// the burst's end. Each shot starts `Weapon_at_ck`'s sequence, takes a
+    /// round and sets the shot's line; `Weapon_at_ck` runs on every tick.
+    fn aim_custom(&mut self, key: u16, drawn: &DrawnParts) {
+        if self.work.routine[3] == 0 {
+            let clip = self.tilt_clip(AIM_FIRE_CLIPS);
+            self.aim_clip(clip);
+            self.work.noise |= 1;
+            self.work.spd = [0; 3];
+        }
+        let hand = self
+            .part_point(HAND_PART, [0; 3])
+            .unwrap_or(self.player.pos);
+        self.work.shot_level = crate::weapon2::hit_scan_ck(
+            self.tick.id,
+            self.tick.weapon.id,
+            self.player.pos[1],
+            self.work.parts0_y,
+            hand[1],
+        );
+        let weapon = self.tick.weapon;
+        if weapon.manual && self.work.move_cnt == CUSTOM_REFIRE[0] {
+            self.work.move_cnt = CUSTOM_BURST_END;
+            self.work.hokan = CUSTOM_BURST_END_BLEND;
+        }
+        let frame = self.work.move_cnt;
+        let fires = if frame == 0 {
+            true
+        } else if CUSTOM_REFIRE.contains(&frame) {
+            let again = key & KEY_FIRE != 0 && weapon.loaded;
+            if !again {
+                self.work.move_cnt = CUSTOM_BURST_END;
+                self.work.hokan = CUSTOM_BURST_END_BLEND;
+            }
+            again
+        } else {
+            false
+        };
+        if fires {
+            self.init_weapon_at();
+            // `Tama_decrease_i`: one round, none from an empty gun or one
+            // that never runs out.
+            if !weapon.infinite && weapon.rounds != ENDLESS && weapon.rounds > self.work.spent {
+                self.work.spent += 1;
+            }
+            // `Shoot_camera` reads the hand as the last draw left it.
+            self.work.shot_line =
+                self.part_matrix(SHOT_PART)
+                    .map(|hand| crate::weapon2::ShotLine {
+                        from: hand.t,
+                        matrix: hand.m,
+                    });
+        }
+        if self.weapon_at_seq() {
+            self.shoot();
+        }
+        self.aim_turn(key, AIM_FIRE_TURN);
+        if key & KEY_AIM == 0 && self.work.move_cnt > weapon.fire_cancel_frame() {
+            self.aim_stage(1);
+            self.work.spd = [0; 3];
+            return;
+        }
+        let shot_from = self.work.effects.len();
+        self.shot_effects();
+        if self.joint_move() {
+            self.aim_stage(1);
+            self.work.spd = [0; 3];
+        }
+        // `Pl_water` comes before `pl_w04_t2_move`'s calls in the original.
+        let water = self.work.water;
+        if water != 0
+            && i32::from(water) < self.ground()
+            && self.work.move_cnt < 6
+            && self.work.move_cnt & 1 != 0
+        {
+            let splash_from = self.work.effects.len();
+            let draws_from = self.work.water_draws.len();
+            self.pl_water(drawn[0]);
+            let splashes = self.work.effects.split_off(splash_from);
+            self.work.effects.splice(shot_from..shot_from, splashes);
+            for draw in &mut self.work.water_draws[draws_from..] {
+                draw.effect = draw.effect - splash_from + shot_from;
+            }
         }
     }
 
@@ -8399,6 +8519,7 @@ mod weapon_tests {
             spare: true,
             rounds: 100,
             infinite: false,
+            manual: false,
         }
     }
 
@@ -8421,16 +8542,31 @@ mod weapon_tests {
     fn each_gun_has_its_own_timing_and_leg() {
         assert!(
             [
-                KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, SPARK, ROCKET, GATLING, BERETTA
+                KNIFE,
+                2,
+                3,
+                CUSTOM_HANDGUN,
+                5,
+                6,
+                7,
+                8,
+                9,
+                0xC,
+                COLT,
+                SPARK,
+                ROCKET,
+                GATLING,
+                BERETTA
             ]
             .iter()
             .all(|&id| weapon(id).aims())
         );
-        assert!(![0, 4, 0x14].iter().any(|&id| weapon(id).aims()));
+        assert!(![0, 0x14].iter().any(|&id| weapon(id).aims()));
         // The knife's row: a slash let go of past frame 0x32 stops at once.
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);
         assert_eq!(weapon(2).fire_cancel_frame(), 8);
+        assert_eq!(weapon(CUSTOM_HANDGUN).fire_cancel_frame(), 15);
         assert_eq!(weapon(7).fire_cancel_frame(), 28);
         assert_eq!(weapon(8).tilt_down_frame(), 8);
         assert_eq!(weapon(5).foot_chain(0), &AIM_FOOT_CHAIN);
@@ -10535,6 +10671,7 @@ mod tests {
             spare,
             rounds: u8::from(loaded) * 18,
             infinite: false,
+            manual: false,
         };
         setup
     }
@@ -10859,9 +10996,9 @@ mod tests {
 
     #[test]
     fn only_a_handgun_raises_into_the_stance() {
-        // The custom handgun (4) isn't ported.
+        // Ammunition (0x14) is no weapon.
         let mut setup = armed(true, false);
-        setup.weapon.id = 4;
+        setup.weapon.id = 0x14;
         setup.tick(aiming(false, false), 200);
         assert_eq!(setup.work.routine[1], MOVE_IDLE);
 
@@ -11121,6 +11258,128 @@ mod tests {
         assert_eq!(spent_at, Some(22));
         assert_eq!(setup.work.spent, 2);
         assert_eq!(setup.work.tama_count, 0);
+    }
+
+    /// `pl_mv05_w4_t2`: the custom handgun fires on frame 0, then on 3 and 6
+    /// while the trigger is held and `Tama_ck_i` finds a round, a round and
+    /// a look by `Weapon_at_ck` each; `pl_w04_t2_move` flashes on 1, 4 and 7
+    /// and throws a case on 3, 6 and 10. A trigger let go, an empty gun, or
+    /// `fg_common`'s 0x7E (MANUAL) up at frame 3 takes it to frame 10 with
+    /// hokan 3 instead, and with aim let go it is cut once past frame 15
+    /// (`custom_equip_118`, `custom_manual_118`).
+    #[test]
+    fn the_custom_handgun_bursts_three_unless_let_go_empty_or_manual() {
+        const FLASH: [u32; 2] = [0x30A_0D00, 0x100_0D00];
+        const CASE: [u32; 3] = [0x308_0900, 0x308_0900, 0x200_0700];
+        /// After each tick: the routine's step, the frame and hokan joint
+        /// move left, the rounds spent, whether a body was hit, and the
+        /// effects' words.
+        type Tick = (u8, u8, u8, u8, bool, Vec<u32>);
+        let run = |held: u8, aimed: u8, manual: bool, loaded: bool| -> Vec<Tick> {
+            let mut setup = bursting(CUSTOM_HANDGUN, 18);
+            setup.weapon.manual = manual;
+            setup.weapon.loaded = loaded;
+            let [x, _, z] = setup.player.pos;
+            // Straight ahead of the body at angle 0, in reach.
+            setup.targets = vec![crate::weapon2::Target {
+                slot: 3,
+                id: 0x1F,
+                be_flg: 1 | 0x400_0000 | 0x800_0000,
+                life: 50,
+                pos: [x + 1500, 0, z],
+                at: [x + 1500, z],
+                at_w: 500,
+                neck_y: -1500,
+                ..Default::default()
+            }];
+            setup.player.angle = 0;
+            setup.work.hit = None;
+            (0..20u8)
+                .map(|tick| {
+                    let mut input = aiming(tick < held, false);
+                    input.aim = tick < aimed;
+                    setup.tick(input, 200);
+                    let hit = setup.work.hit.take().is_some_and(|hit| {
+                        assert_eq!((hit.slot, hit.weapon), (3, CUSTOM_HANDGUN));
+                        true
+                    });
+                    let calls = burst_calls(&mut setup);
+                    for &(word, dir, point) in &calls {
+                        if FLASH.contains(&word) {
+                            assert_eq!((dir, point), (0, [0x78, 600, -0x8A]));
+                        } else {
+                            assert_eq!(point, [0xA0, 200, 0x3C]);
+                            assert_eq!(dir, if word == CASE[2] { 0x514 } else { 0 });
+                        }
+                    }
+                    let words = calls.into_iter().map(|(word, ..)| word).collect();
+                    let work = &setup.work;
+                    (
+                        work.routine[2],
+                        work.move_cnt,
+                        work.hokan,
+                        work.spent,
+                        hit,
+                        words,
+                    )
+                })
+                .collect()
+        };
+        let frames = |ticks: &[Tick]| ticks.iter().map(|tick| tick.1).collect::<Vec<_>>();
+        let hits = |ticks: &[Tick]| {
+            (0..ticks.len())
+                .filter(|&tick| ticks[tick].4)
+                .collect::<Vec<_>>()
+        };
+        let spent = |ticks: &[Tick]| ticks.iter().map(|tick| tick.3).collect::<Vec<_>>();
+        let words_at = |ticks: &[Tick], frame: u8| {
+            ticks
+                .iter()
+                .find(|tick| tick.1 == frame)
+                .map(|tick| tick.5.clone())
+        };
+
+        // Held: three shots, each looking on its own tick only.
+        let burst = run(20, 20, false, true);
+        assert_eq!(frames(&burst), (1..=20).collect::<Vec<_>>());
+        assert_eq!(hits(&burst), [0, 3, 6]);
+        assert_eq!(spent(&burst)[..8], [1, 1, 1, 2, 2, 2, 3, 3]);
+        assert_eq!(burst[19].3, 3);
+        for frame in 1..=20 {
+            let expected = match frame {
+                1 | 4 | 7 => FLASH.to_vec(),
+                3 | 6 | 10 => CASE.to_vec(),
+                _ => Vec::new(),
+            };
+            assert_eq!(words_at(&burst, frame), Some(expected), "frame {frame}");
+        }
+        assert!(burst.iter().all(|tick| tick.0 == 2));
+
+        // Let go before frame 6: two shots, then frame 10's jump, which
+        // joint move takes on to 11 with hokan 2.
+        let two = run(5, 20, false, true);
+        assert_eq!(frames(&two)[..8], [1, 2, 3, 4, 5, 6, 11, 12]);
+        assert_eq!(two[6].2, 2);
+        assert_eq!(hits(&two), [0, 3]);
+        assert_eq!(two[19].3, 2);
+
+        // MANUAL, or an empty gun: the first shot only, jumping at frame 3.
+        for (manual, loaded) in [(true, true), (false, false)] {
+            let one = run(20, 20, manual, loaded);
+            assert_eq!(frames(&one)[..5], [1, 2, 3, 11, 12], "manual {manual}");
+            assert_eq!(one[3].2, 2);
+            assert_eq!(hits(&one), [0]);
+            assert_eq!(one[19].3, 1);
+            assert!(one[3..].iter().all(|tick| tick.5.is_empty()));
+        }
+
+        // Aim let go: the shot plays on to frame 16 and is cut on the tick
+        // after, past `DAT_0053a305`'s 15.
+        let cut = run(20, 0, false, true);
+        assert!(cut[..16].iter().all(|tick| tick.0 == 2));
+        assert_eq!(cut[15].1, 16);
+        assert_eq!(cut[16].0, 1);
+        assert_eq!(hits(&cut), [0, 3, 6]);
     }
 
     /// `Tama_decrease_i` returns before the bursts' counter for a gun at
@@ -11438,6 +11697,7 @@ mod tests {
             spare: false,
             rounds,
             infinite: false,
+            manual: false,
         };
         setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
         setup.work.status_flg = TILT_LEVEL;
@@ -11578,6 +11838,7 @@ mod tests {
             spare: false,
             rounds: 100,
             infinite: false,
+            manual: false,
         };
         setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
         setup.work.status_flg = TILT_LEVEL;
