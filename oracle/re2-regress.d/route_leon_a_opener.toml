@@ -97,7 +97,7 @@ expect = "match"
 record = ""
 # what arklay's model doesn't follow yet: the head through one door, the view's first tick, Ben's `em` and the zombies' `zd` over memory from before
 ignore = [
-    # the head through 114's door 1 with the head turned toward a zombie (oracle/re2-deviations.md, "The head through a door")
+    # the head through 114's door 1 into 115, where Claire's `Kami_rot05` places it (oracle/re2-deviations.md, "The head through a door")
     [24561, 24774, "pneck"],
     # the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), which no other run from room 100 compares
     [0, "movie"],

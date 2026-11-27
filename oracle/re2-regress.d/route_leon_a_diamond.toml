@@ -142,7 +142,7 @@ frame_windows = [[14475, 15335, 0.6], [15702, 15826, 0.3], [16167, 17654, 0.55],
 expect = "match"
 record = ""
 ignore = [
-    # the head through 114's door 1 with the head turned toward a zombie (oracle/re2-deviations.md, "The head through a door")
+    # the head through 114's door 1 into 115, where Claire's `Kami_rot05` places it (oracle/re2-deviations.md, "The head through a door")
     [24561, 24774, "pneck"],
     # the view's load on the new game's first tick (`movie` 1 in the original, 0 in arklay), which no other run from room 100 compares
     [0, "movie"],

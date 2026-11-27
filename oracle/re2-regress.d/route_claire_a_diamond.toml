@@ -49,8 +49,6 @@ fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,s
 frames = [360, 2129]
 expect = "match"
 ignore = [
-  # the head through 10C's door 2 while 114's load runs Sherry's scene behind the door: the original places it on the rest pose at the load, arklay on the door's last frame (oracle/re2-deviations.md, "The head through a door")
-  [875, 1088, "pneck"],
   # the zombie's speeds until its first move: the original's slot holds what its memory held (oracle/re2-deviations.md, "What a zombie's slot held before")
   [875, 1089, "zm0"],
 ]

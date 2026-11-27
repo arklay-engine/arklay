@@ -9921,6 +9921,7 @@ impl GameSession {
             self.enter_transition_destination(pack);
             // A door's load ends behind its animation: `door_stop` is that pass.
             self.game.re2.load_pass = false;
+            self.game.re2.player.kami_rot05 = false;
             crate::character2::init(
                 &mut self.game,
                 &self.loaded.room,
@@ -9935,6 +9936,9 @@ impl GameSession {
             // `se_on`s play there: room 403's lift arrival plays door sound 1
             // on its load, not on the door's end.
             self.play_re2_load_sounds(pack);
+            if std::mem::take(&mut self.game.re2.player.kami_rot05) {
+                self.place_re2_kami_neck();
+            }
         }
         if frame.finished {
             self.end_transition(pack);
@@ -10023,6 +10027,28 @@ impl GameSession {
     /// rest, or with `init` the frame `Pl_init` poses first
     /// ([`crate::player2::pose_init`]).
     fn place_re2_neck(&mut self, init: bool) {
+        self.with_re2_player_tick(if init {
+            crate::player2::pose_init
+        } else {
+            crate::player2::place_neck
+        });
+    }
+
+    /// A door's `Em_init_move` ran `Kami_rot05` for a scene character
+    /// ([`crate::player2::kami_rot05_neck`]) while the door plays: the head
+    /// on `Set_room`'s `Pl_init` pose, where the load's scripts put the
+    /// player, turned as the last room's draw left `M`.
+    fn place_re2_kami_neck(&mut self) {
+        self.rest_re2_player();
+        self.re2_door_neck = false;
+        self.with_re2_player_tick(crate::player2::kami_rot05_neck);
+    }
+
+    /// `place` on the player with a stopped tick of its own assets.
+    fn with_re2_player_tick(
+        &mut self,
+        place: fn(&mut crate::player2::Work, &mut player::PlayerState, &crate::player2::Tick<'_>),
+    ) {
         let Some(assets) = self.loaded.player_assets.as_ref() else {
             return;
         };
@@ -10056,11 +10082,7 @@ impl GameSession {
             objects: &[],
             key_trg: 0,
         };
-        if init {
-            crate::player2::pose_init(&mut self.game.re2.player, &mut self.player, &tick);
-        } else {
-            crate::player2::place_neck(&mut self.game.re2.player, &mut self.player, &tick);
-        }
+        place(&mut self.game.re2.player, &mut self.player, &tick);
     }
 
     /// The tail of `room_transition_load` and `game_loop`'s return into
@@ -22758,6 +22780,10 @@ fn tick_room_timed(
             context.npc_models,
             context.enemy_lua.as_deref_mut(),
         );
+        // A scene character's `Kami_rot05` wrote the player's head, which the
+        // frame's draw writes again before anything but `Rot_neck`'s aim
+        // reads it.
+        context.game.re2.player.kami_rot05 = false;
         if let Some(angle) = context.game.re2.player.turn_to.take() {
             context.player.angle = angle;
             context.game.entities[0].angle = angle;

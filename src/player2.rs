@@ -453,8 +453,8 @@ pub struct Work {
     /// the world into `Pos` (`M.t` is `Pos`), and keeps the local one here.
     pub super_part: Option<u8>,
     pub super_local: Option<[i32; 3]>,
-    /// `Cdir_x` and `Cdir_z`, which only the giant spider on a wall or the
-    /// ceiling turns its body by.
+    /// `Cdir_x` and `Cdir_z`, which the giant spider on a wall or the
+    /// ceiling turns its body by, and a scene's `member_set` the player's.
     pub(crate) tilt: [i16; 2],
     pub move_no: u8,
     pub move_cnt: u8,
@@ -504,6 +504,13 @@ pub struct Work {
     /// `parts` as the last frame's `Joint_trans2` left them, before this
     /// tick's move: what another work reads at its `pSin_parts_ptr`.
     pub(crate) drawn_parts: Vec<Option<Matrix>>,
+    /// The turn of `M` (`+0x24`) as the last draw's `Joint_trans2` left it
+    /// (`RotMatrix` of `Cdir`): a room load and a door's new facing leave it
+    /// until the next draw.
+    pub(crate) drawn_turn: Option<[[i16; 3]; 3]>,
+    /// A scene character's `Spl_mv51` ran `Kami_rot05` this pass, which
+    /// composes the player's part 8 ([`kami_rot05_neck`]).
+    pub kami_rot05: bool,
     /// `Spl_sp44_00`'s weight of part 0 (its `pSa_dat_head`'s word 3), kept
     /// for `Timer3` though not drawn.
     pub(crate) sp_weight: i16,
@@ -1344,6 +1351,8 @@ impl Default for Work {
             root_turn: 0,
             parts_at: None,
             drawn_parts: Vec::new(),
+            drawn_turn: None,
+            kami_rot05: false,
             sp_weight: 0,
             sp_timer3: 0,
             part_rgb: [DEFAULT_PART_RGB; 32],
@@ -1441,6 +1450,9 @@ impl Work {
                 ..Neck::default()
             },
             title_first_move: self.title_first_move,
+            drawn_turn: self.drawn_turn,
+            // `Pl_init` clears only the parts' `Cdir`, not the body's.
+            tilt: self.tilt,
             // `Pl_init` sizes `Atd[0]` but leaves where it stands: the bodies
             // the load's first move (`Em_init_move`) pushes out of the player
             // are pushed out of where the last room left it.
@@ -2063,6 +2075,32 @@ pub fn place_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
     }
     .place_neck();
     work.neck.body = Some(pos);
+}
+
+/// `Kami_rot05` (`0x4B3FE0`), the hair's swing that `Op_PartsSort05` and
+/// `Op_PartsSort06` run for a scene's Claire (`Spl_mv51`) or Sherry: whoever
+/// it swings, it composes the player's part 8 `Workm` (`+0x5C`, the head)
+/// from the player's `M` (`pPl + 0x24`), whose turn is the last draw's and
+/// whose place is `Pos` now, and the pose's parts 0 and 8. A room load's
+/// `Em_init_move` runs it while the door plays and no draw follows: room
+/// 400's Claire puts Sherry's head over the scene's `pos_set` from the load.
+pub fn kami_rot05_neck(work: &mut Work, player: &mut PlayerState, tick: &Tick<'_>) {
+    let turn = work
+        .drawn_turn
+        .unwrap_or_else(|| work.body_rotation(player.angle));
+    let head = Mover {
+        work: &mut *work,
+        player,
+        tick,
+        rnd: crate::zombie2::Rnd::default(),
+        arrived: None,
+        stairs: None,
+        scene_climb: None,
+    }
+    .chain_matrix_turned(&[0, NECK_JOINT], turn);
+    if let Some(head) = head {
+        work.neck.position = Some(head.t);
+    }
 }
 
 /// The pose on screen before the player's first tick of play: the frame its
@@ -3490,6 +3528,7 @@ impl Mover<'_, '_> {
         if let Some(position) = self.chain_position(&[0, NECK_JOINT]) {
             self.work.neck.position = Some(position);
         }
+        self.work.drawn_turn = Some(self.work.body_rotation(self.player.angle));
     }
 
     /// `FUN_0045f5b0`: `Rot_neck_em` on both of the dog's neck joints.
@@ -3833,6 +3872,7 @@ impl Mover<'_, '_> {
     fn latch_parts(&mut self) {
         self.work.parts = self.posed_parts();
         self.work.parts_at = Some(self.player.pos);
+        self.work.drawn_turn = Some(self.work.body_rotation(self.player.angle));
     }
 
     /// Every part's `Workm` on the current pose, with the neck's turn on its
@@ -3976,10 +4016,15 @@ impl Mover<'_, '_> {
     }
 
     fn chain_matrix(&self, chain: &[usize]) -> Option<Matrix> {
+        self.chain_matrix_turned(chain, self.work.body_rotation(self.player.angle))
+    }
+
+    /// [`Self::chain_matrix`] from a root turned by `turn`.
+    fn chain_matrix_turned(&self, chain: &[usize], turn: [[i16; 3]; 3]) -> Option<Matrix> {
         let (clips, keyframes) = self.tick.banks.get(self.work.bank);
         let pose = self.player.anim.pose_keyframe(clips, keyframes)?;
         let mut world = Matrix {
-            m: self.work.body_rotation(self.player.angle),
+            m: turn,
             t: self.player.pos,
         };
         for &part in chain {
@@ -8552,6 +8597,9 @@ pub fn member(work: &Work, member: u8) -> Option<i32> {
         1 => i32::from((work.be_flg >> 16) as u16),
         2..=5 => i32::from(work.routine[usize::from(member) - 2]),
         7 => i32::from(work.kind),
+        // `Cdir_x` and `Cdir_z`: room 400's scene rolls Sherry off the lift.
+        0x0E => i32::from(work.tilt[0]),
+        0x10 => i32::from(work.tilt[1]),
         0x11 => i32::from(work.floor),
         0x14 | 0x19 => i32::from(work.dest[0]),
         0x15 | 0x1A => i32::from(work.dest[1]),
@@ -8575,6 +8623,8 @@ pub fn set_member(work: &mut Work, member: u8, value: i32) -> bool {
         1 => work.be_flg = (work.be_flg & 0xFFFF) | u32::from(value as u16) << 16,
         2..=5 => work.routine[usize::from(member) - 2] = value as u8,
         7 => work.kind = value as u16,
+        0x0E => work.tilt[0] = value as i16,
+        0x10 => work.tilt[1] = value as i16,
         // `nFloor`: 112's weak floor drops the player a level and its script
         // sets his floor where he lands (`main_11`'s `member_set(17, 0)`).
         0x11 => work.floor = value as u8,
@@ -9312,6 +9362,59 @@ mod tests {
             mover.work.neck.position,
             Some([before[0] + 18, before[1], before[2] - 14])
         );
+    }
+
+    /// Room 400's load: `Kami_rot05` puts the head on the pose where the
+    /// scene's `pos_set` moved the body, turned as the last draw left `M`
+    /// (the facing before the door), not the door's new facing.
+    #[test]
+    fn kami_rot05_places_the_head_with_the_last_drawn_turn() {
+        let mut setup = Setup::new(0);
+        for keyframe in &mut setup.keyframes {
+            keyframe.rotations = vec![[0; 3]; NECK_JOINT + 1];
+        }
+        setup.skeleton.relative = vec![[0; 3]; NECK_JOINT + 1];
+        setup.skeleton.relative[NECK_JOINT] = [100, -700, 0];
+        setup.player.pos = [1000, 0, 2000];
+        setup.player.angle = 1024;
+        let bank = (setup.clips.as_slice(), setup.keyframes.as_slice());
+        let tick = Tick {
+            room: &setup.room,
+            skeleton: &setup.skeleton,
+            morphs: &[],
+            banks: Banks {
+                pld: bank,
+                weapon: bank,
+                room: bank,
+                held: bank,
+            },
+            input: Input::default(),
+            options: Options::default(),
+            id: 0,
+            life: 200,
+            poisoned: false,
+            stopped: false,
+            weapon: setup.weapon,
+            necks: [None; NECK_WORKS],
+            targets: &[],
+            neck_targets: &setup.neck_targets,
+            enemies: setup.neck_targets.len() as u8,
+            pushing: false,
+            objects: &[],
+            key_trg: 0,
+        };
+        // The last draw faced 0; the door then turned the body to 1024 and
+        // a script moved it.
+        Mover::new(&mut setup.work, &mut setup.player, &tick).place_neck();
+        assert_eq!(setup.work.drawn_turn, Some(rot_matrix([0, 1024, 0])));
+        setup.work.drawn_turn = Some(rot_matrix([0, 0, 0]));
+        setup.player.pos = [-7512, -7200, -24259];
+        kami_rot05_neck(&mut setup.work, &mut setup.player, &tick);
+        assert_eq!(setup.work.neck.position, Some([-7412, -7900, -24259]));
+        // Before any draw, `M` is the body's own turn.
+        setup.work.drawn_turn = None;
+        kami_rot05_neck(&mut setup.work, &mut setup.player, &tick);
+        assert_eq!(setup.work.neck.position, Some([-7512, -7900, -24359]));
     }
 
     /// `Neck_Dir_ZY` aims from the neck's `Workm.t` (`+0x5C`) as the last
@@ -12766,6 +12869,11 @@ mod tests {
         // The head is on the body where it stands, for the tick's pushes.
         assert_eq!(setup.work.neck.body, Some(setup.player.pos));
         setup.work.neck.body = before.neck.body;
+        assert_eq!(
+            setup.work.drawn_turn,
+            Some(setup.work.body_rotation(setup.player.angle))
+        );
+        setup.work.drawn_turn = before.drawn_turn;
         assert_eq!(setup.work, before);
     }
 
