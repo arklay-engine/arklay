@@ -2090,7 +2090,23 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
     if character.id == MARVIN {
         spl_mv4a(character);
     }
+    if kami_rot05(character.id, game) {
+        game.re2.player.kami_rot05 = true;
+    }
     arrived
+}
+
+/// Whether `_Spl`'s call by `Id` (the table at `0x53CA58`) swings hair with
+/// `Kami_rot05`, which also composes the player's head
+/// ([`player2::kami_rot05_neck`]): `Spl_mv51`'s `Op_PartsSort05` for the odd
+/// ids from 0x51 to 0x5B (Claire), and Sherry's `Spl_mv45` (0x45 and 0x4F)
+/// when `fg_common`'s 0xFF is up (`Op_PartsSort06`).
+fn kami_rot05(id: u8, game: &GameState) -> bool {
+    match id {
+        0x51..=0x5B => id & 1 == 1,
+        0x45 | 0x4F => game.re2.flag(crate::scd2::host::COMMON_BANK, 0xFF),
+        _ => false,
+    }
 }
 
 /// The partner's `Ground`, which `Game_loop` writes after the moves:
@@ -2712,6 +2728,23 @@ mod tests {
         assert_eq!(shoot("1180", false, true), (2, 15, after(seed, 3)));
         assert_eq!(shoot("1030", true, true), (2, 15, after(seed, 5)));
         assert_eq!(shoot("2030", true, true), (6, 900, after(seed, 5)));
+    }
+
+    /// `_Spl`'s per-Id table: the odd ids from 0x51 to 0x5B reach
+    /// `Op_PartsSort05`, and 0x45 and 0x4F reach it only under 4:255.
+    #[test]
+    fn the_npcs_that_write_the_players_head_on_load() {
+        let mut game = GameState::default();
+        assert!(kami_rot05(0x51, &game));
+        assert!(kami_rot05(0x5B, &game));
+        assert!(!kami_rot05(0x50, &game));
+        assert!(!kami_rot05(0x5C, &game));
+        assert!(!kami_rot05(0x45, &game));
+        assert!(!kami_rot05(0x4F, &game));
+        game.re2.set_flag(crate::scd2::host::COMMON_BANK, 0xFF, 1);
+        assert!(kami_rot05(0x45, &game));
+        assert!(kami_rot05(0x4F, &game));
+        assert!(!kami_rot05(0x47, &game));
     }
 
     #[test]

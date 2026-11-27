@@ -94,11 +94,6 @@ frames = [360, 7853]
 frame_max_mean = 0.75
 frame_windows = [[360, 802, 0.4], [930, 3429, 1.35], [3530, 4127, 0.4], [4255, 4732, 0.5], [5071, 7853, 0.9]]
 expect = "match"
-ignore = [
-  # 10D's door 0 into 10E loads the room while the door plays on: the original's head is Claire's idle
-  # at the facing from before the door until the door's end, arklay's the old one (#859)
-  [4859, 5072, "pneck"],
-]
 record = "--start claire --warp 10A:-24120:0:-10840:1798:8 --flag 3:32 --flag 3:33 --flag 3:100 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:72 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:148 --flag 4:152 --flag 4:255 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:17 --flag 31:27 --life 69 --give 0:3:2 --give 2:0x1E:3 --give 3:0x33:1 --give 4:0x32:1 --give 5:0x5A:1 --give 6:0x14:15"
 
 # Rooms 10E, 10D and 21B: back through 10D into 21B's second state (3:64): Irons's radio call (event 39, 3:12) and the Heart Key (0x5B, 8:12).
