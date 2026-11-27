@@ -776,6 +776,23 @@ def frame_errors(ref_dir: Path, ark_dir: Path, first: int, last: int, offset: in
     return errors
 
 
+def judge_means(run: dict, plain: float, boxed: float | None) -> list[str]:
+    """`frame_max_mean` on the plain mean, and `boxed_max_mean` on the mean with the run's `boxes` blanked on both
+    sides: the limit for a run whose boxes hold what can't match (the save labels' wall-clock dates and times), so
+    the rest of the frame keeps a tight one. A `boxed_max_mean` without `boxes` is refused."""
+    problems = []
+    limit = run.get("frame_max_mean")
+    if limit is not None and plain > limit:
+        problems.append(f"frame mean {plain:.2f} is over {limit}")
+    boxed_limit = run.get("boxed_max_mean")
+    if boxed_limit is not None:
+        if boxed is None:
+            problems.append("boxed_max_mean needs boxes")
+        elif boxed > boxed_limit:
+            problems.append(f"frame mean {boxed:.2f} with the boxes blanked is over {boxed_limit}")
+    return problems
+
+
 def judge_windows(windows, errors) -> tuple[list[str], list[str]]:
     """`frame_windows`: each `[first, last, max_mean]` judged on the frames of
     its own ticks. Returns the text for each window and the problems."""
@@ -818,6 +835,22 @@ def self_test() -> int:
     want_problems = ["frame mean 0.30 in 20-21 is over 0.25", "no frames in the window 40-50"]
     if texts != want_texts or problems != want_problems:
         print(f"re2-regress self-test FAILED: {texts} {problems}", file=sys.stderr)
+        return 1
+    # The means' limits: the plain one, and the one with the boxes blanked.
+    means = [
+        judge_means({"frame_max_mean": 1.0}, 0.5, None),
+        judge_means({"frame_max_mean": 1.0}, 1.5, None),
+        judge_means({"boxed_max_mean": 0.2, "boxes": [[0, 0, 1, 1]]}, 4.0, 0.1),
+        judge_means({"boxed_max_mean": 0.2, "boxes": [[0, 0, 1, 1]]}, 4.0, 0.3),
+        judge_means({"boxed_max_mean": 0.2}, 0.1, None),
+        judge_means({"frame_max_mean": 1.0, "boxed_max_mean": 0.2, "boxes": [[0, 0, 1, 1]]}, 1.0, 0.2),
+        judge_means({"frame_max_mean": 1.0, "boxed_max_mean": 0.2, "boxes": [[0, 0, 1, 1]]}, 1.5, 0.3),
+    ]
+    want_means = [[], ["frame mean 1.50 is over 1.0"], [], ["frame mean 0.30 with the boxes blanked is over 0.2"],
+                  ["boxed_max_mean needs boxes"], [],
+                  ["frame mean 1.50 is over 1.0", "frame mean 0.30 with the boxes blanked is over 0.2"]]
+    if means != want_means:
+        print(f"re2-regress self-test FAILED: means {means}", file=sys.stderr)
         return 1
     # The ignore list: only ticks whose ignored field differed count, and a backwards range is refused.
     rows = [
@@ -1978,7 +2011,10 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
     if run.get("frames"):
         if not want_frames:
             text += "; frames: no reference frames"
-            limits = [key for key in ("frame_max_mean", "frame_windows") if run.get(key) is not None]
+            if run.get("boxed_max_mean") is not None and not boxes:
+                # A manifest mistake, which recording again wouldn't mend (`judge_means` says it with frames).
+                result["problems"].append("boxed_max_mean needs boxes")
+            limits = [key for key in ("frame_max_mean", "boxed_max_mean", "frame_windows") if run.get(key) is not None]
             if limits:
                 # A limit nothing is held to would let the run pass on its trace alone.
                 result["problems"].append(f"the reference has no frames for {' and '.join(limits)}: record it again")
@@ -1997,9 +2033,7 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
             if boxes:
                 boxed = frame_summary(streamed[1])
                 text += f" (box blanked {boxed['mean']:.2f})"
-            limit = run.get("frame_max_mean")
-            if limit is not None and plain["mean"] > limit:
-                result["problems"].append(f"frame mean {plain['mean']:.2f} is over {limit}")
+            result["problems"].extend(judge_means(run, plain["mean"], boxed["mean"] if boxes else None))
             if run.get("frame_windows"):
                 texts, problems = judge_windows(run["frame_windows"], per_tick)
                 text += "; windows " + ", ".join(texts)
