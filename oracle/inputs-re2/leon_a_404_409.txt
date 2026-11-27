@@ -1,0 +1,677 @@
+# leon_a_404_409: Ada from 404's ambush through 405's vent, 40B's cockroaches and 409's scene with Annette, to 409's door 0 into 410
+# 404: west along the passage to door 2 (405 on 522)
+344
+348 up run right
+365 up run
+371 up run left
+372 up run
+374 up run left
+375 up run
+376 up run left
+377 up run
+379 up run left
+380 up run
+385 up run right
+386 up run
+389 up run left
+406 up run
+428 up run left
+429 up run
+466 up run right
+467 up run
+472 up run left
+473 up run
+474 up run left
+475 left
+487 action
+489
+509 action
+511
+# 405: the scene of Leon at the vent (`main_00`'s event 11), where a spider bites and poisons Ada (938); then west along the walkway, off its edge (record 9) to the floor, and west to door 2 at the vent: its area's message, then the door (40B on 1227)
+531 action
+533
+553 right
+660 action
+662
+703 up run left
+729 right
+735 left
+736 right
+737 left
+738 right
+739 left
+740 right
+741 left
+742 right
+743 left
+744 right
+745 left
+746 right
+747 left
+748 right
+749 left
+750 right
+751 left
+752 right
+753 left
+754 right
+755 left
+756 right
+757 left
+758 right
+759 left
+760 right
+761 left
+762 right
+763 left
+764 right
+765 left
+766 right
+767 left
+768 right
+769 left
+770 right
+771 left
+772 right
+773 left
+774 right
+775 left
+776 right
+777 left
+778 right
+779 left
+780 right
+781 left
+782 right
+783 left
+784 right
+785 left
+786 right
+787 left
+788 right
+789 left
+790 right
+791 left
+792 right
+793 left
+794 right
+795 left
+796 right
+797 left
+798 right
+799 left
+800 right
+801 left
+802 right
+803 left
+804 right
+805 left
+806 right
+807 left
+808 right
+809 left
+810 right
+811 left
+812 right
+813 left
+814 right
+815 left
+816 right
+817 left
+818 right
+819 left
+820 right
+821 left
+822 right
+823 left
+824 right
+825 left
+826 right
+827 left
+828 right
+829 left
+830 right
+831 left
+832 right
+833 left
+834 right
+835 left
+836 right
+837 left
+838 right
+839 left
+840 right
+841 left
+842 right
+843 left
+844 right
+845 left
+846 right
+847 left
+848 right
+849 left
+850 right
+851 left
+852 right
+853 left
+854 right
+855 left
+856 right
+857 left
+858 right
+859 left
+860 right
+861 left
+862 right
+863 left
+864 right
+865 left
+866 right
+867 left
+868 right
+869 left
+870 right
+871 left
+872 right
+873 left
+874 right
+875 left
+876 right
+877 left
+878 right
+879 left
+880 right
+881 left
+882 right
+883 left
+884 right
+885 left
+886 right
+887 left
+888 right
+889 left
+890 right
+891 left
+892 right
+893 left
+894 right
+895 left
+896 right
+897 left
+898 right
+899 left
+900 right
+901 left
+902 right
+903 left
+904 right
+905 left
+906 right
+907 left
+908 right
+909 left
+910 right
+911 left
+912 right
+913 left
+914 right
+915 left
+916 right
+917 left
+918 right
+919 left
+920 right
+921 left
+922 right
+923 left
+924 right
+925 left
+926 right
+927 left
+928 right
+929 left
+930 right
+931 left
+932 right
+933 left
+934 right
+935 left
+936 right
+937 left
+938 right
+939 left
+962 action
+964
+1024 up run left
+1046 up run
+1090 up run left
+1091 up run
+1098 right
+1121 action
+1123
+1135 action
+1137
+1149 action
+1151
+1163 action
+1165
+1177 action
+1179
+1191 action
+1193
+1205 action
+1207
+# 40B: west through the cockroaches to area 3, pressed as she reaches it: its message, then door 1 (409 on 1547)
+1349 up run
+1369 up run right
+1370 up run
+1456 up run right
+1457 up run
+1459 left
+1461 action
+1463
+1471 action
+1473
+1481 action
+1483
+1491 action
+1493
+1501 action
+1503
+1511 action
+1513
+1521 action
+1523
+1531 action
+1533
+1541 action
+1543
+# 409: north along the upper walkway into area 2, Annette's scene (`main_02`, with `main_06` for Ada and `main_07` for Annette), pressing through its messages; then west to x 900, south along the walkway to z -6000 and west to door 0, whose event (`main_17`) puts up message 40 and opens the door, which starts on 6245
+1551 action
+1553
+1561 action
+1563
+1571 action
+1573
+1581 action
+1583
+1591 action
+1593
+1601 action
+1603
+1611 action
+1613
+1621 action
+1623
+1631 action
+1633
+1702 up run right
+1711 up run
+1713 up run right
+1714 up run
+1746 up run right
+1747 up run
+1749 up run left
+1761 up run
+1766 up run left
+1767 up run
+1768 up run left
+1769 up run
+1770 up run left
+1771 up run
+1772 up run left
+1773 up run
+1774 up run left
+1775 up run
+1777 up run left
+1778 up run
+1784 up run right
+2249
+2274 action
+2275
+2300 action
+2301
+2326 action
+2327
+2352 action
+2353
+2378 action
+2379
+2404 action
+2405
+2430 action
+2431
+2456 action
+2457
+2482 action
+2483
+2508 action
+2509
+2534 action
+2535
+2560 action
+2561
+2586 action
+2587
+2612 action
+2613
+2638 action
+2639
+2664 action
+2665
+2690 action
+2691
+2716 action
+2717
+2742 action
+2743
+2768 action
+2769
+2794 action
+2795
+2820 action
+2821
+2846 action
+2847
+2872 action
+2873
+2898 action
+2899
+2924 action
+2925
+2950 action
+2951
+2976 action
+2977
+3002 action
+3003
+3028 action
+3029
+3054 action
+3055
+3080 action
+3081
+3106 action
+3107
+3132 action
+3133
+3158 action
+3159
+3184 action
+3185
+3210 action
+3211
+3236 action
+3237
+3262 action
+3263
+3288 action
+3289
+3314 action
+3315
+3340 action
+3341
+3366 action
+3367
+3392 action
+3393
+3418 action
+3419
+3444 action
+3445
+3470 action
+3471
+3496 action
+3497
+3522 action
+3523
+3548 action
+3549
+3574 action
+3575
+3600 action
+3601
+3626 action
+3627
+3652 action
+3653
+3678 action
+3679
+3704 action
+3705
+3730 action
+3731
+3756 action
+3757
+3782 action
+3783
+3808 action
+3809
+3834 action
+3835
+3860 action
+3861
+3886 action
+3887
+3912 action
+3913
+3938 action
+3939
+3964 action
+3965
+3990 action
+3991
+4016 action
+4017
+4042 action
+4043
+4068 action
+4069
+4094 action
+4095
+4120 action
+4121
+4146 action
+4147
+4172 action
+4173
+4198 action
+4199
+4224 action
+4225
+4250 action
+4251
+4276 action
+4277
+4302 action
+4303
+4328 action
+4329
+4354 action
+4355
+4380 action
+4381
+4406 action
+4407
+4432 action
+4433
+4458 action
+4459
+4484 action
+4485
+4510 action
+4511
+4536 action
+4537
+4562 action
+4563
+4588 action
+4589
+4614 action
+4615
+4640 action
+4641
+4666 action
+4667
+4692 action
+4693
+4718 action
+4719
+4744 action
+4745
+4770 action
+4771
+4796 action
+4797
+4822 action
+4823
+4848 action
+4849
+4874 action
+4875
+4900 action
+4901
+4926 action
+4927
+4952 action
+4953
+4978 action
+4979
+5004 action
+5005
+5030 action
+5031
+5056 action
+5057
+5082 action
+5083
+5108 action
+5109
+5134 action
+5135
+5160 action
+5161
+5186 action
+5187
+5212 action
+5213
+5238 action
+5239
+5264 action
+5265
+5290 action
+5291
+5316 action
+5317
+5342 action
+5343
+5368 action
+5369
+5394 action
+5395
+5420 action
+5421
+5446 action
+5447
+5465 up run left
+5468 up run
+5470 up run left
+5471 up run
+5492 up run left
+5514 up run
+5613 up run right
+5614 up run
+5634 up run right
+5635 up run
+5638 up run left
+5639 up run
+5667 up run right
+5690 up run
+5698 up run right
+5699 up run
+5712 up run left
+5713 up run
+5716 up run left
+5717 up run
+5725 up run left
+5726 up run
+5739 up run right
+5740 up run
+5747 up run left
+5748 up run
+5760 up run right
+5761 up run
+5768 up run left
+5769 up run
+5780 up run right
+5781 up run
+5787 up run left
+5788 up run
+5800 up run right
+5801 up run
+5808 up run left
+5809 up run
+5820 up run right
+5821 up run
+5827 up run left
+5828 up run
+5840 up run right
+5841 up run
+5848 up run left
+5849 up run
+5860 up run right
+5861 up run
+5867 up run left
+5868 up run
+5880 up run right
+5881 up run
+5888 up run left
+5889 up run
+5900 up run right
+5901 up run
+5908 up run left
+5909 up run
+5920 up run right
+5921 up run
+5927 up run left
+5928 up run
+5940 up run right
+5941 up run
+5948 up run left
+5949 up run
+5960 up run right
+5961 up run
+5967 up run left
+5968 up run
+5980 up run right
+5981 up run
+5988 up run left
+5989 up run
+6000 up run right
+6001 up run
+6023 up run left
+6024 up run
+6026 up run left
+6027 up run
+6036 up run right
+6037 up run
+6070 up run left
+6071 up run
+6079 up run right
+6080 up run
+6136 up run left
+6137 up run
+6145 up run right
+6146 up run
+6167 action
+6169
+6181 action
+6183
+6195 action
+6197
+6209 action
+6211
+6223 action
+6225
+6237 action
+6239
