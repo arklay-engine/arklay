@@ -1350,10 +1350,6 @@ fn ex_results_times_are_hours_minutes_and_seconds() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// RESULT's records (`FUN_004DD4F0`): two loading ticks drawing nothing,
-/// slot 0's fade in, then RESULT, the three labels on the count's 0x1E and
-/// the times on 0x3C, each fading in from black over 16 ticks, opaque; past 0x5A a
-/// press fades out, and once the fade is done the task ends black.
 /// After an Extreme Battle game (`FUN_004DDFF0`, `special_ex_leon_end`):
 /// the page counts to 0xC9; at 0xB4 a level opens when the game's is past
 /// those open, and a run better than the level's record (or the first)
@@ -1428,6 +1424,10 @@ fn ex_results_after_a_game_take_the_record_and_open_a_level() {
     assert_eq!(out[11], 0x7FFF);
 }
 
+/// RESULT's records (`FUN_004DD4F0`): two loading ticks drawing nothing,
+/// slot 0's fade in, then RESULT, the three labels on the count's 0x1E and
+/// the times on 0x3C, each fading in from black over 16 ticks, opaque; past 0x5A a
+/// press fades out, and once the fade is done the task ends black.
 #[test]
 fn ex_results_records_show_by_their_count_and_end_on_a_press() {
     let dir = std::env::temp_dir().join(format!("arklay-re2-exr-tick-{}", std::process::id()));

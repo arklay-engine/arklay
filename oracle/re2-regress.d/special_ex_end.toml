@@ -4,6 +4,7 @@
 # `ptr_ex_battle_end` typed and faded, then `Result_exit` on 7024, whose title opens the RESULT records page from 7025 (`title_mv_state` 7, arklay's title writes no `exe`),
 # the confirm on 7400 fades it out and Extreme Battle's title is back on 7493. The page's frames differ by the character's name: the
 # recorded build (Classic REbirth) draws "Leon" in English letters where `RES_MOJI.TIM` has the Japanese ones arklay draws.
+# `rmus` is `Result`'s own and arklay writes it as `-` once the title has it back; the page's music fade and stop are `snd`'s.
 [[run]]
 name = "special_ex_leon_end"
 ui = "title"
@@ -16,7 +17,7 @@ input = "special_ex_leon_end.txt"
 fields = "room,rng,exe,snd,rmus,ti,tfade"
 frames = [4301, 7699]
 ignore = [[4301, 7024, "ti"], [4301, 7024, "tfade"], [7024, 7699, "exe"], [7024, 7699, "rmus"]]
-frame_max_mean = 0.45
+frame_windows = [[4301, 7024, 0.05], [7025, 7699, 2.1]]
 voice_from_ref = true
 expect = "match"
 record = "--flag 0:10"
