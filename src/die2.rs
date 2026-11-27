@@ -16,14 +16,22 @@ use crate::state::Image;
 const STOP_ALL: u32 = 0xFF00_0000;
 /// The bits `Die_move_wait` flips to let one tick in three through.
 const STOP_STROBE: u32 = 0xFC00_0000;
-/// The stops the white-out leaves on once it's over.
+/// The stops the white-out leaves on once it's over: `splayer_work`'s, or
+/// the player's when the death is the ally's.
 const STOP_AFTER: u32 = 0x4000_0000;
+const STOP_AFTER_ALLY: u32 = 0x8000_0000;
 /// `BYTE_00525cdc`: who killed the player, which picks a row of the tables here.
 const KILLERS: [u8; 15] = [
     0, 0x10, 0x22, 0x20, 0x30, 0x27, 0x2E, 0x33, 0x31, 0x23, 0x2A, 0x2B, 0x34, 0x36, 0x24,
 ];
-/// `Die_move_fade_out`'s wait, `PTR_DAT_00525b18`.
-const HELD_WAITS: [i16; 15] = [180, 95, 10, 90, 145, 145, 0, 84, 81, 0, 0, 90, 95, 100, 10];
+/// `Die_move_fade_out`'s wait, `PTR_DAT_00525b18`, and the word past its
+/// last row, which [`HELD_WAIT_PAST`] reads.
+const HELD_WAITS: [i16; 16] = [
+    180, 95, 10, 90, 145, 145, 0, 84, 81, 0, 0, 90, 95, 100, 10, 0,
+];
+/// The wait's row `Die_move_fade_out` gives a 0x34 with `Type`'s bit 0
+/// clear: one past the table's fifteen.
+const HELD_WAIT_PAST: usize = 15;
 /// `Die_move_pause`'s length, in `DWORD_00525b38`.
 const PAUSES: [i16; 15] = [
     91, 91, 96, 86, 150, 120, 120, 86, 82, 75, 83, 81, 81, 85, 96,
@@ -180,6 +188,17 @@ pub struct DieBodies {
     pub player_parts: Vec<Option<[i32; 3]>>,
     pub killer_angle: Option<u16>,
     pub killer_parts: Vec<Option<[i32; 3]>>,
+    pub ally: Option<DieAlly>,
+}
+
+/// `splayer_work` in its death routine (`Routine_0` 3) with `fg_status`'s
+/// `0x10000000` up: what `Die_sprt_load` checks for, and what the game over
+/// then follows in place of the player.
+#[derive(Debug, Clone, Default)]
+pub struct DieAlly {
+    pub id: u8,
+    pub pos: [i32; 3],
+    pub parts: Vec<Option<[i32; 3]>>,
 }
 
 impl DieBodies {
@@ -202,6 +221,8 @@ const LEVEL_FULL: u16 = 0x7FFF;
 
 /// `Be_flg`'s bit that keeps a character from being drawn.
 pub const BE_HIDDEN: u32 = 0x8_0000;
+/// The ally's `Routine_0` in its death, which `Die_sprt_load` checks for.
+pub const ALLY_DYING: u8 = 3;
 
 /// `Die_enemy_set`: those near `player` lose their collisions (`Be_flg`'s 8) and
 /// the rest aren't drawn. The one holding the body is always near.
@@ -328,27 +349,47 @@ pub struct Die {
     spiral: Option<Spiral>,
     /// `Die_light_set`'s light, from `Die_move_set_cut` on.
     light: Option<DieLight>,
+    /// `BYTE_0099cf14`'s 1 from `Die_sprt_load`: the ally's id when the
+    /// death is the ally's.
+    ally: Option<u8>,
 }
 
-/// The killer's row: a search from the end, which stops at the first when
-/// there's no match. The `0x34` of `Em34`'s second form isn't told apart.
-fn killer_row(id: u8) -> usize {
-    let id = if id == 0x39 { 0x2E } else { id };
-    KILLERS
-        .iter()
-        .rposition(|&killer| killer == id)
-        .unwrap_or(0)
+/// Whatever had hold of the player: its `Id` and `Type` (`+0x10E`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DieKiller {
+    pub id: u8,
+    pub kind: u16,
+}
+
+/// `Die_move_set_cut`'s row: a search from the end, which stops at the
+/// first when there's no match. A 0x34 with `Type`'s bit 0 clear takes
+/// 0x33's row, and 0x39 takes 0x2E's.
+fn killer_row(killer: DieKiller) -> usize {
+    let id = match killer.id {
+        0x34 if killer.kind & 1 == 0 => 0x33,
+        0x39 => 0x2E,
+        id => id,
+    };
+    KILLERS.iter().rposition(|&row| row == id).unwrap_or(0)
+}
+
+/// `Die_move_fade_out`'s row of the wait: a killer below 0x20 waits as a
+/// zombie does, and a 0x34 with `Type`'s bit 0 clear reads past the table.
+fn wait_row(killer: DieKiller) -> usize {
+    match killer.id {
+        0x34 if killer.kind & 1 == 0 => HELD_WAIT_PAST,
+        0x20.. => killer_row(killer),
+        _ => ZOMBIE_ROW,
+    }
 }
 
 impl Die {
     /// `killer` is the id of whatever had hold of the player, when something
     /// did: `fg_system`'s `0x100`.
-    pub fn new(killer: Option<u8>, arrange: bool) -> Self {
+    pub fn new(killer: Option<DieKiller>, arrange: bool) -> Self {
         let held = killer.is_some();
-        let (wait, pause) = killer.map_or((0, PAUSES[ZOMBIE_ROW]), |id| {
-            let row = killer_row(id);
-            let wait_row = if id < 0x20 { ZOMBIE_ROW } else { row };
-            (HELD_WAITS[wait_row], PAUSES[row])
+        let (wait, pause) = killer.map_or((0, PAUSES[ZOMBIE_ROW]), |killer| {
+            (HELD_WAITS[wait_row(killer)], PAUSES[killer_row(killer)])
         });
         Self {
             phase: 0,
@@ -366,6 +407,32 @@ impl Die {
             row: killer.map_or(0, killer_row),
             spiral: None,
             light: None,
+            ally: None,
+        }
+    }
+
+    /// The ally whose death this is, from `Die_sprt_load` on.
+    pub fn ally(&self) -> Option<u8> {
+        self.ally
+    }
+
+    /// The id `Die_sprt_load` picks the text by: the player's, or for an
+    /// ally's death `(Id & 4 | 0x38) >> 2`.
+    pub fn text_player(&self, player: u8) -> u8 {
+        self.ally.map_or(player, |id| (id & 4 | 0x38) >> 2)
+    }
+
+    /// The part `Spiral_move` circles: the killer's for a row that names it,
+    /// else the ally's under `BYTE_0099cf14`'s 1, else the player's.
+    fn followed(&self, bodies: &DieBodies, row: SpiralRow) -> [i32; 3] {
+        match (&bodies.ally, self.ally) {
+            (Some(ally), Some(_)) if !row.killer => ally
+                .parts
+                .get(row.part)
+                .copied()
+                .flatten()
+                .unwrap_or_default(),
+            _ => bodies.part(row.killer, row.part),
         }
     }
 
@@ -395,8 +462,8 @@ impl Die {
 
     /// `Die_move_set_cut_usual` (`0x44E4B0`), or `Die_move_set_cut`
     /// (`0x44E300`) for a death in a killer's hands, then the first
-    /// `Spiral_move`. `Die_move_wait` has just zeroed `BYTE_0099cf14`, so the
-    /// player's part is the target, not the partner's.
+    /// `Spiral_move`. A held death is never the ally's, so its first target is
+    /// the row's part of the player or the killer.
     fn set_cut(&mut self, bodies: &DieBodies) {
         self.count = 0;
         let spiral = if self.held {
@@ -485,11 +552,13 @@ impl Die {
     /// thirtieth of the way across and a fifth of the way down (to 300
     /// above it) each tick.
     fn spiral_move(&mut self, bodies: &DieBodies) {
+        let Some(row) = self.spiral.map(|spiral| SPIRAL_ROWS[spiral.row]) else {
+            return;
+        };
+        let part = self.followed(bodies, row);
         let Some(spiral) = self.spiral.as_mut() else {
             return;
         };
-        let row = SPIRAL_ROWS[spiral.row];
-        let part = bodies.part(row.killer, row.part);
         spiral.radius = spiral.radius.wrapping_sub(spiral.shrink);
         let fall = self.speed;
         self.speed = self.speed.wrapping_add(spiral.fall_step);
@@ -629,7 +698,12 @@ impl Die {
             self.count = 0;
             self.phase = if self.held { 3 } else { 4 };
             let stop = re2.fg_stop_mut();
-            *stop = (*stop & 0x03FF_FFFF) | STOP_AFTER;
+            let after = if self.ally.is_some() {
+                STOP_AFTER_ALLY
+            } else {
+                STOP_AFTER
+            };
+            *stop = (*stop & 0x03FF_FFFF) | after;
             out.fade = Some(DieFade::WhiteClear);
             return;
         }
@@ -653,8 +727,13 @@ impl Die {
             return;
         }
         // `Die_sprt_load`, whose file the session reads when the text needs it,
-        // and `Bg_set_mode`.
+        // and `Bg_set_mode`. Its check for the ally sets `BYTE_0099cf14`.
         self.strobe = 0;
+        self.ally = bodies
+            .ally
+            .as_ref()
+            .filter(|_| !self.held)
+            .map(|ally| ally.id);
         self.count = 0;
         self.white_done = true;
         re2.effects.die();
@@ -1186,6 +1265,11 @@ fn add_triangle(image: &mut Image, sheet: &Image, corners: [Corner; 3]) {
 mod tests {
     use super::*;
 
+    /// A death in the hands of `id`, whose `Type` is 0.
+    fn held(id: u8) -> Option<DieKiller> {
+        Some(DieKiller { id, kind: 0 })
+    }
+
     /// A held death's text, past `Die_spr_init`.
     fn text_at(ticks: usize) -> (DieText, crate::zombie2::Rnd) {
         let mut text = DieText::new(true);
@@ -1282,15 +1366,81 @@ mod tests {
 
     #[test]
     fn the_killer_picks_the_wait_and_the_pause() {
-        let zombie = Die::new(Some(0x10), false);
+        let zombie = Die::new(held(0x10), false);
         assert_eq!((zombie.wait, zombie.pause), (95, 91));
         // A zombie this table has no row for waits as the others do.
-        let other = Die::new(Some(0x1E), false);
+        let other = Die::new(held(0x1E), false);
         assert_eq!((other.wait, other.pause), (95, 91));
-        let licker = Die::new(Some(0x22), false);
+        let licker = Die::new(held(0x22), false);
         assert_eq!((licker.wait, licker.pause), (10, 96));
         let none = Die::new(None, false);
         assert_eq!((none.wait, none.held), (0, false));
+    }
+
+    #[test]
+    fn a_0x34_without_types_bit_0_takes_0x33s_row_and_the_word_past_the_waits() {
+        // `Die_move_set_cut` swaps it for 0x33 (row 7), and
+        // `Die_move_fade_out` reads its wait from row 15, the 0 past the
+        // table's end.
+        let swapped = Die::new(held(0x34), false);
+        assert_eq!((swapped.row, swapped.wait, swapped.pause), (7, 0, 86));
+        // With the bit up it keeps its own row, 12, for both.
+        let own = Die::new(Some(DieKiller { id: 0x34, kind: 1 }), false);
+        assert_eq!((own.row, own.wait, own.pause), (12, 95, 81));
+        let g3 = Die::new(held(0x33), false);
+        assert_eq!((g3.row, g3.wait, g3.pause), (7, 84, 86));
+    }
+
+    fn ally_bodies() -> DieBodies {
+        DieBodies {
+            player_parts: vec![Some([0, 0, 0])],
+            ally: Some(DieAlly {
+                id: 0x44,
+                pos: [5000, 0, 6000],
+                parts: vec![Some([5000, -900, 6000])],
+            }),
+            ..DieBodies::default()
+        }
+    }
+
+    /// From `Die_move_wait`'s last white to the tick after its cut.
+    fn past_the_white(die: &mut Die, bodies: &DieBodies) -> Re2State {
+        let mut re2 = Re2State::default();
+        die.phase = 2;
+        die.level = LEVEL_FULL;
+        die.tick(&mut re2, bodies);
+        die.tick(&mut re2, bodies);
+        die.tick(&mut re2, bodies);
+        re2
+    }
+
+    #[test]
+    fn an_allys_death_stops_the_player_and_circles_the_ally() {
+        let bodies = ally_bodies();
+        let mut die = Die::new(None, true);
+        let mut re2 = past_the_white(&mut die, &bodies);
+        assert_eq!(die.ally(), Some(0x44));
+        // `Die_move_wait` leaves the player's stop up, not `splayer_work`'s.
+        assert_eq!(*re2.fg_stop_mut() & 0xFC00_0000, STOP_AFTER_ALLY);
+        // The usual cut starts on the player's part, and `Spiral_move`
+        // closes on the ally's.
+        let target = die.view().unwrap().target;
+        die.tick(&mut re2, &bodies);
+        let moved = die.view().unwrap().target;
+        assert!(moved[0] > target[0] && moved[2] > target[2]);
+        // The text is the one for the ally's id: `(0x44 & 4 | 0x38) >> 2`.
+        assert_eq!(die.text_player(0), 0xF);
+        assert_eq!(text_entry(die.text_player(0)), "die/died0f.tim");
+    }
+
+    #[test]
+    fn a_held_death_ignores_the_ally() {
+        let bodies = ally_bodies();
+        let mut die = Die::new(held(0x10), true);
+        let mut re2 = past_the_white(&mut die, &bodies);
+        assert_eq!(die.ally(), None);
+        assert_eq!(*re2.fg_stop_mut() & 0xFC00_0000, STOP_AFTER);
+        assert_eq!(die.text_player(1), 1);
     }
 
     /// The ticks the original's `fg_stop` changes on after a zombie's kill,
@@ -1298,7 +1448,7 @@ mod tests {
     #[test]
     fn a_held_death_stops_the_routines_when_the_original_does() {
         let mut re2 = Re2State::default();
-        let mut die = Die::new(Some(0x10), false);
+        let mut die = Die::new(held(0x10), false);
         let mut changes = Vec::new();
         let mut last = 0;
         let mut end = None;
@@ -1337,8 +1487,8 @@ mod tests {
         // `Die_move_fade_out` goes straight to `Die_move_wait` under
         // `censorship_off`, so the zombie's timer (its wait of 95, and the
         // tick that passes it) is skipped.
-        assert_eq!(end_of(Die::new(Some(0x10), false)), 545);
-        assert_eq!(end_of(Die::new(Some(0x10), true)), 545 - 96);
+        assert_eq!(end_of(Die::new(held(0x10), false)), 545);
+        assert_eq!(end_of(Die::new(held(0x10), true)), 545 - 96);
         // A death outside a killer's hands has no timer either way.
         assert_eq!(end_of(Die::new(None, true)), end_of(Die::new(None, false)));
     }
@@ -1392,7 +1542,7 @@ mod tests {
         // 1000 above the player's part.
         let mut with = bodies([0, 0, 0], 0x100);
         with.killer_angle = Some(0x100);
-        let mut die = Die::new(Some(0x10), true);
+        let mut die = Die::new(held(0x10), true);
         die.set_cut(&with);
         let spiral = die.spiral.unwrap();
         assert_eq!((spiral.radius, spiral.shrink), (3000 - 8, 8));
@@ -1401,7 +1551,7 @@ mod tests {
         // Facing the player, it starts 1500 past.
         let mut against = with.clone();
         against.killer_angle = Some(0x900);
-        let mut die = Die::new(Some(0x10), true);
+        let mut die = Die::new(held(0x10), true);
         die.set_cut(&against);
         assert_eq!(die.spiral.unwrap().angle, (0x100 + 1500 - 2) & 0xFFF);
     }
@@ -1410,7 +1560,7 @@ mod tests {
     fn the_pause_stills_the_spiral_and_main_sets_it_falling() {
         let body = bodies([0, 0, 0], 0);
         let mut re2 = Re2State::default();
-        let mut die = Die::new(Some(0x10), true);
+        let mut die = Die::new(held(0x10), true);
         die.white_done = true;
         die.phase = 2;
         die.set_cut(&body);
@@ -1466,7 +1616,7 @@ mod tests {
     fn a_held_deaths_light_flashes_red_and_the_out_dims_it() {
         let body = bodies([0, 0, 0], 0);
         let mut re2 = Re2State::default();
-        let mut die = Die::new(Some(0x10), true);
+        let mut die = Die::new(held(0x10), true);
         die.white_done = true;
         die.set_cut(&body);
         die.phase = 4;
@@ -1659,7 +1809,7 @@ mod tests {
             let mut re2 = Re2State::default();
             re2.banks[0][0] = system;
             re2.set_flag(STATUS_BANK, FG_STATUS_EXTRA_MAP, 1);
-            let mut die = Die::new(Some(0x10), false);
+            let mut die = Die::new(held(0x10), false);
             die.tick(&mut re2, &DieBodies::default());
             assert_eq!(
                 re2.flag(STATUS_BANK, FG_STATUS_EXTRA_MAP),
@@ -1672,7 +1822,7 @@ mod tests {
     #[test]
     fn the_white_climbs_to_full_then_clears_and_ends_in_black() {
         let mut re2 = Re2State::default();
-        let mut die = Die::new(Some(0x10), false);
+        let mut die = Die::new(held(0x10), false);
         let mut whites = Vec::new();
         let mut others = Vec::new();
         for tick in 0..546 {
