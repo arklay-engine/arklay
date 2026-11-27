@@ -10,9 +10,10 @@ setup_script = "fade_60d.lua"
 input = "fade_60d.txt"
 input_shift = 344
 ticks = 700
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat,om4,om5,om6"
 frames = [360, 699]
-# 15.4 measured (45.9 with the fade held): the room's lighting isn't the original's
-frame_max_mean = 16.0
+# 16.22 measured (45.9 with the fade held): the mist planes (objects 4 to 6, which the room's loop shows by the cut
+# on each cut change) draw grey where the original's are white (#1008); from cut 1 on 534 plane 5 covers more floor
+frame_max_mean = 16.5
 expect = "match"
 record = "--no-enemies --life 200 --warp 60D:-20729:0:-24149:2160"
