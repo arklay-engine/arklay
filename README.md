@@ -118,7 +118,9 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # page lists and rebinds arklay's own controls), the new-game choice and the prologues (a second scenario's after its save), the
 # inventory, the status screen with its map, the save screen, the item box,
 # the special menu's gallery (pictures, movies and 3D models) and its extra
-# modes' titles (the 4th Survivor's, To-fu's and Extreme Battle's, with Extreme Battle's character choice, its opening and RESULT's records), and the results
+# modes' titles (the 4th Survivor's, To-fu's and Extreme Battle's, with Extreme
+# Battle's character choice, its opening, its play into room F14 and RESULT's
+# records), and the results
 # after a cleared game (with the next scenario's save) are drawn from the original's art. Leon A's route from
 # the new game through Marvin's room 202, the Blue Card Key, the darkroom (208),
 # the S.T.A.R.S. office (115), the Spade Key and its doors, the Diamond Key in
@@ -129,13 +131,17 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # oracle/re2-deviations.md. Both routes go on in matched segments:
 # Leon A is one continuous run from the new game to the Manhole Opener in 301,
 # and goes on in warp runs through the kennel's manhole and the sewer, with Ada
-# as the player, to the Club Key, then back up to the police station, where all
-# four chess plugs are matched, as is the way back as far as 111's dust chute;
+# as the player, to the Club Key, then back up to the police station for all four
+# chess plugs, down 111's dust chute to Ben's death in 301, round by 210 for the
+# magnum, past 303's G adult with the plugs, and on from 304 with Ada through
+# 402 and 403 to Annette's ambush in 404;
 # Claire A is one continuous run from the new game to the Diamond Key, and goes on
 # in warp runs from the Diamond Key down 110's ladder to 209 and 202's bomb half,
 # up to 10A's wall and on to the Heart Key, then through the sewer with Sherry to
 # her door into 305, and from the Club Key through 212, 211, 20F, 20B and 20A to
-# 20C, with a detour back to 201's item box. Both characters fire the knife and weapons 2
+# 20C, with detours to 201's item box and 10F's Lighter, on to the cog in 20D,
+# through 111's clock and 21B's stones down Irons's lift, armed from 113, and
+# past 309's G adult to 30A. Both characters fire the knife and weapons 2
 # to 8 and the grenade launcher, bowgun, Colt S.A.A., spark shot, Beretta,
 # sub-machine gun, flamethrower, rocket launcher and gatling gun (weapons 9 to
 # 0x13). Zombies,
@@ -143,8 +149,8 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # room 205's bodies and the alligator are ported, as are the giant moth and its
 # larvae in part; the G forms are part way (G1,
 # G2 and G3 are done, the G embryo walks, jumps, latches on and struggles, and
-# the G adult walks, bites, spits, is born, takes hits and dies, but the embryos
-# that ride its back are to come). The engine also plays RE2 doors with --door,
+# the G adult walks, bites, spits, is born, takes hits and dies, and the embryo
+# that rides in Ben bursts out of him). The engine also plays RE2 doors with --door,
 # and plays its sounds and films (see issue #244 and oracle/re2-deviations.md);
 # --game re2 skips detection
 cargo run -- pack convert game /path/to/re2
