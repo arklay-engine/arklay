@@ -5982,14 +5982,21 @@ impl GameSession {
                         .collect()
                 })
                 .unwrap_or_default(),
-            ally: re2.partner_bit().then_some(()).and_then(|()| {
-                let ally = re2
-                    .characters
-                    .0
-                    .get(crate::scd2::host::SPLAYER_SLOT)?
-                    .as_deref()
-                    .filter(|ally| ally.work.routine[0] == crate::die2::ALLY_DYING)?;
-                Some(crate::die2::DieAlly {
+            // `Die_sprt_load` checks the ally once; from then on the game over
+            // follows `splayer_work` whatever its routine.
+            ally: re2
+                .characters
+                .0
+                .get(crate::scd2::host::SPLAYER_SLOT)
+                .and_then(|ally| ally.as_deref())
+                .filter(|ally| {
+                    self.re2_die
+                        .as_ref()
+                        .and_then(crate::die2::Die::ally)
+                        .is_some()
+                        || re2.partner_bit() && ally.work.routine[0] == crate::die2::ALLY_DYING
+                })
+                .map(|ally| crate::die2::DieAlly {
                     id: ally.id,
                     pos: ally.body.pos,
                     parts: ally
@@ -5998,8 +6005,7 @@ impl GameSession {
                         .iter()
                         .map(|part| part.map(|matrix| matrix.t))
                         .collect(),
-                })
-            }),
+                }),
         }
     }
 
@@ -6029,7 +6035,7 @@ impl GameSession {
                     .map_or(crate::die2::DieKiller { id: 0x10, kind: 0 }, |character| {
                         crate::die2::DieKiller {
                             id: character.id,
-                            kind: character.kind,
+                            kind: character.work.kind,
                         }
                     })
             });
@@ -6097,8 +6103,14 @@ impl GameSession {
                     .map(|c| &mut **c),
                 player,
             );
-            // The killer stays whatever else it's been told, and stops colliding.
-            let killer = self.game.re2.player.held_by;
+            // The killer stays whatever else it's been told, and stops colliding;
+            // an ally's death leaves the player's killer alone.
+            let killer = self
+                .game
+                .re2
+                .player
+                .held_by
+                .filter(|_| die.ally().is_none());
             if let Some(character) = killer
                 .and_then(|slot| self.game.re2.characters.0.get_mut(slot))
                 .and_then(|character| character.as_deref_mut())
