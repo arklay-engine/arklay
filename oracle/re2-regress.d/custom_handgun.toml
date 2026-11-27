@@ -1,0 +1,31 @@
+# The custom handgun (4), which `pl_mv05_w4` fires on its own step (`pl_mv05_w4_t2`): with `fg_common`'s 0x7E down (AUTO) a held trigger fires on frames 0, 3 and 6, a burst of three; with it up (MANUAL) frame 3 goes to 10, one shot (oracle/re2.md, "Weapons"). Each run EQUIPs it through the status screen, as smg_equip_118 does.
+
+[[run]]
+name = "custom_equip_118"
+room = "118"
+ticks = 1600
+# run_119's start with the custom handgun in slot 2 and handgun rounds in slot 3: EQUIP it, aim at the zombies and fire, held and tapped
+setup_script = "custom_equip_118.lua"
+input = "custom_equip_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat,esp"
+frames = [360, 1599]
+# 0.03 measured
+frame_max_mean = 0.1
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x04:18 --give 3:0x14:60"
+
+[[run]]
+name = "custom_manual_118"
+room = "118"
+ticks = 1600
+# custom_equip_118 with fg_common's 0x7E up (MANUAL): each press one shot
+setup_script = "custom_manual_118.lua"
+input = "custom_equip_118.txt"
+input_shift = 344
+fields = "room,cam,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,rng,inv,snd,zm0,zm1,zm2,zm3,zm4,zm5,fgstat,esp"
+frames = [360, 1599]
+# 0.03 measured
+frame_max_mean = 0.1
+expect = "match"
+record = "--warp 118:-24617:0:-24996:1024 --life 200 --give 2:0x04:18 --give 3:0x14:60 --flag 4:0x7E"

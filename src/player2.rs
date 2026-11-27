@@ -718,6 +718,16 @@ pub struct EffectCall {
 
 /// `Type & 0xFFF` of the grenade launcher with each of its rounds.
 const GRENADES: u8 = 9;
+/// The custom handgun, whose stance is `pl_mv05_w1`'s but which fires on its
+/// own step (`pl_mv05_w4_t2`): a burst of three while the trigger is held,
+/// or one shot with `fg_common`'s 0x7E up ([`Weapon::manual`]).
+pub const CUSTOM_HANDGUN: u8 = 4;
+/// The frames `pl_mv05_w4_t2` fires again on while the trigger is held,
+/// and the frame it goes to when it doesn't.
+const CUSTOM_REFIRE: [u8; 2] = [3, 6];
+const CUSTOM_BURST_END: u8 = 10;
+/// The hokan it goes there with.
+const CUSTOM_BURST_END_BLEND: u8 = 3;
 /// The Colt S.A.A. and the Beretta, which `pl_mv05_w1` fires as it does the
 /// handguns.
 pub const COLT: u8 = 0xD;
@@ -1687,6 +1697,9 @@ pub struct Weapon {
     /// it: `Tama_ck_i` finds it loaded and `Tama_decrease_i` takes nothing,
     /// the bursts' counter (`WORD_00691f8c`) untouched.
     pub infinite: bool,
+    /// `fg_common`'s 0x7E (the status screen's MANUAL): the custom handgun
+    /// fires one shot a press, not a burst.
+    pub manual: bool,
 }
 
 impl Weapon {
@@ -1698,9 +1711,7 @@ impl Weapon {
         matches!(
             self.id,
             KNIFE
-                | 2
-                | 3
-                | 5..=8
+                | 2..=8
                 | GRENADES..=crate::bow2::BOW
                 | COLT
                 | SPARK
@@ -1780,6 +1791,10 @@ impl Weapon {
             // `0x539DBC`'s bytes `00 02 ff 01 fe ff`: it looks on two
             // ticks in three.
             &[(0, 2), (0xFF, 1), (0xFE, 0xFF)]
+        } else if self.id == CUSTOM_HANDGUN {
+            // The handguns' `0x539B24`, `00 01 00 ff`: it looks on the
+            // shot's first tick, then waits.
+            &[(0, 1), (0, 0xFF)]
         } else {
             &[(0, 0xFF)]
         }
@@ -1814,6 +1829,7 @@ impl Weapon {
             SPARK => [0x9E, 0x9E, 0x1E],
             ROCKET => [0x9E, 0x9E, 0x5A],
             GATLING => [0x5A, 0x5A, 0x5A],
+            CUSTOM_HANDGUN => [0x85, 0x87, 15],
             // The handguns' and the Beretta's.
             _ => [0x85, 0x87, 8],
         }
@@ -1907,6 +1923,20 @@ impl Weapon {
             ],
             (2 | BERETTA, 3) => &[ShotEffect {
                 point: [0x15E, 0x28, -15],
+                calls: &[
+                    (0x308_0900, None),
+                    (0x308_0900, None),
+                    (0x200_0700, Some(0x514)),
+                ],
+            }],
+            // `pl_w04_t2_move`: the flash on each shot's frame, the case on
+            // each shot's third.
+            (CUSTOM_HANDGUN, 1 | 4 | 7) => &[ShotEffect {
+                point: [0x78, 600, -0x8A],
+                calls: &[(0x30A_0D00, None), (0x100_0D00, None)],
+            }],
+            (CUSTOM_HANDGUN, 3 | 6 | 10) => &[ShotEffect {
+                point: [0xA0, 200, 0x3C],
                 calls: &[
                     (0x308_0900, None),
                     (0x308_0900, None),
@@ -3334,6 +3364,7 @@ impl Mover<'_, '_> {
             2 if self.tick.weapon.bursts() => self.aim_burst(key, &drawn),
             2 if self.tick.weapon.sparks() => self.aim_spark(key, &drawn),
             2 if self.tick.weapon.id == GATLING => self.aim_gatling(key, &drawn),
+            2 if self.tick.weapon.id == CUSTOM_HANDGUN => self.aim_custom(key, &drawn),
             2 => self.aim_fire(key, &drawn),
             3 => self.aim_lower(key),
             4 => self.aim_reload(),
@@ -4189,6 +4220,95 @@ impl Mover<'_, '_> {
         }
         if kicks {
             self.add_speed_xz();
+        }
+    }
+
+    /// `pl_mv05_w4_t2` (`0x4d8ea0`): the custom handgun's shots. `hit_scan_ck`
+    /// looks at the hand on every tick. It fires on frame 0, and again on
+    /// frames 3 and 6 while the trigger is held and the gun has a round;
+    /// otherwise, or on frame 3 with [`Weapon::manual`], it goes to frame 10,
+    /// the burst's end. Each shot starts `Weapon_at_ck`'s sequence, takes a
+    /// round and sets the shot's line; `Weapon_at_ck` runs on every tick.
+    fn aim_custom(&mut self, key: u16, drawn: &DrawnParts) {
+        if self.work.routine[3] == 0 {
+            let clip = self.tilt_clip(AIM_FIRE_CLIPS);
+            self.aim_clip(clip);
+            self.work.noise |= 1;
+            self.work.spd = [0; 3];
+        }
+        let hand = self
+            .part_point(HAND_PART, [0; 3])
+            .unwrap_or(self.player.pos);
+        self.work.shot_level = crate::weapon2::hit_scan_ck(
+            self.tick.id,
+            self.tick.weapon.id,
+            self.player.pos[1],
+            self.work.parts0_y,
+            hand[1],
+        );
+        let weapon = self.tick.weapon;
+        if weapon.manual && self.work.move_cnt == CUSTOM_REFIRE[0] {
+            self.work.move_cnt = CUSTOM_BURST_END;
+            self.work.hokan = CUSTOM_BURST_END_BLEND;
+        }
+        let frame = self.work.move_cnt;
+        let fires = if frame == 0 {
+            true
+        } else if CUSTOM_REFIRE.contains(&frame) {
+            let again = key & KEY_FIRE != 0 && weapon.loaded;
+            if !again {
+                self.work.move_cnt = CUSTOM_BURST_END;
+                self.work.hokan = CUSTOM_BURST_END_BLEND;
+            }
+            again
+        } else {
+            false
+        };
+        if fires {
+            self.init_weapon_at();
+            // `Tama_decrease_i`: one round, none from an empty gun or one
+            // that never runs out.
+            if !weapon.infinite && weapon.rounds != ENDLESS && weapon.rounds > self.work.spent {
+                self.work.spent += 1;
+            }
+            // `Shoot_camera` reads the hand as the last draw left it.
+            self.work.shot_line =
+                self.part_matrix(SHOT_PART)
+                    .map(|hand| crate::weapon2::ShotLine {
+                        from: hand.t,
+                        matrix: hand.m,
+                    });
+        }
+        if self.weapon_at_seq() {
+            self.shoot();
+        }
+        self.aim_turn(key, AIM_FIRE_TURN);
+        if key & KEY_AIM == 0 && self.work.move_cnt > weapon.fire_cancel_frame() {
+            self.aim_stage(1);
+            self.work.spd = [0; 3];
+            return;
+        }
+        let shot_from = self.work.effects.len();
+        self.shot_effects();
+        if self.joint_move() {
+            self.aim_stage(1);
+            self.work.spd = [0; 3];
+        }
+        // `Pl_water` comes before `pl_w04_t2_move`'s calls in the original.
+        let water = self.work.water;
+        if water != 0
+            && i32::from(water) < self.ground()
+            && self.work.move_cnt < 6
+            && self.work.move_cnt & 1 != 0
+        {
+            let splash_from = self.work.effects.len();
+            let draws_from = self.work.water_draws.len();
+            self.pl_water(drawn[0]);
+            let splashes = self.work.effects.split_off(splash_from);
+            self.work.effects.splice(shot_from..shot_from, splashes);
+            for draw in &mut self.work.water_draws[draws_from..] {
+                draw.effect = draw.effect - splash_from + shot_from;
+            }
         }
     }
 
@@ -8399,6 +8519,7 @@ mod weapon_tests {
             spare: true,
             rounds: 100,
             infinite: false,
+            manual: false,
         }
     }
 
@@ -10535,6 +10656,7 @@ mod tests {
             spare,
             rounds: u8::from(loaded) * 18,
             infinite: false,
+            manual: false,
         };
         setup
     }
@@ -11123,6 +11245,43 @@ mod tests {
         assert_eq!(setup.work.tama_count, 0);
     }
 
+    /// `pl_mv05_w4_t2`: the custom handgun fires on frame 0, then on 3 and 6
+    /// while the trigger is held, a round each; a trigger let go by frame 3,
+    /// or `fg_common`'s 0x7E (MANUAL) up, takes it to frame 10 after the
+    /// first (`custom_equip_118`, `custom_manual_118`).
+    #[test]
+    fn the_custom_handgun_bursts_three_unless_let_go_or_manual() {
+        // The rounds spent and the frame reached after each of 8 ticks.
+        let run = |held: u8, manual: bool| {
+            let mut setup = bursting(CUSTOM_HANDGUN, 18);
+            setup.weapon.manual = manual;
+            (0..8u8)
+                .map(|tick| {
+                    setup.tick(aiming(tick < held, false), 200);
+                    (setup.work.spent, setup.work.move_cnt)
+                })
+                .collect::<Vec<_>>()
+        };
+        let burst = run(8, false);
+        assert_eq!(
+            burst.iter().map(|&(spent, _)| spent).max(),
+            Some(3),
+            "{burst:?}"
+        );
+        for (held, manual) in [(2, false), (8, true)] {
+            let one = run(held, manual);
+            assert_eq!(
+                one.iter().map(|&(spent, _)| spent).max(),
+                Some(1),
+                "{one:?}"
+            );
+            assert!(
+                one.iter().any(|&(_, frame)| frame > CUSTOM_BURST_END),
+                "held {held}, manual {manual}: {one:?}"
+            );
+        }
+    }
+
     /// `Tama_decrease_i` returns before the bursts' counter for a gun at
     /// 0xFF (the unlocked sub-machine gun's) or with its bit of the extras
     /// word up: no call takes a round or steps the counter.
@@ -11438,6 +11597,7 @@ mod tests {
             spare: false,
             rounds,
             infinite: false,
+            manual: false,
         };
         setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
         setup.work.status_flg = TILT_LEVEL;
@@ -11578,6 +11738,7 @@ mod tests {
             spare: false,
             rounds: 100,
             infinite: false,
+            manual: false,
         };
         setup.work.routine = [MODE_MOVE, MOVE_AIM, 1, 1];
         setup.work.status_flg = TILT_LEVEL;
