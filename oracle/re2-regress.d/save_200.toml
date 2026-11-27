@@ -86,8 +86,10 @@ frames = [540, 8459]
 saves = true
 # The list's panel is blanked on both sides: its labels carry each side's wall clock when it saved (date and time,
 # seconds included, on up to ten rows), and centred, a label's other text moves with their width. The rest of the
-# frame is held to 0.1 (0.05 measured, 0.09 the worst); the plain mean (2.93 to 3.89) is reported, not judged.
-# `save_200_page_few` compares the labels too, on a list of two rows.
+# frame is held to 0.1 (0.05 measured, 0.09 the worst single frame). The plain mean (2.93 to 3.89, by the seconds the
+# clocks show) is still held to 4.5, so that a list, a cursor bar or a panel that goes undrawn or wrong fails too;
+# `save_200_page_few` compares the labels themselves, on a list of two rows.
+frame_max_mean = 4.5
 boxes = [[10, 45, 310, 201]]
 boxed_max_mean = 0.1
 expect = "match"

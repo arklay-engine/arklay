@@ -843,9 +843,12 @@ def self_test() -> int:
         judge_means({"boxed_max_mean": 0.2, "boxes": [[0, 0, 1, 1]]}, 4.0, 0.1),
         judge_means({"boxed_max_mean": 0.2, "boxes": [[0, 0, 1, 1]]}, 4.0, 0.3),
         judge_means({"boxed_max_mean": 0.2}, 0.1, None),
+        judge_means({"frame_max_mean": 1.0, "boxed_max_mean": 0.2, "boxes": [[0, 0, 1, 1]]}, 1.0, 0.2),
+        judge_means({"frame_max_mean": 1.0, "boxed_max_mean": 0.2, "boxes": [[0, 0, 1, 1]]}, 1.5, 0.3),
     ]
     want_means = [[], ["frame mean 1.50 is over 1.0"], [], ["frame mean 0.30 with the boxes blanked is over 0.2"],
-                  ["boxed_max_mean needs boxes"]]
+                  ["boxed_max_mean needs boxes"], [],
+                  ["frame mean 1.50 is over 1.0", "frame mean 0.30 with the boxes blanked is over 0.2"]]
     if means != want_means:
         print(f"re2-regress self-test FAILED: means {means}", file=sys.stderr)
         return 1
@@ -2008,6 +2011,9 @@ def finish_run(run, ctx, result, command, frames_dir, want_frames, stream, ticks
     if run.get("frames"):
         if not want_frames:
             text += "; frames: no reference frames"
+            if run.get("boxed_max_mean") is not None and not boxes:
+                # A manifest mistake, which recording again wouldn't mend (`judge_means` says it with frames).
+                result["problems"].append("boxed_max_mean needs boxes")
             limits = [key for key in ("frame_max_mean", "boxed_max_mean", "frame_windows") if run.get(key) is not None]
             if limits:
                 # A limit nothing is held to would let the run pass on its trace alone.
