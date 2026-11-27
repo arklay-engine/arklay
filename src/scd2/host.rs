@@ -123,6 +123,9 @@ pub struct Re2State {
     /// `Sce_Door` stops both from the next tick; the port runs the scripts
     /// first, so the player, the cut and the characters sit this tick out.
     pub script_door: bool,
+    /// A door's load is under way: the speed the last room left, which the
+    /// load's `Pl_init` keeps.
+    pub door_spd: Option<[i16; 3]>,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
     /// Each task's `Speed_set`s: speeds of position and rotation, then what
@@ -1072,6 +1075,7 @@ impl Default for Re2State {
             door_key_stop: false,
             objects_key_stop: false,
             script_door: false,
+            door_spd: None,
             work: [Work::Player; TASK_SLOTS],
             speeds: [[0; 12]; TASK_SLOTS],
             pending_player: PendingPlayer::default(),

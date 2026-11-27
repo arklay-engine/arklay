@@ -240,6 +240,16 @@ struct Sequence {
     /// `since` when `SsPlay` last turned the loop off, for a buffer that
     /// plays once: it ends at the end of the pass it was in then.
     once_from: Option<u32>,
+    /// `0x689DD8`, `0x689DDC` and `0x689DE0`: a fade has stepped its volume
+    /// (`Snd_se_call`). A script's fade running out on a playing buffer puts
+    /// it down, but the fade's volume steps outlast its state's count, so
+    /// the next step raises it again; only `SsInit2`'s end (`FUN_004eee40`)
+    /// puts it down for good. While it is up, `SsInit2` doesn't start the
+    /// sequence again.
+    faded: bool,
+    /// `SsStopAll`'s mark (`0x689DCC`, `0x689DD0`): its buffer was playing
+    /// when `SsClose` stopped it.
+    closed: bool,
 }
 
 /// Where `sce_bgm_control` runs, which some of its cases ask.
@@ -300,6 +310,8 @@ impl Default for Music {
                 volume: SEQUENCE_VOLUME,
                 since: None,
                 once_from: None,
+                faded: false,
+                closed: false,
             }; SEQUENCES],
             door_fade: 0,
             door_wait: 0,
@@ -335,8 +347,7 @@ impl Music {
         format!("{word:04x},{sequences},{}", tracks.join(","))
     }
 
-    /// Sequence `sequence`'s fade (`ss_timer`) is running: `SsInit2` doesn't
-    /// start it again (`0x689DD8`, `0x689DDC`, `0x689DE0`).
+    /// Sequence `sequence`'s fade (`ss_timer`) is running.
     pub fn fading(&self, sequence: usize) -> bool {
         self.sequences
             .get(sequence)
@@ -386,9 +397,69 @@ impl Music {
     }
 
     /// Sub sequence `sequence`'s channel plays (`0x4347B0`'s status bit 0):
-    /// a track is loaded, and one played once hasn't reached its end.
+    /// a track is loaded and started, not stopped since (`SsClose` stops
+    /// every buffer), and one played once hasn't reached its end.
     fn sub_playing(&self, sequence: usize) -> bool {
-        self.sequences[sequence].loaded && !self.ended(sequence)
+        self.buffer_playing(sequence)
+    }
+
+    /// Sequence `sequence`'s buffer plays (`SsGetStatus`'s bit 0).
+    fn buffer_playing(&self, sequence: usize) -> bool {
+        let state = &self.sequences[sequence];
+        state.loaded && state.since.is_some() && !self.ended(sequence)
+    }
+
+    /// The fade flag `SsInit2` tests (the sequence's `faded`).
+    pub fn faded(&self, sequence: usize) -> bool {
+        self.sequences
+            .get(sequence)
+            .is_some_and(|state| state.faded)
+    }
+
+    /// `SsStopAll` under `SsClose` (`movie_on`): every buffer stops, and each
+    /// sequence whose buffer was playing is marked for `SsInit2`.
+    pub fn ss_close(&mut self) {
+        for sequence in 0..SEQUENCES {
+            if self.buffer_playing(sequence) {
+                self.sequences[sequence].closed = true;
+            }
+            self.sequences[sequence].since = None;
+            self.sequences[sequence].once_from = None;
+        }
+    }
+
+    /// A test's sequence `sequence`: its bank loaded, its buffer playing or
+    /// stopped, and `SsStopAll`'s mark.
+    #[cfg(test)]
+    pub fn set_test_sequence(&mut self, sequence: usize, playing: bool, closed: bool) {
+        let state = &mut self.sequences[sequence];
+        state.loaded = true;
+        state.since = playing.then_some(0);
+        state.closed = closed;
+    }
+
+    /// `FUN_004eee40`, the end of `SsInit2`: each marked sequence without its
+    /// fade flag starts again from its first sample, looping, and every fade
+    /// flag goes down. A marked sequence whose flag was up stays stopped and
+    /// marked. Returns the sequences it started.
+    pub fn ss_init2(&mut self) -> [bool; SEQUENCES] {
+        let mut started = [false; SEQUENCES];
+        // `SsInit2` calls it only when a main or sub bank is named.
+        if !self.sequences.iter().any(|state| state.loaded) {
+            return started;
+        }
+        for (sequence, state) in self.sequences.iter_mut().enumerate() {
+            if state.closed && !state.faded {
+                state.closed = false;
+                state.since = Some(0);
+                state.once_from = None;
+                started[sequence] = true;
+            }
+        }
+        for state in &mut self.sequences {
+            state.faded = false;
+        }
+        started
     }
 
     fn stop(&mut self, sequence: usize) {
@@ -792,10 +863,21 @@ impl Music {
                 for index in sequence_channels(sequence) {
                     self.channels[index].volume = self.channels[index].volume.saturating_sub(1);
                 }
+                // The main's flag goes up with every step; a sub's when its
+                // `SsSetVol` finds a buffer.
+                let channel = sequence_channels(sequence).start;
+                if sequence == 0 || self.channels[channel].track.is_some() {
+                    self.sequences[sequence].faded = true;
+                }
             }
             if self.door_fade == 0 && self.sequences[sequence].state > 5 {
                 self.sequences[sequence].state -= 1;
                 if self.sequences[sequence].state == 5 {
+                    // The main's flag goes down whatever plays; a sub's only
+                    // with its buffer playing, as it is stopped.
+                    if sequence == 0 || self.buffer_playing(sequence) {
+                        self.sequences[sequence].faded = false;
+                    }
                     self.sequences[sequence].state = 0;
                     self.stop(sequence);
                 }
@@ -1274,6 +1356,76 @@ mod tests {
         assert!(music.fading(1));
         assert_eq!(music.sequences[2].state, STATE_PLAYING);
         assert!(!music.fading(2));
+    }
+
+    /// A door's fade (`Snd_bgm_fade_ON`) steps each playing sequence's
+    /// volume, which raises its fade flag, and nothing on that path puts it
+    /// down: after a film `SsInit2` leaves the sub stopped, so the next door
+    /// to a new sub finds no buffer playing and leaves its state (409's
+    /// word 0x9814 into 410's 0xE214 after Annette's scene).
+    #[test]
+    fn a_door_s_fade_keeps_a_sub_stopped_through_a_film() {
+        let tracks = sub_tracks(5);
+        assert!(tracks[0].is_some());
+        let mut music = Music::default();
+        music.enter_room(RoomMusic::from_word(0x0500), Place::default());
+        music.leave_room(RoomMusic::from_word(0x0501), 0);
+        while music.waiting() {
+            music.tick();
+        }
+        assert!(music.faded(0) && music.faded(1));
+        music.enter_room(RoomMusic::from_word(0x0501), Place::default());
+        assert!(music.buffer_playing(1));
+        music.ss_close();
+        let started = music.ss_init2();
+        assert!(!started[0] && !started[1]);
+        assert!(!music.faded(0) && !music.faded(1));
+        music.leave_room(RoomMusic::from_word(0x0201), 0);
+        assert_eq!(music.sequences[1].state, STATE_PLAYING);
+        assert!(!music.sub_playing(1));
+        // With no fade since, the next film starts the sub again and a door
+        // fades it.
+        music.ss_close();
+        assert!(music.ss_init2()[1]);
+        music.leave_room(RoomMusic::from_word(0x0301), 0);
+        assert_eq!(music.sequences[1].state, STATE_SCRIPT_FADE);
+    }
+
+    /// A sub's script fade running out on its playing buffer puts its fade
+    /// flag down as it stops it, but the fade's volume steps outlast the
+    /// state's count (`ss_timer` 0x5A against 0x32), and the next one raises
+    /// it again: only `SsInit2` puts it down for good, and does nothing
+    /// without a bank.
+    #[test]
+    fn a_sub_s_fade_running_out_puts_its_flag_down_for_a_tick() {
+        let tracks = sub_tracks(5);
+        assert!(tracks[0].is_some());
+        let room_107 = Place {
+            stage: 0,
+            room: 7,
+            ..Place::default()
+        };
+        let mut music = Music::default();
+        music.enter_room(RoomMusic::from_word(0x0500), room_107);
+        music.leave_room(RoomMusic::from_word(0xC200), 0);
+        music.tick();
+        assert!(music.faded(1));
+        while music.sequences[1].state != 0 {
+            music.tick();
+        }
+        assert!(!music.faded(1));
+        assert!(music.sequences[1].fade > 0);
+        music.tick();
+        assert!(music.faded(1), "the fade's next step");
+        music.ss_init2();
+        assert!(!music.faded(1));
+        let mut empty = Music::default();
+        empty.sequences[1].faded = true;
+        empty.ss_init2();
+        assert!(
+            empty.faded(1),
+            "no bank: SsInit2 doesn't reach FUN_004eee40"
+        );
     }
 
     /// Across a stage change `Snd_bgm_ck` runs a frame after the door's,
