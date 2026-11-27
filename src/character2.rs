@@ -452,10 +452,9 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
 
 /// `+0x1EE` (`Eff_at_r`), which widens a shot's first box (`Weapon_at_ck`)
 /// and a blast's (`FUN_004d7e30`) by a quarter of it: each kind's init
-/// (`enemy_init_table`, `Em_move_tbl_set`) writes it once, and a licker's
-/// box sets (`Em22_Atd_set_1`, `Em22_Atd_set_2`) by its surface.
-/// `Sce_em_set` doesn't clear a new work, and nothing in `Em_24` writes it,
-/// so 0x24's is whatever the memory held: arklay gives it the zombies' 500.
+/// (`enemy_init_table`, `Em_move_tbl_set`) writes it, and both lickers'
+/// box sets (`Em22_Atd_set_1`, `Em22_Atd_set_2`, which 0x24's `0x46cfa0`
+/// and `0x46e350` call too) by the surface.
 fn eff_at_r(id: u8, licker: Option<&crate::zombie2::licker::Licker>) -> u16 {
     use crate::zombie2 as z;
     if let Some(licker) = licker {
@@ -481,7 +480,7 @@ fn eff_at_r(id: u8, licker: Option<&crate::zombie2::licker::Licker>) -> u16 {
         // `MrX_init`.
         z::MRX_ID => 800,
         // `FUN_00483eb0`.
-        0x2D => 800,
+        z::EM2D_ID => 800,
         // `FUN_00484c90`, which `Em_2E` runs for the poison ivy (0x39) too.
         z::IVY_ID | z::POISON_IVY_ID => 800,
         // `FUN_00488a70`.
@@ -492,7 +491,8 @@ fn eff_at_r(id: u8, licker: Option<&crate::zombie2::licker::Licker>) -> u16 {
         z::G3_ID => 900,
         // `FUN_004acd70`.
         z::MOTH_ID => 0x384,
-        // `FUN_004b03d0`, for the kinds it ports.
+        // `FUN_004b03d0`, for the kinds it ports; `Type` 0x2003 to 0x2006
+        // (on a wall, not ported) take 400 from `FUN_004b0660`.
         z::LARVA_ID => 200,
         // `Em10_Init`'s, and G1's (`FUN_0048a540`).
         _ => 500,
@@ -3051,14 +3051,13 @@ mod tests {
             (z::DOG_ID, 600),
             (z::CROW_ID, 300),
             (z::ALLIGATOR_ID, 1100),
-            (0x24, 500),
             (z::SPIDER_ID, 800),
             (z::YOUNG_ID, 20),
             (z::EMBRYO_ID, 300),
             (z::ADULT_ID, 800),
             (z::ROACH_ID, 800),
             (z::MRX_ID, 800),
-            (0x2D, 800),
+            (z::EM2D_ID, 800),
             (z::IVY_ID, 800),
             (z::POISON_IVY_ID, 800),
             (z::VINE_ID, 1200),
