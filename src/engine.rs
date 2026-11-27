@@ -2935,6 +2935,15 @@ impl crate::result2::MusicHost for Re2ResultMusic<'_> {
         let bgm = &mut self.re2.music;
         match music {
             crate::result2::Music::FadeOut(time) => bgm.fade_on(time, self.system),
+            crate::result2::Music::FinishFade => {
+                // `Snd_se_call`'s steps, the stop and then the free.
+                for _ in 0..=u8::MAX as usize + 1 {
+                    if bgm.fade_rtn().0 == 0 {
+                        break;
+                    }
+                    bgm.tick();
+                }
+            }
             crate::result2::Music::Main(id) => bgm.play_main(id, self.system),
             crate::result2::Music::Sub(id) => bgm.play_sub(id, self.place),
             crate::result2::Music::Control(word) => {
@@ -2999,6 +3008,7 @@ fn re2_clear(game: &game::GameState, special: u8) -> crate::result2::Clear {
     crate::result2::Clear {
         extra,
         tofu: re2.flag(0, FG_SYSTEM_TOFU),
+        extreme: re2.flag(0, crate::scd2::host::FG_SYSTEM_EXTREME),
         claire: status(0),
         scenario_b: status(1),
         penalty: status(8),
@@ -7027,7 +7037,12 @@ impl GameSession {
             }
             // `Game_loop` tests the flag in its step 2, the room's own tick:
             // not under a screen, a door or a film, which run in its place.
+            // Nor before the title has handed the room its task, nor while
+            // Extreme Battle's opening holds it.
             if self.room_frozen()
+                || self.boot_message.is_some()
+                || self.re2_exb_opening.is_some()
+                || self.re2_exb_opening_due
                 || self.re2_save.is_some()
                 || self.re2_config.is_some()
                 || self.transition.is_some()
@@ -7058,6 +7073,7 @@ impl GameSession {
             // `Result_init`'s `Snd_room_load`: the room's banks give way to
             // the results' own.
             self.re2_sounds.results_room = true;
+            self.re2_sounds.results_room_extreme = clear.extreme;
             bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
             return true;
         }
@@ -7101,6 +7117,28 @@ impl GameSession {
         };
         let out = result.tick(raw, &mut music);
         let earned = result.next_game();
+        if !out.cues.is_empty() {
+            // Extreme Battle's end's `Snd_se_on(0x2NN0000)`s.
+            for &slot in &out.cues {
+                if let Some(id) = crate::se2::SoundId::decode(0x0200_0000 | u32::from(slot) << 16) {
+                    self.game
+                        .re2
+                        .sounds
+                        .push(crate::scd2::host::SoundRequest::new(id, [0; 3]));
+                }
+            }
+            let cut = self.sound_cut();
+            play_re2_sounds(
+                &mut self.music,
+                &mut self.sfx_cache,
+                &mut self.re2_sounds,
+                pack,
+                &self.loaded.room,
+                &mut self.game,
+                &mut self.player,
+                cut,
+            );
+        }
         bgm::apply_live(&mut self.music, &mut self.game, &mut self.bgm_cache, pack);
         if let Some(id) = self.game.re2.film.take() {
             let claire = self.game.re2.flag(1, crate::scd2::host::STATUS_PLAYER);
@@ -7239,6 +7277,40 @@ impl GameSession {
             };
             screen.draw(&cx, framebuffer);
             framebuffer.fade_overlay(screen.overlay());
+            return;
+        }
+        if let Some(lines) = game
+            .re2_result
+            .as_ref()
+            .and_then(|result| result.ex_end_lines())
+        {
+            // Extreme Battle's end: black, its lines in the message font,
+            // and fade slot 0 over them.
+            let [width, height] = [framebuffer.width as i32, framebuffer.height as i32];
+            framebuffer.fill_rect([0, 0, width, height], [0, 0, 0, 255]);
+            if let Some(font) = font.as_ref() {
+                for (y, text) in lines {
+                    framebuffer.with_screen(|screen| {
+                        font.draw_text(
+                            screen,
+                            crate::result2::EX_END_LINE_X,
+                            y,
+                            font::Tint::White,
+                            2,
+                            text,
+                            true,
+                        );
+                    });
+                }
+            }
+            if let Some(result) = game.re2_result.as_ref()
+                && let Some((level, mode)) = result.view().fade
+            {
+                let mut fade = transition::Fade::inactive();
+                fade.set(mode, 0, level);
+                framebuffer
+                    .fade_overlay(fade.overlay().map(|overlay| (overlay.color, overlay.alpha)));
+            }
             return;
         }
         if let Some(screen) = re2_result_screen.as_mut() {
@@ -11043,10 +11115,12 @@ impl GameSession {
                 .then(|| self.game.re2_typewriter_trace()),
             // Task 0 runs the title from `Result_exit`'s tick.
             re2_result: self.game.is_re2_room.then(|| match &self.game.re2_result {
-                Some(result) if !self.re2_result_over => {
-                    result.trace_fields(self.game.re2.music.fade_rtn())
-                }
-                _ => "res=- rest=- rfade=- rmus=-".to_string(),
+                Some(result) if !self.re2_result_over => format!(
+                    "{} exe={}",
+                    result.trace_fields(self.game.re2.music.fade_rtn()),
+                    result.ex_end_trace()
+                ),
+                _ => "res=- rest=- rfade=- rmus=- exe=-".to_string(),
             }),
             // The typewriter's hand-off and the option screen's set a game
             // mode so far, and the option key's press.
@@ -19289,6 +19363,9 @@ struct Re2Sounds {
     /// room header at `0x995BA0` whose sound tables point into the data
     /// `end00.adt` was loaded to, `Mem_top`).
     results_room: bool,
+    /// The results' room is Extreme Battle's end's (`Result_init`'s
+    /// `BufferizeFile` of `end1` in place of the pictures' `Load_ADT`).
+    results_room_extreme: bool,
 }
 
 impl Re2Sounds {
@@ -19301,6 +19378,16 @@ impl Re2Sounds {
     fn results_room_level(&self, slot: u8) -> Option<u16> {
         if !self.results_room {
             return None;
+        }
+        // Extreme Battle's end's typing cues, as `special_ex_leon_end` has
+        // them: its sheet leaves other bytes there.
+        if self.results_room_extreme {
+            return match slot {
+                0x22 => Some(0xFFAE),
+                0x23 => Some(0xFFF1),
+                0x24 => Some(0xFFE0),
+                _ => None,
+            };
         }
         match slot {
             0x22 => Some(0xFFFA),

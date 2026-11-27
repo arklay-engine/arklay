@@ -25,6 +25,10 @@
 //! weapons and records [`Result::next_game`] hands to the next scenario, and
 //! the gallery's bits ([`Result::gallery`]).
 
+mod ex_end;
+
+pub use ex_end::{ExEnd, LINE_X as EX_END_LINE_X};
+
 /// The pieces in `text_result_0`.
 pub const PIECES: usize = 33;
 /// A piece's flags: shown, fading in, fading out.
@@ -144,6 +148,8 @@ const FADE_STEP: i16 = 0x100;
 
 /// `Snd_bgm_fade_ON(0xB4, 0x18)`: the music fades out over 180 ticks.
 pub const MUSIC_FADE: u8 = 0xB4;
+/// The main Extreme Battle's end plays (`pBgm_table`'s `0xFF38`).
+const MAIN_EX_END: u8 = 0x38;
 /// The mains `Result_01` plays: the results' and the picture's.
 const MAIN_RESULT: u8 = 0x30;
 const MAIN_PICTURE: u8 = 0x2A;
@@ -202,6 +208,9 @@ pub enum Music {
     Sub(u8),
     /// `Snd_bgm_ctr(word)`.
     Control(u32),
+    /// `Snd_se_call` until `Fade_rtn` is down: the fade's stop and free run
+    /// within the call (`Task_sleep` doesn't yield on the PC).
+    FinishFade,
 }
 
 /// What the results ask of the session: the music's calls as they make
@@ -227,6 +236,8 @@ pub struct Output {
     /// ([`Result::next_game`]) and `Task_execute(1, Mem_card)` the save
     /// screen. The results sleep under it ([`Result::sleep`]) until it ends.
     pub save: bool,
+    /// Extreme Battle's end's cues, `Snd_se_on(0x2NN0000)`.
+    pub cues: Vec<u8>,
 }
 
 /// What `Result_retrieve` and the main game's steps read of the game they
@@ -238,6 +249,9 @@ pub struct Clear {
     /// 1, To-fu's.
     pub extra: bool,
     pub tofu: bool,
+    /// `fg_system`'s `0x1000000`: Extreme Battle's game, whose end
+    /// ([`ExEnd`]) takes the results' place.
+    pub extreme: bool,
     /// `fg_status`'s `0x80000000` (Claire) and `0x40000000` (scenario B).
     pub claire: bool,
     pub scenario_b: bool,
@@ -622,6 +636,8 @@ pub struct Result {
     /// The gallery's bits the results have set (`Set_registry_flg`).
     gallery: [u32; 5],
     clear: Clear,
+    /// Extreme Battle's end, from `Result_init` on.
+    ex_end: Option<Box<ExEnd>>,
 }
 
 impl Result {
@@ -659,6 +675,7 @@ impl Result {
             last_raw: 0,
             gallery: [0; 5],
             clear,
+            ex_end: None,
         }
     }
 
@@ -1221,9 +1238,58 @@ impl Result {
         true
     }
 
+    /// `Result_init` under Extreme Battle: the music's fade, `Snd_se_call`
+    /// until `Fade_rtn` is down (which `Task_sleep` doesn't yield on the PC),
+    /// main 0x38 played, the four fades off, and the end's work.
+    fn init_ex_end(&mut self, music: &mut dyn MusicHost) {
+        music.call(Music::FadeOut(MUSIC_FADE));
+        music.call(Music::FinishFade);
+        music.call(Music::Main(MAIN_EX_END));
+        music.call(Music::Control(PLAY_MAIN));
+        self.piece_flags = [0; PIECES];
+        self.background = false;
+        self.fade.level = -1;
+        self.ex_end = Some(Box::new(ExEnd::new()));
+    }
+
+    /// A tick of Extreme Battle's end: `Result`'s first step's
+    /// `Result_init`, then `Result_4B7B00` with the task's step at 1.
+    fn tick_ex_end(&mut self, music: &mut dyn MusicHost, out: &mut Output) {
+        if !std::mem::replace(&mut self.started, true) {
+            self.init_ex_end(music);
+        }
+        self.task_step = 1;
+        self.drawn = false;
+        let Some(ex_end) = self.ex_end.as_mut() else {
+            return;
+        };
+        for effect in ex_end.tick(&mut self.fade) {
+            match effect {
+                ex_end::Effect::Cue(slot) => out.cues.push(slot),
+                ex_end::Effect::Exit => out.exit = true,
+            }
+        }
+    }
+
+    /// What Extreme Battle's end drew this tick: each line's y (at x
+    /// [`ex_end::LINE_X`]) and its codes; `None` outside it.
+    pub fn ex_end_lines(&self) -> Option<Vec<(i32, &'static [u8])>> {
+        self.clear.extreme.then(|| {
+            self.ex_end
+                .as_ref()
+                .map_or_else(Vec::new, |ex_end| ex_end.lines())
+        })
+    }
+
     /// One tick of task 0: `raw` is the pad as `Pad_set` read it.
     pub fn tick(&mut self, raw: u16, music: &mut dyn MusicHost) -> Output {
         let mut out = Output::default();
+        if self.clear.extreme {
+            self.last_raw = raw;
+            self.tick_ex_end(music, &mut out);
+            self.system_trans();
+            return out;
+        }
         let trig = raw & !self.last_raw;
         self.last_raw = raw;
         let mut chained = false;
@@ -1254,13 +1320,17 @@ impl Result {
             self.task_step = 2;
             self.draw_quads();
         }
-        // `System_trans`.
+        self.system_trans();
+        out
+    }
+
+    /// `System_trans`'s fade slot 0: drawn, then stepped.
+    fn system_trans(&mut self) {
         self.drawn_fade = None;
         if self.fade.level >= 0 {
             self.drawn_fade = Some((self.fade.level, self.fade.mode));
             self.fade.level = self.fade.level.wrapping_add(self.fade.add);
         }
-        out
     }
 
     /// `Result_draw_quads`'s steps of the pieces' colours: a piece fading
@@ -1319,6 +1389,17 @@ impl Result {
             background: self.background,
             digits: self.retrieve.digits,
             fade: self.drawn_fade,
+        }
+    }
+
+    /// The trace's `exe`: Extreme Battle's end's work, or `-`.
+    pub fn ex_end_trace(&self) -> String {
+        match &self.ex_end {
+            Some(ex_end) => ex_end.trace(self.task_step),
+            None if self.clear.extreme => {
+                format!("{},0,0,0,0,0,0,0,0,0,0,0,0,0", self.task_step)
+            }
+            None => "-".to_string(),
         }
     }
 
@@ -1435,6 +1516,55 @@ mod tests {
         assert_eq!(main_scores(99 * 3600, 20, 6, false).1, 4);
     }
 
+    #[test]
+    fn extreme_battles_end_finishes_the_fade_then_plays_0x38_and_exits() {
+        let clear = Clear {
+            extreme: true,
+            ..Clear::default()
+        };
+        let fade = Fade {
+            level: -1,
+            add: 0,
+            mode: 0,
+        };
+        let mut result = Result::new(clear, COLOURS, fade);
+        let mut music = FakeMusic {
+            left: 0,
+            fade_ticks: 180,
+            calls: Vec::new(),
+            films: Vec::new(),
+        };
+        assert_eq!(result.ex_end_lines(), Some(Vec::new()));
+        let first = result.tick(0, &mut music);
+        assert_eq!(
+            music.calls,
+            [
+                Music::FadeOut(MUSIC_FADE),
+                Music::FinishFade,
+                Music::Main(MAIN_EX_END),
+                Music::Control(PLAY_MAIN),
+            ]
+        );
+        assert!(!music.fading());
+        assert!(!first.exit && first.cues.is_empty());
+        assert_eq!(result.ex_end_trace(), "1,1,0,89,0,0,0,0,0,0,0,0,0,0");
+        // The wait, then the first letter's cue; `Result_exit` on the pass
+        // the second page's fade is out (7024 - 4302 passes after the first).
+        let mut cues = 0;
+        let mut exit = None;
+        for pass in 1..=7024 - 4302 {
+            let out = result.tick(0, &mut music);
+            cues += out.cues.len();
+            if out.exit {
+                exit = Some(pass);
+                break;
+            }
+        }
+        assert_eq!(exit, Some(7024 - 4302));
+        assert!(cues > 0);
+        assert_eq!(music.calls.len(), 4);
+    }
+
     /// A music whose fade frees it `fade_ticks` ticks after it starts.
     struct FakeMusic {
         left: u32,
@@ -1445,8 +1575,10 @@ mod tests {
 
     impl MusicHost for FakeMusic {
         fn call(&mut self, music: Music) {
-            if let Music::FadeOut(_) = music {
-                self.left = self.fade_ticks;
+            match music {
+                Music::FadeOut(_) => self.left = self.fade_ticks,
+                Music::FinishFade => self.left = 0,
+                _ => {}
             }
             self.calls.push(music);
         }
