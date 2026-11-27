@@ -634,3 +634,25 @@ frame_max_mean = 1.2
 frame_windows = [[360, 704, 1.45], [736, 1390, 0.4], [1421, 1711, 0.25], [1743, 2065, 2.45], [2097, 2365, 3.4], [2397, 7720, 1.2], [7752, 7778, 0.25]]
 expect = "match"
 record = "--start claire --warp 400:-8362:-7200:-25842:3448:0 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 3:34 --flag 3:36 --flag 3:99 --flag 8:45 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 8:18 --flag 8:145 --flag 31:2 --flag 3:1 --flag 3:2 --flag 3:3 --flag 3:4 --flag 3:6 --flag 3:7 --flag 3:10 --flag 6:143 --flag 6:112 --flag 3:9 --flag 3:5 --flag 8:201 --flag 4:57 --flag 4:58 --flag 6:98 --flag 3:8 --life 200 --give 0:3:5 --give 2:0x0B:1 --give 3:0x19:6 --give 4:0x14:15 --give 5:0x18:1 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 4:0x32:1 --box 5:0x2F:1"
+
+# Rooms 40A, 410 and 409: the alligator and its gas tank, 40A's lock panel, 410's scene with Sherry and the Wolf Medal, to 409.
+[[run]]
+name = "claire_a_40a_409"
+room = "40A"
+player = 1
+character = 1
+sound = false
+setup_script = "claire_a_40a_409.lua"
+input = "claire_a_40a_409.txt"
+input_shift = 344
+input_drop_early = true
+ticks = 4859
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,msg,hk,fgstat,fgitem,fgroom,fgcom,fgkey,fgscn,zm*"
+frames = [360, 4858]
+# each room from its hand back to the press that leaves it: 40A with the alligator and the lock panel 1.01, 410 with Sherry's
+# scene and the Wolf Medal 1.85, then 409 0.12. 410 draws its water lighter (`mizu_div_set` isn't modelled); the doors and
+# loads count only in the whole run's mean, 1.47 measured
+frame_max_mean = 1.6
+frame_windows = [[360, 2616, 1.15], [2936, 4482, 1.95], [4832, 4858, 0.25]]
+expect = "match"
+record = "--start claire --warp 40A:-9175:-1800:-855:2064:8 --flag 3:0 --flag 3:12 --flag 3:32 --flag 3:33 --flag 3:64 --flag 3:65 --flag 3:100 --flag 3:128 --flag 3:129 --flag 3:130 --flag 3:131 --flag 4:0 --flag 4:3 --flag 4:5 --flag 4:6 --flag 4:7 --flag 4:9 --flag 4:10 --flag 4:15 --flag 4:26 --flag 4:27 --flag 4:38 --flag 4:39 --flag 4:40 --flag 4:46 --flag 4:47 --flag 4:48 --flag 4:49 --flag 4:70 --flag 4:71 --flag 4:72 --flag 4:83 --flag 4:85 --flag 4:86 --flag 4:87 --flag 4:102 --flag 4:135 --flag 4:146 --flag 4:147 --flag 4:148 --flag 4:152 --flag 6:12 --flag 6:18 --flag 6:19 --flag 6:61 --flag 6:71 --flag 6:72 --flag 6:78 --flag 6:115 --flag 6:116 --flag 6:207 --flag 6:208 --flag 6:13 --flag 8:3 --flag 8:5 --flag 8:8 --flag 8:12 --flag 8:20 --flag 8:32 --flag 8:73 --flag 8:93 --flag 8:97 --flag 8:101 --flag 8:104 --flag 8:113 --flag 8:116 --flag 8:119 --flag 8:124 --flag 8:141 --flag 8:152 --flag 8:154 --flag 8:195 --flag 31:3 --flag 31:4 --flag 31:5 --flag 31:8 --flag 31:9 --flag 31:15 --flag 31:16 --flag 31:17 --flag 31:18 --flag 31:27 --flag 8:33 --flag 8:46 --flag 8:92 --flag 8:39 --flag 8:170 --flag 8:171 --flag 31:12 --flag 31:1 --flag 6:33 --flag 6:205 --flag 4:75 --flag 4:84 --flag 8:108 --flag 6:144 --flag 4:69 --flag 8:56 --flag 31:13 --flag 8:188 --flag 4:36 --flag 8:31 --flag 8:103 --flag 3:34 --flag 3:36 --flag 3:99 --flag 8:45 --flag 4:55 --flag 4:74 --flag 4:76 --flag 4:153 --flag 8:55 --flag 4:23 --flag 4:24 --flag 4:53 --flag 8:21 --flag 4:18 --flag 4:19 --flag 4:43 --flag 8:96 --flag 8:18 --flag 8:145 --flag 31:2 --flag 3:1 --flag 3:2 --flag 3:3 --flag 3:4 --flag 3:6 --flag 3:7 --flag 3:10 --flag 6:143 --flag 6:112 --flag 3:9 --flag 3:5 --flag 8:201 --flag 4:57 --flag 4:58 --flag 6:98 --flag 3:8 --flag 4:30 --flag 4:31 --flag 4:62 --life 200 --give 0:3:5 --give 2:0x0B:1 --give 3:0x19:6 --give 4:0x14:15 --give 5:0x18:1 --give 6:0x32:1 --box 0:0x27:1 --box 1:0x14:2 --box 2:0x1E:3 --box 3:0x5C:2 --box 5:0x2F:1"

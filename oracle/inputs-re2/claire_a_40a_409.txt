@@ -1,0 +1,307 @@
+# claire_a_40a_409: Claire A from 40A through 410 to 409 (#896): 40A's corridor west and south, east into the
+# alligator's scene, back west and north to the gas tank's button (the action key, facing east), then aimed south and
+# firing as the alligator comes up until the tank's blast kills it; east to the lock panel (its question answered yes)
+# and north through door 0 (410); in 410 the scene with Sherry (the action key facing east at area 2, then through its
+# lines), the Wolf Medal, up box 10 and west to door 0 (409); a step shows control.
+344 left up run
+347 up run
+398 right up run
+399 up run
+423 left up run
+424 up run
+428 left
+433 left up run
+444 up run
+518 left up run
+519 up run
+530 right up run
+531 up run
+537 left up run
+538 up run
+545 right up run
+546 up run
+547 left
+553 left up run
+564 up run
+636 left up run
+637 up run
+682 right up run
+683 up run
+693 confirm
+695
+713 confirm
+715
+733 confirm
+735
+753 confirm
+755
+773 confirm
+775
+793 confirm
+795
+813 confirm
+815
+833 confirm
+835
+853 confirm
+855
+873 confirm
+875
+893 confirm
+895
+913 confirm
+915
+933 confirm
+935
+953 confirm
+955
+973 confirm
+975
+993 confirm
+995
+1013 confirm
+1015
+1033 confirm
+1035
+1053 confirm
+1055
+1073 confirm
+1075
+1093 confirm
+1095
+1113 confirm
+1115
+1133 confirm
+1135
+1150 left
+1225 right
+1244 right up run
+1246 up run
+1274 right up run
+1275 up run
+1303 right
+1307 right up run
+1319 up run
+1372 left up run
+1373 up run
+1378 right up run
+1379 up run
+1382 right up run
+1383 right
+1395 action
+1396
+1425 right
+1439 aim
+1619 aim fire
+1622 aim
+1649 aim fire
+1652 aim
+1679 aim fire
+1682 aim
+1709 aim fire
+1712 aim
+1739 aim fire
+1742 aim
+1769 aim fire
+1772 aim
+1799 aim fire
+1802 aim
+1829 aim fire
+1832 aim
+1859 aim fire
+1862 aim
+1889 aim fire
+1892 aim
+1902
+1962 left up run
+1967 up run
+2021 left up run
+2022 up run
+2053 right up run
+2054 up run
+2057 right up run
+2058 left
+2065 left up run
+2076 up run
+2183 left up run
+2184 up run
+2199 right up run
+2200 up run
+2201 right up run
+2202 left up
+2208 up
+2210 left up
+2211 up
+2227 left up
+2228 right
+2232
+2292 confirm
+2295
+2322 confirm
+2325
+2352 confirm
+2355
+2382 confirm
+2385
+2412 confirm
+2415
+2442 confirm
+2445
+2532 left
+2548 left up
+2576 right
+2593 action
+2595
+2605 action
+2607
+2617 action
+2619
+2629 action
+2631 up
+2937 right up run
+2939 up run
+2952 right up run
+2953 up run
+2959 left up run
+2960 up run
+2963 left up run
+2964 up run
+2965 up
+3016 right up
+3017 up
+3057 right up
+3058 up
+3061 right
+3072 action
+3076
+3094 action
+3096
+3114 action
+3116
+3134 action
+3136
+3154 action
+3156
+3174 action
+3176
+3194 action
+3196
+3214 action
+3216
+3234 action
+3236
+3254 action
+3256
+3274 action
+3276
+3294 action
+3296
+3314 action
+3316
+3334 action
+3336
+3354 action
+3356
+3374 action
+3376
+3394 action
+3396
+3414 action
+3416
+3434 action
+3436
+3454 action
+3456
+3474 action
+3476
+3494 action
+3496
+3514 action
+3516
+3534 action
+3536
+3554 action
+3556
+3574 action
+3576
+3594 action
+3596
+3614 action
+3616
+3634 action
+3636
+3654 action
+3656
+3674 action
+3676
+3694 action
+3696
+3714 action
+3716
+3734 action
+3736
+3754 action
+3756
+3774 action
+3776
+3794 action
+3796
+3814 action
+3816
+3834 action
+3836
+3844 left
+3861 left up
+3878 up
+3893 left up
+3894 up
+3915 right up
+3916 right
+3929 action
+3930
+3959 confirm
+3961
+3979 confirm
+3981
+3999 confirm
+4001
+4019 confirm
+4020
+4120 confirm
+4123
+4180 right
+4192 right up run
+4203 up run
+4205 right up run
+4206 up run
+4218 left up run
+4219 up run
+4224 right up run
+4225 up run
+4226 right
+4232 right up
+4249 up
+4279 right up
+4280 up
+4305 right up
+4306 up
+4309 right
+4314 action
+4315
+4404 left up run
+4422 left up
+4431 right
+4435 action
+4437
+4447 action
+4449
+4459 action
+4461
+4471 action
+4473
+4483 action
+4485
+4495 action
+4497 up
+4833
+4853
