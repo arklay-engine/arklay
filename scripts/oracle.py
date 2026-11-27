@@ -271,9 +271,10 @@ def message_state(fields: dict[str, str]) -> str | None:
     return fields["gi"].split(",")[5]
 
 
-# `fg_status`'s bits arklay keeps outside its bank, which `fgstat` leaves out: 0x40 (a message or a hit
-# holds the game), 0x80 (`pl_mv_05`'s 0xc0), 0x100 (the camera's lock, `camera.locked`), 0x8000 (the
-# get-item window, the status screen or the box) and 0x100000 (`Swap_Cbuff`'s load).
+# `fg_status`'s bits `fgstat` leaves out: those arklay keeps outside its bank, 0x40 (a message or a hit
+# holds the game), 0x80 (`pl_mv_05`'s 0xc0), 0x100 (the camera's lock, `camera.locked`) and 0x8000 (the
+# get-item window, the status screen or the box); and 0x100000 (the cut change), which the runs' references
+# have never been compared on.
 FGSTAT_COMPARED = 0xFFEF7E3F
 
 

@@ -760,6 +760,12 @@ fn splc_ret(character: &mut Character, life: i16) {
 pub const STATUS_VOICE: u8 = 26;
 /// A scene is running: the bars come down and the menus stay shut.
 pub const STATUS_SCENE: u8 = 27;
+/// `fg_status`'s `0x100000`: the cut changed. `Cut_chg` and `Cut_old_0`
+/// raise it, and `Swap_Cbuff` with a load; `Psx_main` clears it (with
+/// `0x200000`) after the tasks. Room 409's events wait on it for the next cut.
+pub const STATUS_CUT_CHANGED: u8 = 11;
+/// `fg_status`'s `0x300000`, which `Psx_main` clears after the tasks.
+pub const STATUS_TICK_BITS: u32 = 0x0030_0000;
 /// `fg_status`'s `0x40`, under which `Game_loop` takes no START: the bit as
 /// a script or a drawer writes it. The player's routines' is
 /// [`crate::player2::Work::holds_game`].
@@ -1745,6 +1751,13 @@ impl Re2State {
             self.spl_pos_ck_timer,
             character.work.neck.flags,
         )
+    }
+
+    /// `Player_move` returns at once, its poison included, under `fg_stop`'s
+    /// top bit, which a door the scripts opened this tick has raised by the
+    /// original's next pass ([`Self::script_door`]).
+    pub fn player_move_stopped(&self) -> bool {
+        self.script_door || self.player_stopped()
     }
 
     /// `fg_stop`'s second bit keeps `splayer_work` from running, and its third
@@ -2762,6 +2775,7 @@ impl GameHost<'_> {
         self.game.set_camera_cut(usize::from(cut & 0x7F));
         self.game.re2.bg_load = cut & 0x80 == 0;
         self.game.re2.cut_no_load = cut & 0x80 != 0;
+        self.game.re2.set_flag(STATUS_BANK, STATUS_CUT_CHANGED, 1);
     }
 
     fn character_mut(&mut self, slot: u8) -> Option<&mut Character> {
@@ -3105,6 +3119,9 @@ impl GameHost<'_> {
                 pending.angle.unwrap_or(self.game.entities[0].angle) as i16,
             )),
             MEMBER_AREA => Some(i32::from(self.game.re2.player.at_sce)),
+            // `pPl.Id`: who the player is. Room 405's `main_00` asks whether
+            // it is Ada (14) for her way through the vent and Leon's scene.
+            MEMBER_ID => Some(i32::from(self.game.re2.pl_id)),
             // `Type`'s low bits are the weapon in hand, which the engine keeps
             // with the inventory.
             MEMBER_TYPE => Some(i32::from(
@@ -3476,6 +3493,7 @@ impl Host for GameHost<'_> {
                 self.game.set_camera_cut(usize::from(cut));
                 self.game.re2.bg_load = true;
                 self.game.re2.cut_no_load = false;
+                self.game.re2.set_flag(STATUS_BANK, STATUS_CUT_CHANGED, 1);
             }
             "cut_auto" => self.game.camera.locked = at(0) == 0,
             "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
@@ -4505,6 +4523,39 @@ mod tests {
         assert!(game.re2.bg_load, "`Cut_old_0` loads through `FUN_004e5020`");
     }
 
+    /// Room 405's vent: the message's close opens door 2 (`aot_on`), and the
+    /// poisoned player's timer stands from that tick, as `Sce_Door` stops
+    /// `Player_move` before the scripts' next pass.
+    #[test]
+    fn a_door_the_scripts_opened_stops_the_players_move() {
+        let mut game = GameState::default();
+        assert!(!game.re2.player_move_stopped());
+        game.re2.script_door = true;
+        assert!(game.re2.player_move_stopped());
+        game.re2.script_door = false;
+        game.re2.set_flag(STOP_BANK, 0, 1);
+        assert!(game.re2.player_move_stopped());
+    }
+
+    /// `Cut_chg`, with or without bit 7, and `Cut_old_0` raise `fg_status`'s
+    /// `0x100000`, which room 409's `main_06` waits on for the next cut.
+    #[test]
+    fn a_cut_change_raises_the_cut_changed_flag() {
+        for (op, ops) in [
+            ("cut_chg", &[3][..]),
+            ("cut_chg", &[0x83]),
+            ("cut_old", &[]),
+        ] {
+            let mut game = GameState::default();
+            exec(&mut game, op, ops);
+            assert!(
+                game.re2.flag(STATUS_BANK, STATUS_CUT_CHANGED),
+                "{op} {ops:?}"
+            );
+            assert_eq!(game.re2.banks[1][0], 0x0010_0000, "{op} {ops:?}");
+        }
+    }
+
     /// `Esp_move` reads a following effect's matrix through its pointer each
     /// tick: the player's part `Workm`, or an enemy's, as this tick's draw
     /// left them.
@@ -5301,6 +5352,23 @@ mod tests {
         exec(&mut game, "dir_set", &[0, 0, 2048, 0]);
         let mut host = GameHost { game: &mut game };
         assert_eq!(host.member(0, MEMBER_ANGLE), Some(2048));
+    }
+
+    /// Room 405's `main_00` reads the player's `Id` (member 6) to tell Ada
+    /// from Leon: Ada (0xE) raises 4:32, which leaves the vent's area its
+    /// event (`main_09`) rather than a message.
+    #[test]
+    fn the_players_member_6_is_who_the_player_is() {
+        let mut game = GameState::default();
+        game.re2.pl_id = crate::game::pl_change2::ADA;
+        exec(&mut game, "work_set", &[WK_PLAYER, 0]);
+        let mut host = GameHost { game: &mut game };
+        assert_eq!(host.member(0, MEMBER_ID), Some(14));
+        let op = crate::scd2::opcode::by_mnemonic("member_cmp").unwrap();
+        assert!(!matches!(host.exec(0, op, &[0, 6, 0, 14]), Step::False));
+        game.re2.pl_id = 0;
+        let mut host = GameHost { game: &mut game };
+        assert!(matches!(host.exec(0, op, &[0, 6, 0, 14]), Step::False));
     }
 
     /// Room 704's `main_06` turns the player 150 a pass with `add_speed`

@@ -2606,10 +2606,6 @@ struct GameSession {
     re2_pause_shown: bool,
     /// That frame has been drawn, so the paused ticks hold it.
     re2_pause_drawn: bool,
-    /// `fg_status`'s `0x100000` at the top of a tick: the last tick's
-    /// `Swap_Cbuff` loaded a cut. `Psx_main` clears it after the tasks and
-    /// `Swap_Cbuff` raises it with a load.
-    re2_cut_loaded: bool,
     room_fade: transition::Fade,
     /// The alpha the room fade draws this frame: the accumulator *before* the
     /// tick's step, since the original draws and only then adds the counter
@@ -3734,7 +3730,6 @@ impl GameSession {
             re2_pause: None,
             re2_pause_shown: false,
             re2_pause_drawn: false,
-            re2_cut_loaded: false,
             room_fade: transition::Fade::inactive(),
             room_fade_draw: None,
             tween: Tween::default(),
@@ -4294,8 +4289,12 @@ impl GameSession {
         let now = (self.loaded.id, self.loaded.room.current_cut);
         let screen = self.re2_screen_clears_cut();
         let load = swap_cbuff_view(&mut self.game, self.tick_cut, now, screen);
-        self.re2_cut_loaded = load;
+        // `Psx_main` clears the tasks' cut change before `Swap_Cbuff`, whose
+        // load raises it for the next tick's.
+        use crate::scd2::host::{STATUS_BANK, STATUS_CUT_CHANGED, STATUS_TICK_BITS};
+        self.game.re2.banks[usize::from(STATUS_BANK)][0] &= !STATUS_TICK_BITS;
         if load {
+            self.game.re2.set_flag(STATUS_BANK, STATUS_CUT_CHANGED, 1);
             self.present_skip.movie_set(transition::RE2_CUT_LOAD_FRAMES);
         }
         // A script's film plays now, with no frame counted down under it, and
@@ -9921,8 +9920,7 @@ impl GameSession {
             );
         }
         if let Some(spd) = carried {
-            self.game.re2.player = self.game.re2.player.clone().after_pl_init();
-            self.game.re2.player.spd = spd;
+            re2_door_set_room_player(&mut self.game, spd);
         }
         if frame.finished {
             self.end_transition(pack);
@@ -22174,13 +22172,23 @@ fn re2_player_part_world(
     crate::player2::part_world(&mut context.game.re2.player, context.player, &tick, part)
 }
 
+/// A door's load of the player (`Set_room`): `Pl_init`, which keeps the speed
+/// the last room left, then the one `Player_move` of its case 6, whose poison
+/// steps as any tick's does.
+fn re2_door_set_room_player(game: &mut game::GameState, spd: [i16; 3]) {
+    game.re2.player = game.re2.player.clone().after_pl_init();
+    game.re2.player.spd = spd;
+    if let Some(player) = game.entities.first_mut() {
+        crate::player2::poison_tick(&mut game.re2.player, &mut player.health);
+    }
+}
+
 fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: player::Input) {
     if context.game.re2.player.kind & crate::player2::KIND_NOT_MOVED != 0 {
         return;
     }
-    if !context.game.re2.player_stopped()
-        && let Some(player) = context.game.entities.first_mut()
-    {
+    let stopped = context.game.re2.player_move_stopped();
+    if !stopped && let Some(player) = context.game.entities.first_mut() {
         crate::player2::poison_tick(&mut context.game.re2.player, &mut player.health);
     }
     let empty: (&[Clip], &[crate::model::Keyframe]) = (&[], &[]);
@@ -22206,7 +22214,7 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         id: context.game.re2.pl_id,
         life: i32::from(context.game.entities[0].health),
         poisoned: context.game.re2.player.poisoned,
-        stopped: context.game.re2.player_stopped() || context.game.re2.script_door,
+        stopped,
         weapon: context.game.re2_weapon(),
         necks: context.game.re2.necks(),
         targets: &targets,
@@ -30477,7 +30485,6 @@ mod tests {
                 1,
             )
         }));
-        assert!(refused(&|session| session.re2_cut_loaded = true));
         assert!(refused(&|session| {
             session.menu_request = Some((MenuRequest::Menu, session.game.message_flags))
         }));
@@ -42503,6 +42510,25 @@ off_0010:
         assert!(!session.film_ended, "no Pad_set saw the keys clear");
     }
 
+    /// `Psx_main` clears `fg_status`'s `0x300000` after the tasks, and
+    /// `Swap_Cbuff` raises `0x100000` again when it loads a cut: the next
+    /// tick's scripts see a cut change only from a load.
+    #[test]
+    fn swap_cbuff_leaves_the_cut_changed_flag_on_a_load_only() {
+        use crate::scd2::host::{STATUS_BANK, STATUS_CUT_CHANGED};
+        let (_dir, _pack, mut session) = re2_film_session(&[]);
+        session.game.re2.banks[usize::from(STATUS_BANK)][0] |= 0x0030_0010;
+        session.swap_cbuff();
+        assert_eq!(
+            session.game.re2.banks[usize::from(STATUS_BANK)][0],
+            0x10,
+            "no load: both bits down, the rest kept"
+        );
+        session.game.re2.bg_load = true;
+        session.swap_cbuff();
+        assert!(session.game.re2.flag(STATUS_BANK, STATUS_CUT_CHANGED));
+    }
+
     #[test]
     fn an_re2_movie_on_with_the_films_off_keeps_the_frame_for_two_ticks() {
         let (_dir, pack, mut session) = re2_film_session(&[]);
@@ -50748,6 +50774,23 @@ end
         }
         assert!(!game.scene_bars());
         assert_eq!(game.re2.scroll, 0);
+    }
+
+    /// Room 405's door into 40B with Ada poisoned: the load's `Player_move`
+    /// (`Set_room` case 6) takes the timer's step on the load's tick.
+    #[test]
+    fn a_doors_load_steps_the_poison() {
+        let mut game = game::GameState::default();
+        game.entities[0].health = 165;
+        game.re2.player.poisoned = true;
+        game.re2.player.poison_timer = 2;
+        re2_door_set_room_player(&mut game, [7, 0, 9]);
+        assert_eq!(game.re2.player.poison_timer, 1);
+        assert_eq!(game.re2.player.spd, [7, 0, 9]);
+        re2_door_set_room_player(&mut game, [0; 3]);
+        re2_door_set_room_player(&mut game, [0; 3]);
+        assert_eq!(game.re2.player.poison_timer, 0x1E);
+        assert_eq!(game.entities[0].health, 164);
     }
 
     #[test]
