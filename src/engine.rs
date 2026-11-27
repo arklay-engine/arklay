@@ -5982,6 +5982,24 @@ impl GameSession {
                         .collect()
                 })
                 .unwrap_or_default(),
+            ally: re2.partner_bit().then_some(()).and_then(|()| {
+                let ally = re2
+                    .characters
+                    .0
+                    .get(crate::scd2::host::SPLAYER_SLOT)?
+                    .as_deref()
+                    .filter(|ally| ally.work.routine[0] == crate::die2::ALLY_DYING)?;
+                Some(crate::die2::DieAlly {
+                    id: ally.id,
+                    pos: ally.body.pos,
+                    parts: ally
+                        .work
+                        .parts
+                        .iter()
+                        .map(|part| part.map(|matrix| matrix.t))
+                        .collect(),
+                })
+            }),
         }
     }
 
@@ -6008,7 +6026,12 @@ impl GameSession {
                     .held_by
                     .and_then(|slot| self.game.re2.characters.0.get(slot))
                     .and_then(|character| character.as_deref())
-                    .map_or(0x10, |character| character.id)
+                    .map_or(crate::die2::DieKiller { id: 0x10, kind: 0 }, |character| {
+                        crate::die2::DieKiller {
+                            id: character.id,
+                            kind: character.kind,
+                        }
+                    })
             });
             self.re2_die = Some(crate::die2::Die::new(killer, self.game.re2.censorship_off));
         }
@@ -6062,7 +6085,8 @@ impl GameSession {
                 .and_then(|character| character.as_deref())
                 .map(|character| character.id);
             self.game.re2_die_hide_objects(killer_id);
-            let player = self.game.entities[0].pos;
+            let ally = bodies.ally.as_ref().filter(|_| die.ally().is_some());
+            let player = ally.map_or(self.game.entities[0].pos, |ally| ally.pos);
             crate::die2::enemy_set(
                 self.game
                     .re2
@@ -6081,6 +6105,20 @@ impl GameSession {
             {
                 character.be_flg = character.be_flg & !crate::die2::BE_HIDDEN | 8;
             }
+            // An ally's death shows the ally and hides the player.
+            if die.ally().is_some() {
+                self.game.re2.player.be_flg |= crate::die2::BE_HIDDEN;
+                if let Some(ally) = self
+                    .game
+                    .re2
+                    .characters
+                    .0
+                    .get_mut(crate::scd2::host::SPLAYER_SLOT)
+                    .and_then(|character| character.as_deref_mut())
+                {
+                    ally.be_flg &= !crate::die2::BE_HIDDEN;
+                }
+            }
         }
         // Only over the room `Die_vcut_set` set its quad on: a room loaded
         // since (F1's jump) has its own cuts and background.
@@ -6096,8 +6134,12 @@ impl GameSession {
             self.re2_sounds
                 .banks
                 .load_core(pack, crate::die2::sound_bank(player));
+            let text = self
+                .re2_die
+                .as_ref()
+                .map_or(player, |die| die.text_player(player));
             self.re2_die_sheet = pack
-                .read(crate::die2::text_entry(player))
+                .read(crate::die2::text_entry(text))
                 .and_then(|data| crate::die2::text_sheet(&data))
                 .inspect_err(|error| crate::warning!("warning: no game over text: {error:#}"))
                 .ok();
