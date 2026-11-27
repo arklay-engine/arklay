@@ -84,8 +84,12 @@ ticks = 8460
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,snd,msg,tw,gm,fgstat,sv,svs"
 frames = [540, 8459]
 saves = true
-# 2.93 to 3.89 measured: the labels' times (the wall clock's on both sides, seconds included) on up to ten rows
-frame_max_mean = 4.5
+# The list's panel is blanked on both sides: its labels carry each side's wall clock when it saved (date and time,
+# seconds included, on up to ten rows), and centred, a label's other text moves with their width. The rest of the
+# frame is held to 0.1 (0.05 measured, 0.09 the worst); the plain mean (2.93 to 3.89) is reported, not judged.
+# `save_200_page_few` compares the labels too, on a list of two rows.
+boxes = [[10, 45, 310, 201]]
+boxed_max_mean = 0.1
 expect = "match"
 record = "--no-enemies --warp 200:-12200:-1800:-1900:1024 --flag 4:6 --life 200 --give 2:0x1E:15"
 
