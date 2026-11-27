@@ -182,4 +182,4 @@ voice_from_ref = true
 fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ib,fgstat,fgroom,zm0,zm1,zm2,zm3,zm4,zd,esp,pl"
 # Slot 4's `Dest` on the title's memory, as in special_4th_die_play.
 ignore = [[3159, 3361, "zd"]]
-expect = { tick = 4093, fields = ["esp81", "esp82", "esp83"], note = "The third blood of the arm TOFU pulls off (FUN_0045bd20) starts 50 to 155 off the original's as its zombie flies back; the first two (4085, 4089) match" }
+expect = "match"

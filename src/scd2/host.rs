@@ -1933,6 +1933,13 @@ impl Re2State {
     /// `Joint_trans2`, which comes just before `Esp_move` in the draw pass,
     /// makes `Parts_down`'s calls: the zombies' thrown parts fall.
     pub fn tick_parts_down(&mut self, sca: Option<&crate::state::Sca>) {
+        let root = self
+            .player
+            .parts
+            .first()
+            .copied()
+            .flatten()
+            .or(self.player.root);
         for (slot, character) in self.characters.0.iter_mut().enumerate() {
             let Some(character) = character.as_deref_mut() else {
                 continue;
@@ -1940,6 +1947,7 @@ impl Re2State {
             let Some(zombie) = character.zombie.as_mut() else {
                 continue;
             };
+            zombie.compose_pulled(root);
             zombie.parts_down(
                 &mut character.work,
                 slot as u8,
