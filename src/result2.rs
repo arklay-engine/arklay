@@ -1271,6 +1271,12 @@ impl Result {
         }
     }
 
+    /// Extreme Battle's end (`fg_system`'s `0x1000000`): `Result_exit`
+    /// raises `BYTE_00989E90`, which sends the title to its records.
+    pub fn extreme(&self) -> bool {
+        self.clear.extreme
+    }
+
     /// What Extreme Battle's end drew this tick: each line's y (at x
     /// [`ex_end::LINE_X`]) and its codes; `None` outside it.
     pub fn ex_end_lines(&self) -> Option<Vec<(i32, &'static [u8])>> {

@@ -3540,8 +3540,10 @@ local EX_RESULT_FADES = {
     end,
 }
 
--- The records `FUN_004DE720` reads (0x689F60): arklay keeps none, so each
--- level shows its dashes, as a game without Extreme Battle's records does.
+-- The records `FUN_004DE720` reads (0x689F60): arklay keeps none past the
+-- title's screen, so each level shows its dashes, as a game without Extreme
+-- Battle's records does, until an after-game page writes one
+-- (`FUN_004DE690`), which this title keeps.
 local function ex_records()
     local records = {}
     for level = 1, 3 do
@@ -3571,10 +3573,20 @@ function ex.result(api)
     if not c then
         -- The title's task's +9: the records are running.
         s.sub = 1
-        c = ExResult.new(EX_RESULT_FADES, ex_records(), s.levels)
+        s.ex_records = s.ex_records or ex_records()
+        c = ExResult.new(EX_RESULT_FADES, s.ex_records, s.levels, s.ex_after)
+        s.ex_after = nil
         s.exr = c
     end
     ExResult.tick(c, { edge = s.edge })
+    -- The after-game page opens a level (`BYTE_00989E91`).
+    s.levels = c.levels
+    if c.music == "fade" then
+        api:music_fade()
+    elseif c.music == "stop" then
+        api:music(nil)
+    end
+    c.music = nil
     for _, load in ipairs(c.loads) do
         if load == "background" and api:has_image("ui/exbattle/result") then
             s.exr_background = api:picture("ui/exbattle/result")
@@ -3778,6 +3790,20 @@ local function game_return(api, demo, fade_add, fg_system, task_step, task_sub, 
     s.boot = { step = 3, sleep = 1, flag = 0, acks = demo }
 end
 
+-- After Extreme Battle's end (`Result_exit`'s `BYTE_00989E90`): `Title`'s
+-- step 0 goes straight to `title_mv_state` 7, the records, with the
+-- title's core bank (`Snd_load_core(0x10)`) and its picture loaded, and
+-- the records run their after-game page for `level` and `character`. The
+-- levels open are `FUN_004B73C0`'s 2, which nothing in play changes.
+local function ex_end_return(api, level, character)
+    s.boot = nil
+    s.init, s.sub = 1, 0
+    s.mv = 7
+    s.levels = 2
+    api:core_bank(0x10)
+    s.ex_after = { level = level, character = character, times = { 0, 0, 0 } }
+end
+
 local function publish(api)
     Prologue.publish(api, s.pro)
     Gallery.publish(api, s.gal)
@@ -3921,6 +3947,9 @@ function M.open(api, args)
     -- After a game (`"game"`) or a demo played to its end (`"demo"`).
     if args and args.after then
         game_return(api, args.after == "demo", args.fade_add, args.fg_system, args.task_step, args.task_sub, args.limiter)
+        if args.ex_end then
+            ex_end_return(api, args.ex_level or 1, args.ex_character or 0)
+        end
     end
     -- config.ini's SPECIAL, read as the signed byte it is.
     local special = args and args.special or 15
