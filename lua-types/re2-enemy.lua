@@ -2012,6 +2012,12 @@ function Re2EnemyApi:hide_object(index) end
 ---@param slot integer The bank slot.
 function Re2EnemyApi:sound(slot) end
 
+---Play a sound by its `Snd_se_on` word (bank in the top byte, slot in the
+---next, `1` in the low byte for a sound placed in the room), from where the
+---body stands now, after the tick's enemy-bank sounds.
+---@param word integer The sound's word, such as `0x20F0001`.
+function Re2EnemyApi:se_on(word) end
+
 ---`Rnd`: the next draw of the stream everything random in the game shares.
 ---@return integer value 0 to 255.
 function Re2EnemyApi:rnd() end

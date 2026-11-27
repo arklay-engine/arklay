@@ -3999,6 +3999,7 @@ impl Host for GameHost<'_> {
                 if let Some(player) = self.game.entities.first_mut() {
                     player.health = max;
                 }
+                self.game.set_health_copy(max);
                 self.game.re2.player.poisoned = false;
                 self.game.re2.player.poison_timer = 0;
             }
