@@ -220,6 +220,18 @@ pub struct PulledArm {
     hold: [i32; 3],
 }
 
+impl PulledArm {
+    /// `FUN_0045bd20`'s tick in the hands: `M` takes the hand back to where
+    /// it's kept and turns about z by `shake`. `Workm` isn't touched: the
+    /// draw composes it ([`Zombie::compose_pulled`]).
+    fn shake(&mut self, hand: &player2::Matrix, shake: i16) {
+        for axis in 0..3 {
+            self.local.t[axis] += self.hold[axis] - hand.t[axis];
+        }
+        self.local = self.local.turned([0, 0, shake]);
+    }
+}
+
 /// `FUN_0045b870`'s head: off the body after Claire's stomp, it spins, falls
 /// and bounces three times, bleeding and knocking (the zombie's sound 7) on
 /// each, and is gone after the third.
@@ -679,6 +691,39 @@ pub struct Hung {
 }
 
 impl Zombie {
+    /// `Joint_trans2`'s `CompM` for a pulled arm, whose `Super` is the
+    /// player's part 0: its `Workm` this tick, from the player's part 0 as
+    /// the player's move left it and the arm's `M` as this tick's hold and
+    /// shake left it. The arm's blood and the draw read it.
+    pub(crate) fn compose_pulled(&mut self, root: Option<player2::Matrix>) {
+        if let (Some(arm), Some(root)) = (self.pulled.as_mut(), root) {
+            arm.world = root.comp(&arm.local);
+        }
+    }
+
+    /// A pulled arm on `part`, with `M` under the player's part 0, as a
+    /// shove leaves it.
+    #[cfg(test)]
+    pub(crate) fn test_pull(&mut self, part: u8, local: player2::Matrix) {
+        self.pulled = Some(PulledArm {
+            part,
+            behind: false,
+            left: 0x38,
+            done: false,
+            world: player2::Matrix::default(),
+            hand: player2::Matrix::default(),
+            below: None,
+            local,
+            hold: [0; 3],
+        });
+    }
+
+    /// The pulled arm's `Workm`, as the draw composed it.
+    #[cfg(test)]
+    pub(crate) fn test_pulled_world(&self) -> Option<player2::Matrix> {
+        self.pulled.as_ref().map(|arm| arm.world)
+    }
+
     /// `Parts_down` on each thrown part, then the redraw. A part that
     /// lands for the last time this tick is drawn there once more: the
     /// original leaves its `Workm` where it landed, for the blood that
@@ -2467,14 +2512,24 @@ impl Em<'_, '_, '_> {
         let Some(mut arm) = self.z.pulled.take() else {
             return;
         };
-        let Some(root) = self.world.pl.root else {
+        // `Super`: the player's part 0 as the last draw composed it.
+        let Some(root) = self
+            .world
+            .pl
+            .parts
+            .first()
+            .copied()
+            .flatten()
+            .or(self.world.pl.root)
+        else {
             return;
         };
         if arm.done {
             let turn = if arm.behind { 0 } else { 0x800u16 };
             let rest = [0, self.world.player_angle.wrapping_add(turn) as i16, -0x400];
             let facing = self.mover.player.angle;
-            let world = root.comp(&arm.local);
+            // `Parts_down` starts from `Workm` as the last draw left it.
+            let world = arm.world;
             self.push_thrown(ThrownPart::new(
                 arm.part,
                 world,
@@ -2519,11 +2574,11 @@ impl Em<'_, '_, '_> {
         let left = arm.left;
         arm.left = left.wrapping_sub(1);
         arm.done = left == 0;
-        for axis in 0..3 {
-            arm.local.t[axis] += arm.hold[axis] - hand.t[axis];
-        }
         let shake = i16::from(self.rnd() & 0xF) * (1 - 2 * i16::from(arm.left & 1)) - 8;
-        arm.local = arm.local.turned([0, 0, shake]);
+        // `Workm` as the last draw composed it: the arm's blood is called on
+        // it, before this tick's hold and shake move `M`.
+        let drawn = arm.world;
+        arm.shake(&hand, shake);
         if arm.left & 3 == 0 {
             let dir = self.angle();
             let row = self.rnd() & 1;
@@ -2532,12 +2587,11 @@ impl Em<'_, '_, '_> {
             let anchor = self.anchor(usize::from(arm.part));
             self.world
                 .effects
-                .call_on_part(0, row, size, dir, anchor, arm.world, [0; 3]);
+                .call_on_part(0, row, size, dir, anchor, drawn, [0; 3]);
             let size = u16::from(self.rnd() & 1) + 0xC18;
             let side = (i32::from(arm.part) / 3 - 3) * 500 - 0xFA;
             self.effect(0, 0, size, dir, 0, [0, -500, side]);
         }
-        arm.world = root.comp(&arm.local);
         self.z.pulled = Some(arm);
     }
 
@@ -3016,6 +3070,52 @@ pub(crate) fn life_down(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A pulled arm's tick moves only `M` (the hold, then the shake); the
+    /// draw composes `Workm` from the player's part 0 and that `M`, and the
+    /// next tick's blood is called on it (`special_tofu_die_play`'s 4085 and
+    /// 4089).
+    #[test]
+    fn a_pulled_arms_workm_is_composed_at_the_draw() {
+        let local = player2::Matrix {
+            m: player2::rot_matrix([0, 0, 0x100]),
+            t: [300, -900, 100],
+        };
+        let world = player2::Matrix {
+            m: player2::rot_matrix([0, 0x200, 0]),
+            t: [1, 2, 3],
+        };
+        let mut zombie = Zombie {
+            pulled: Some(PulledArm {
+                part: 0xC,
+                behind: false,
+                left: 0x38,
+                done: false,
+                world,
+                hand: player2::Matrix::default(),
+                below: None,
+                local,
+                hold: [100, 200, 50],
+            }),
+            ..Zombie::default()
+        };
+        let hand = player2::Matrix {
+            m: player2::rot_matrix([0, 0, 0]),
+            t: [90, 180, 60],
+        };
+        let arm = zombie.pulled.as_mut().unwrap();
+        arm.shake(&hand, 8);
+        assert_eq!(arm.world, world, "the tick leaves Workm");
+        assert_eq!(arm.local.t, [310, -880, 90]);
+        assert_eq!(arm.local.m, local.turned([0, 0, 8]).m);
+        let shaken = arm.local;
+        let root = player2::Matrix {
+            m: player2::rot_matrix([0, 0x400, 0]),
+            t: [-20000, -6400, -15000],
+        };
+        zombie.compose_pulled(Some(root));
+        assert_eq!(zombie.pulled.unwrap().world, root.comp(&shaken));
+    }
 
     /// The adult's death shrinks `Atd[1]` and `Atd[2]` by 3 a tick from the
     /// init's 800, while `Atd[0]` (6 a tick from 0x514) is over 300.
