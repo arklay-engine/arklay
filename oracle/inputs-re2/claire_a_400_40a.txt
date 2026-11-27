@@ -1,0 +1,1186 @@
+# claire_a_400_40a: Claire A from 400 after Sherry's part through 401, 404, 405, 407 and 408 to 40A (#896): 400's
+# walkway west, up box 13 and north to door 1 (401); in 401 the item box's valve handle into slot 6, then east round box
+# 17 to door 3 (404); 404 north and west to door 2 (405); off 405's ledge into the water and west to door 0 (407); 407's
+# channel west, up box 6 to door 1 (408); 408's scene with Sherry (the action key through its lines), east to the panel,
+# the valve handle used there for the bridge, the status screen it opens closed, then west over the bridge to door 1
+# (40A); a step shows control
+346 left
+353 left up run
+368 up run
+382 left up run
+383 up run
+449 right up run
+450 up run
+473 left up run
+474 up run
+485 right up run
+486 right
+499 action
+500
+579 up run
+580 left up run
+581 up run
+592 right up run
+593 up run
+594 right up run
+595 left up
+597 up
+603 left up
+604 up
+665 right up
+666 up
+669 action
+671
+681 action
+683
+693 action
+695
+705 action
+707
+717 action
+718 up
+737 left up run
+744 up run
+750 right up run
+751 left
+754 left up
+770 up
+796 left up
+797 up
+809 right
+811
+817 confirm
+818
+907 down
+910
+937 down
+940
+967 down
+970
+997 confirm
+1000
+1027 down
+1030
+1057 down
+1060
+1087 confirm
+1090
+1117 cancel
+1120
+1187 left
+1204 left up run
+1219 up run
+1229 left up run
+1230 up run
+1231 right up run
+1237 up run
+1240 right up run
+1241 up run
+1244 left up run
+1245 up run
+1246 left up run
+1253 up run
+1255 right up run
+1256 up run
+1259 left
+1263 left up run
+1278 up run
+1283 left up run
+1284 up run
+1290 left up run
+1291 up run
+1292 right up run
+1299 up run
+1303 left up run
+1304 right
+1309 right up
+1316 right
+1318 right up
+1322 right
+1324 right up
+1326 right
+1328 right up
+1329 right
+1331 right up
+1333 right
+1336 right up
+1337 right
+1339 right up
+1340 right
+1343 right up
+1344 right
+1348 right up
+1349 left
+1367 action
+1369
+1379 action
+1381
+1391 action
+1393
+1403 action
+1404 up
+1518 right up run
+1521 up run
+1567 right up run
+1568 up run
+1596 left
+1602 left up run
+1614 up run
+1653 right up run
+1654 up run
+1668 left up run
+1669 up run
+1673 right up run
+1674 up run
+1675 right up run
+1676 action
+1678
+1688 action
+1690
+1700 action
+1702
+1712 action
+1714
+1724 action
+1725 up
+1744 up run
+1754 right up run
+1757 left
+1760 action
+1761
+1850 right
+1855 right up run
+1867 up run
+1913 right up run
+1914 left up run
+1915 up run
+1941 left
+1946 left up run
+1958 up run
+2021 right up run
+2022 up run
+2030 left up run
+2031 up run
+2038 right up run
+2040 left
+2042 action
+2044
+2054 action
+2056
+2066 action
+2068
+2078 action
+2079 up
+2098 up run
+2121 left up run
+2122 up run
+2150 right up run
+2151 up run
+2163 left up run
+2164 up run
+2165 left up run
+2167 up run
+2195 right up run
+2196 up run
+2204 left up run
+2205 up run
+2211 right up run
+2212 up run
+2221 left up run
+2222 up run
+2224 left up run
+2225 left
+2236 action
+2237
+2326 up run
+2335 right up run
+2336 up run
+2339 right up run
+2340 left
+2342 action
+2344
+2354 action
+2356
+2366 action
+2368
+2378 action
+2379 up
+2398
+2418 left
+2420 left up run
+2437 right
+2439 action
+2441
+2444 up
+2449 action
+2451
+2454 up
+2459 action
+2461
+2464 up
+2469 action
+2471
+2474 up
+2479 action
+2481
+2484 up
+2489 action
+2491
+2494 up
+2499 action
+2501
+2504 up
+2509 action
+2511
+2514 up
+2519 action
+2521
+2524 up
+2529 action
+2531
+2534 up
+2539 action
+2541
+2544 up
+2549 action
+2551
+2554 up
+2559 action
+2561
+2564 up
+2569 action
+2571
+2574 up
+2579 action
+2581
+2584 up
+2589 action
+2591
+2594 up
+2599 action
+2601
+2604 up
+2609 action
+2611
+2614 up
+2619 action
+2621
+2624 up
+2629 action
+2631
+2634 up
+2639 action
+2641
+2644 up
+2649 action
+2651
+2654 up
+2659 action
+2661
+2664 up
+2669 action
+2671
+2674 up
+2679 action
+2681
+2684 up
+2689 action
+2691
+2694 up
+2699 action
+2701
+2704 up
+2709 action
+2711
+2714 up
+2719 action
+2721
+2724 up
+2729 action
+2731
+2734 up
+2739 action
+2741
+2744 up
+2749 action
+2751
+2754 up
+2759 action
+2761
+2764 up
+2769 action
+2771
+2774 up
+2779 action
+2781
+2784 up
+2789 action
+2791
+2794 up
+2799 action
+2801
+2804 up
+2809 action
+2811
+2814 up
+2819 action
+2821
+2824 up
+2829 action
+2831
+2834 up
+2839 action
+2841
+2844 up
+2849 action
+2851
+2854 up
+2859 action
+2861
+2864 up
+2869 action
+2871
+2874 up
+2879 action
+2881
+2884 up
+2889 action
+2891
+2894 up
+2899 action
+2901
+2904 up
+2909 action
+2911
+2914 up
+2919 action
+2921
+2924 up
+2929 action
+2931
+2934 up
+2939 action
+2941
+2944 up
+2949 action
+2951
+2954 up
+2959 action
+2961
+2964 up
+2969 action
+2971
+2974 up
+2979 action
+2981
+2984 up
+2989 action
+2991
+2994 up
+2999 action
+3001
+3004 up
+3009 action
+3011
+3014 up
+3019 action
+3021
+3024 up
+3029 action
+3031
+3034 up
+3039 action
+3041
+3044 up
+3049 action
+3051
+3054 up
+3059 action
+3061
+3064 up
+3069 action
+3071
+3074 up
+3079 action
+3081
+3084 up
+3089 action
+3091
+3094 up
+3099 action
+3101
+3104 up
+3109 action
+3111
+3114 up
+3119 action
+3121
+3124 up
+3129 action
+3131
+3134 up
+3139 action
+3141
+3144 up
+3149 action
+3151
+3154 up
+3159 action
+3161
+3164 up
+3169 action
+3171
+3174 up
+3179 action
+3181
+3184 up
+3189 action
+3191
+3194 up
+3199 action
+3201
+3204 up
+3209 action
+3211
+3214 up
+3219 action
+3221
+3224 up
+3229 action
+3231
+3234 up
+3239 action
+3241
+3244 up
+3249 action
+3251
+3254 up
+3259 action
+3261
+3264 up
+3269 action
+3271
+3274 up
+3279 action
+3281
+3284 up
+3289 action
+3291
+3294 up
+3299 action
+3301
+3304 up
+3309 action
+3311
+3314 up
+3319 action
+3321
+3324 up
+3329 action
+3331
+3334 up
+3339 action
+3341
+3344 up
+3349 action
+3351
+3354 up
+3359 action
+3361
+3364 up
+3369 action
+3371
+3374 up
+3379 action
+3381
+3384 up
+3389 action
+3391
+3394 up
+3399 action
+3401
+3404 up
+3409 action
+3411
+3414 up
+3419 action
+3421
+3424 up
+3429 action
+3431
+3434 up
+3439 action
+3441
+3444 up
+3449 action
+3451
+3454 up
+3459 action
+3461
+3464 up
+3469 action
+3471
+3474 up
+3479 action
+3481
+3484 up
+3489 action
+3491
+3494 up
+3499 action
+3501
+3504 up
+3509 action
+3511
+3514 up
+3519 action
+3521
+3524 up
+3529 action
+3531
+3534 up
+3539 action
+3541
+3544 up
+3549 action
+3551
+3554 up
+3559 action
+3561
+3564 up
+3569 action
+3571
+3574 up
+3579 action
+3581
+3584 up
+3589 action
+3591
+3594 up
+3599 action
+3601
+3604 up
+3609 action
+3611
+3614 up
+3619 action
+3621
+3624 up
+3629 action
+3631
+3634 up
+3639 action
+3641
+3644 up
+3649 action
+3651
+3654 up
+3659 action
+3661
+3664 up
+3669 action
+3671
+3674 up
+3679 action
+3681
+3684 up
+3689 action
+3691
+3694 up
+3699 action
+3701
+3704 up
+3709 action
+3711
+3714 up
+3719 action
+3721
+3724 up
+3729 action
+3731
+3734 up
+3739 action
+3741
+3744 up
+3749 action
+3751
+3754 up
+3759 action
+3761
+3764 up
+3769 action
+3771
+3774 up
+3779 action
+3781
+3784 up
+3789 action
+3791
+3794 up
+3799 action
+3801
+3804 up
+3809 action
+3811
+3814 up
+3819 action
+3821
+3824 up
+3829 action
+3831
+3834 up
+3839 action
+3841
+3844 up
+3849 action
+3851
+3854 up
+3859 action
+3861
+3864 up
+3869 action
+3871
+3874 up
+3879 action
+3881
+3884 up
+3889 action
+3891
+3894 up
+3899 action
+3901
+3904 up
+3909 action
+3911
+3914 up
+3919 action
+3921
+3924 up
+3929 action
+3931
+3934 up
+3939 action
+3941
+3944 up
+3949 action
+3951
+3954 up
+3959 action
+3961
+3964 up
+3969 action
+3971
+3974 up
+3979 action
+3981
+3984 up
+3989 action
+3991
+3994 up
+3999 action
+4001
+4004 up
+4009 action
+4011
+4014 up
+4019 action
+4021
+4024 up
+4029 action
+4031
+4034 up
+4039 action
+4041
+4044 up
+4049 action
+4051
+4054 up
+4059 action
+4061
+4064 up
+4069 action
+4071
+4074 up
+4079 action
+4081
+4084 up
+4089 action
+4091
+4094 up
+4099 action
+4101
+4104 up
+4109 action
+4111
+4114 up
+4119 action
+4121
+4124 up
+4129 action
+4131
+4134 up
+4139 action
+4141
+4144 up
+4149 action
+4151
+4154 up
+4159 action
+4161
+4164 up
+4169 action
+4171
+4174 up
+4179 action
+4181
+4184 up
+4189 action
+4191
+4194 up
+4199 action
+4201
+4204 up
+4209 action
+4211
+4214 up
+4219 action
+4221
+4224 up
+4229 action
+4231
+4234 up
+4239 action
+4241
+4244 up
+4249 action
+4251
+4254 up
+4259 action
+4261
+4264 up
+4269 action
+4271
+4274 up
+4279 action
+4281
+4284 up
+4289 action
+4291
+4294 up
+4299 action
+4301
+4304 up
+4309 action
+4311
+4314 up
+4319 action
+4321
+4324 up
+4329 action
+4331
+4334 up
+4339 action
+4341
+4344 up
+4349 action
+4351
+4354 up
+4359 action
+4361
+4364 up
+4369 action
+4371
+4374 up
+4379 action
+4381
+4384 up
+4389 action
+4391
+4394 up
+4399 action
+4401
+4404 up
+4409 action
+4411
+4414 up
+4419 action
+4421
+4424 up
+4429 action
+4431
+4434 up
+4439 action
+4441
+4444 up
+4449 action
+4451
+4454 up
+4459 action
+4461
+4464 up
+4469 action
+4471
+4474 up
+4479 action
+4481
+4484 up
+4489 action
+4491
+4494 up
+4499 action
+4501
+4504 up
+4509 action
+4511
+4514 up
+4519 action
+4521
+4524 up
+4529 action
+4531
+4534 up
+4539 action
+4541
+4544 up
+4549 action
+4551
+4554 up
+4559 action
+4561
+4564 up
+4569 action
+4571
+4574 up
+4579 action
+4581
+4584 up
+4589 action
+4591
+4594 up
+4599 action
+4601
+4604 up
+4609 action
+4611
+4614 up
+4619 action
+4621
+4624 up
+4629 action
+4631
+4634 up
+4639 action
+4641
+4644 up
+4649 action
+4651
+4654 up
+4659 action
+4661
+4664 up
+4669 action
+4671
+4674 up
+4679 action
+4681
+4684 up
+4689 action
+4691
+4694 up
+4699 action
+4701
+4704 up
+4709 action
+4711
+4714 up
+4719 action
+4721
+4724 up
+4729 action
+4731
+4734 up
+4739 action
+4741
+4744 up
+4749 action
+4751
+4754 up
+4759 action
+4761
+4764 up
+4769 action
+4771
+4774 up
+4779 action
+4781
+4784 up
+4789 action
+4791
+4794 up
+4799 action
+4801
+4804 up
+4809 action
+4811
+4814 up
+4819 action
+4821
+4824 up
+4829 action
+4831
+4834 up
+4839 action
+4841
+4844 up
+4849 action
+4851
+4854 up
+4859 action
+4861
+4864 up
+4869 action
+4871
+4874 up
+4879 action
+4881
+4884 up
+4889 action
+4891
+4894 up
+4899 action
+4901
+4904 up
+4909 action
+4911
+4914 up
+4919 action
+4921
+4924 up
+4929 action
+4931
+4934 up
+4939 action
+4941
+4944 up
+4949 action
+4951
+4954 up
+4959 action
+4961
+4964 up
+4969 action
+4971
+4974 up
+4979 action
+4981
+4984 up
+4989 action
+4991
+4994 up
+4999 action
+5001
+5004 up
+5009 action
+5011
+5014 up
+5019 action
+5021
+5024 up
+5029 action
+5031
+5034 up
+5039 action
+5041
+5044 up
+5049 action
+5051
+5054 up
+5059 action
+5061
+5064 up
+5069 action
+5071
+5074 up
+5079 action
+5081
+5084 up
+5089 action
+5091
+5094 up
+5099 action
+5101
+5104 up
+5109 action
+5111
+5114 up
+5119 action
+5121
+5124 up
+5129 action
+5131
+5134 up
+5139 action
+5141
+5144 up
+5149 action
+5151
+5154 up
+5159 action
+5161
+5164 up
+5169 action
+5171
+5174 up
+5179 action
+5181
+5184 up
+5189 action
+5191
+5194 up
+5199 action
+5201
+5204 up
+5209 action
+5211
+5214 up
+5219 action
+5221
+5224 up
+5229 action
+5231
+5234 up
+5239 action
+5241
+5244 up
+5249 action
+5251
+5254 up
+5259 action
+5261
+5264 up
+5269 action
+5271
+5274 up
+5279 action
+5281
+5284 up
+5289 action
+5291
+5294 up
+5299 action
+5301
+5304 up
+5309 action
+5311
+5314 up
+5319 action
+5321
+5324 up
+5329 action
+5331
+5334 up
+5339 action
+5341
+5344 up
+5349 action
+5351
+5354 up
+5359 action
+5361
+5364 up
+5369 action
+5371
+5374 up
+5379 action
+5381
+5384 up
+5389 action
+5391
+5394 up
+5399 action
+5401
+5404 up
+5409 action
+5411
+5414 up
+5419 action
+5421 right up run
+5565 right
+5567 right up run
+5582 up run
+5585 right up run
+5586 up run
+5587 left up run
+5588 up run
+5589 right
+5592 right up
+5607 up
+5615 right up
+5616 up
+5713 left up
+5714 up
+5719 left
+5723 left up
+5725 left
+5727 left up
+5729 left
+5731 left up
+5733 left
+5735 left up
+5736 left
+5738 left up
+5739 left
+5741 left up
+5746 right up
+5747 right
+5752
+5760 start
+5761
+5796 down
+5797
+5816 down
+5817
+5836 down
+5837
+5856 confirm
+5857
+5876 confirm
+5877
+7467 start
+7468
+7507 down
+7508 left
+7515 left up run
+7519 left
+7521 left up run
+7524 left
+7527 left up run
+7528 left
+7530 left up run
+7531 left
+7533 left up run
+7534 left
+7537 left up run
+7543 up run
+7587 right up run
+7588 up run
+7603 left up run
+7604 up run
+7607 right up run
+7608 up run
+7609 left
+7614 left up run
+7632 right
+7641 right up
+7660 up
+7695 left
+7697 action
+7699
+7709 action
+7711
+7721 action
+7723
+7733 action
+7734 up
+7753
+7773
