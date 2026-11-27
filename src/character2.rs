@@ -1998,12 +1998,57 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         }
         None
     } else if player2::in_scenario(&character.work) {
-        player2::player_move(
-            &mut character.work,
-            &mut character.body,
-            tick,
-            &mut game.re2.rnd,
-        )
+        // A scene's Sherry or Ada climbs and jumps down on her own words,
+        // which only `splayer_work` has, so the original's test for the
+        // scene's routines (the partner bit clear or another work) is the
+        // partner bit. With it set, `Oma_Spl_updown_ck` would take
+        // `Spl_Auto`'s routine 8, which isn't ported; anyone else's check
+        // isn't ported either.
+        match character.partner.as_deref_mut() {
+            Some(words) if (sherry || ada) && !game.re2.partner_bit() => {
+                // Neither the check, the climb nor the jump draws `Rnd` or
+                // reads the enemy list or the timer.
+                let mut timer = game.re2.spl_pos_ck_timer;
+                let mut spare = game.re2.rnd;
+                let mut world = crate::partner2::PartnerWorld {
+                    player: [0; 3],
+                    player_angle: 0,
+                    player_routine: game.re2.player.routine[1],
+                    distance: character.distance,
+                    nearest: [None; 3],
+                    nearest_dist: game.re2.nearest_dist,
+                    rnd: &mut spare,
+                    pos_ck_timer: &mut timer,
+                    ground: partner_ground(tick.room, character.body.pos),
+                    be_flg: character.be_flg,
+                    noise: 0,
+                    player_noise: game.re2.player.noise,
+                    player_spd_x: game.re2.player.spd[0],
+                    poisoned: game.re2.partner_poisoned,
+                };
+                let mut climb = crate::partner2::SceneClimb {
+                    partner: words,
+                    kind: &mut character.kind,
+                    world: &mut world,
+                };
+                let arrived = player2::player_move_with(
+                    &mut character.work,
+                    &mut character.body,
+                    tick,
+                    &mut game.re2.rnd,
+                    Some(&mut climb),
+                );
+                character.be_flg = world.be_flg;
+                game.re2.player.noise |= world.noise;
+                arrived
+            }
+            _ => player2::player_move(
+                &mut character.work,
+                &mut character.body,
+                tick,
+                &mut game.re2.rnd,
+            ),
+        }
     } else if player2::in_auto(&character.work)
         && (sherry || ada)
         && let Some(words) = character.partner.as_deref_mut()

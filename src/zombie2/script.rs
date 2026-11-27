@@ -8945,6 +8945,70 @@ mod tests {
             let state: (i64, i64, i64) = eval(&lua, "return w.drawn, w.vars[1], w.hidden");
             assert_eq!(state, (0, 4, 1 << 0x12));
         }
+
+        /// The init's `Type` 3 starts room 30A's lift (routine 12) with no
+        /// morph and its `Type` cut to its high bits.
+        #[test]
+        fn the_init_starts_room_30a_s_lift() {
+            let (lua, log) = run(&g1(), "w.kind = 0x4003", 1, &["clip", "morph("]);
+            assert_eq!(log, ["clip(0,0,0)"]);
+            let state: (i64, i64, i64, i64) = eval(&lua, "return w.r[0], w.r[1], w.r[2], w.kind");
+            assert_eq!(state, (1, 12, 0, 0x4000));
+        }
+
+        /// Routine 12 (`0x48d710`): case 0 sets clip 1 from its start
+        /// (`0x1f0001` at `+0x14c`) with `Timer0` 60 and plays nothing until
+        /// `Sce_free0`'s bit 0; case 1 plays clip 1 until bit 1; case 2 and 3
+        /// play the room's clip 0 until bit 2; case 4 and 5 play clip 1 for
+        /// good. Parts 1 and 2 swell by `BYTE_0052a350` each tick.
+        #[test]
+        fn the_lift_follows_the_scene_s_bits() {
+            let calls = &["clip", "joint", "spd", "add_speed", "morph("];
+            let lift = |sub: i64, free: i64| {
+                let setup = format!("w.kind = 0 w.r = {{ [0] = 1, 12, {sub}, 0 }} w.free = {free}");
+                let (lua, log) = run(&g1(), &setup, 1, calls);
+                (eval::<(i64, i64)>(&lua, "return w.r[2], w.timers[0]"), log)
+            };
+            let swell = ["morph(1,3981)", "morph(2,3981)"];
+            let (held, log) = lift(0, 0);
+            assert_eq!(held, (0, 0x3C));
+            assert_eq!(log, [&["clip(1,0,31)"][..], &swell].concat());
+            assert_eq!(lift(0, 1).0, (1, 0x3C));
+            let (played, log) = lift(1, 1);
+            assert_eq!(played.0, 1);
+            assert_eq!(
+                log,
+                [&["spd()", "joint(128)", "add_speed_xz()"][..], &swell].concat()
+            );
+            assert_eq!(lift(1, 2).0.0, 2);
+            let (room, log) = lift(2, 2);
+            assert_eq!(room.0, 3);
+            assert_eq!(
+                log,
+                [
+                    &[
+                        "clip(0,0,31)",
+                        "spd_bank(2)",
+                        "joint_bank(2,128)",
+                        "add_speed_xz()"
+                    ][..],
+                    &swell
+                ]
+                .concat()
+            );
+            assert_eq!(lift(3, 4).0.0, 4);
+            let (walk, log) = lift(4, 0);
+            assert_eq!(walk, (5, 0x3C));
+            assert_eq!(
+                log,
+                [
+                    &["clip(1,0,31)", "spd()", "joint(128)", "add_speed_xz()"][..],
+                    &swell
+                ]
+                .concat()
+            );
+            assert_eq!(lift(5, 0xFF).0.0, 5);
+        }
     }
 
     /// The G embryo inside a host (`Type` 1, state 3, `FUN_00474b80`).

@@ -22300,11 +22300,14 @@ fn tick_re2_player(context: &mut RoomContext<'_>, assets: &PlayerAssets, pad: pl
         crate::character2::player_held(context.game, context.player, &tick);
         None
     } else {
-        crate::player2::player_move(
+        // A scene's walk takes the player off an edge or up a box as it
+        // does a scene character (`Oma_Spl_updown_ck`).
+        crate::player2::player_move_with(
             &mut context.game.re2.player,
             context.player,
             &tick,
             &mut context.game.re2.rnd,
+            Some(&mut crate::partner2::PlayerSceneClimb),
         )
     };
     context.game.tick_re2_crouch();
