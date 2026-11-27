@@ -22226,15 +22226,17 @@ fn re2_player_part_world(
     crate::player2::part_world(&mut context.game.re2.player, context.player, &tick, part)
 }
 
-/// Game mode 3's `Player_move` on a screen's return: the poison's step,
-/// unless `fg_stop`'s top bit holds the player, then `Pl_init`.
+/// Game mode 3's `Player_move` on a screen's return
+/// ([`crate::player2::return_move`]), unless `fg_stop`'s top bit holds the
+/// player, when `Pl_init` alone restarts the routines.
 fn re2_return_player_move(game: &mut game::GameState) {
     if !game.re2.player_stopped()
         && let Some(player) = game.entities.first_mut()
     {
-        crate::player2::poison_tick(&mut game.re2.player, &mut player.health);
+        crate::player2::return_move(&mut game.re2.player, &mut player.health);
+    } else {
+        crate::player2::pl_init(&mut game.re2.player);
     }
-    crate::player2::pl_init(&mut game.re2.player);
 }
 
 /// `Set_room`'s case 6 `Player_move`: its poison step, then `Pl_init`, which
@@ -50960,23 +50962,32 @@ end
 
     /// Game mode 3 on the status screen's return runs `Player_move` with
     /// `fg_stop` down, so a poisoned player's timer steps on that tick, as
-    /// after room 405's status screen with Leon poisoned; the top bit held
-    /// stops it.
+    /// after room 405's status screen with Leon poisoned, and `Damage_cnt`
+    /// and the noise step with it; the top bit held stops them.
     #[test]
     fn a_screens_return_steps_the_poison() {
-        let mut game = game::GameState::default();
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let game = &mut session.game;
         game.entities[0].health = 70;
         game.re2.player.poisoned = true;
         game.re2.player.poison_timer = 24;
-        re2_return_player_move(&mut game);
+        game.re2.player.damage_cnt = 0x85;
+        game.re2.player.noise = 0x3A;
+        session.return_re2_room(&pack);
+        let game = &mut session.game;
         assert_eq!(game.re2.player.poison_timer, 23);
+        assert_eq!(game.re2.player.damage_cnt, 0x84, "`Damage_cnt` counts down");
+        assert_eq!(game.re2.player.noise, 0x20, "the noise's low bits go");
         assert_eq!(
             game.re2.player.routine,
             [crate::player2::MODE_MOVE, 0, 0, 0]
         );
         *game.re2.fg_stop_mut() = 0x8000_0000;
-        re2_return_player_move(&mut game);
+        re2_return_player_move(game);
         assert_eq!(game.re2.player.poison_timer, 23);
+        assert_eq!(game.re2.player.damage_cnt, 0x84);
     }
 
     #[test]
