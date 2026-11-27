@@ -2935,6 +2935,15 @@ impl crate::result2::MusicHost for Re2ResultMusic<'_> {
         let bgm = &mut self.re2.music;
         match music {
             crate::result2::Music::FadeOut(time) => bgm.fade_on(time, self.system),
+            crate::result2::Music::FinishFade => {
+                // `Snd_se_call`'s steps, the stop and then the free.
+                for _ in 0..=u8::MAX as usize + 1 {
+                    if bgm.fade_rtn().0 == 0 {
+                        break;
+                    }
+                    bgm.tick();
+                }
+            }
             crate::result2::Music::Main(id) => bgm.play_main(id, self.system),
             crate::result2::Music::Sub(id) => bgm.play_sub(id, self.place),
             crate::result2::Music::Control(word) => {

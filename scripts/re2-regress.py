@@ -287,7 +287,9 @@ def play_flags_lua(run: dict) -> str | None:
     settle = load_recorder().SETTLE_TICKS
     return (
         "local play_settled = 0\n"
+        "local after_tick_before = after_tick\n"
         "function after_tick()\n"
+        "    if after_tick_before then after_tick_before() end\n"
         f"    if play_settled <= {settle} and mode() == \"play\" and game:health() ~= 0 then\n"
         "        play_settled = play_settled + 1\n"
         f"        if play_settled > {settle} then {sets} end\n"
