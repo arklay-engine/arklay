@@ -1,0 +1,325 @@
+# claire_a_308_sherry: Claire A from 308 with Sherry down Irons's lift to 400, Sherry's part through 401, 40F and 40C,
+# and back to Claire in 400 (#896): 308's door 1 into 300, 300's west side to door 1 into 309 (a message, then a second
+# press), 309's corridor west to door 3 into 30A (event 20's message, whose yes opens it), and east along 30A's walkway
+# into event 3's area, whose scene starts G1 on the lift and has Sherry and then Claire jump down off its edge
+# (`main_04`, `main_05`), down to 400. Its arrival scene (3:34) leaves Sherry the player (id 15, her own room motions
+# after `rbj_reset`) on the lower level: she climbs box 16 (the action key, facing west) to the walkway above and goes
+# west to door 2 (401), round 401's west side to door 0 (40F), runs 40F's corridor past its cockroaches, mashing through
+# their latches, to door 1 (40C), and takes 40C's item 0x49 (8:45), which turns on aot 2 under her: `main_02`'s scene,
+# with G1 (`Type` 1), ends with `save(32, 1)`, and door 1 puts Claire back in 400; a step up shows control
+354 right up run
+367 right
+369 right up run
+370 right
+372 right up run
+373 right
+376 right up run
+377 left up run
+393 up run
+397 right
+405 right up run
+418 up run
+463 left
+469 left up run
+481 up run
+522 right up run
+523 up run
+526 right up run
+527 left
+532 left up
+539 left
+541 left up
+546 left
+548 left up
+551 left
+553 left up
+554 left
+556 left up
+558 left
+560 left up
+561 left
+564 left up
+565 left
+567 left up
+568 left
+571 left up
+572 left
+576 left up
+577 left
+579 left up
+580 left
+582 left up
+583 left
+585 left up
+586 left
+588 left up
+589 left
+592 left up
+593 left
+596 left up
+597 left
+602 left up
+603 left
+616
+622 action
+623
+659 up
+950 right up run
+952 up run
+962 right up run
+963 left up run
+965 up run
+971 left up run
+972 up run
+974 right up run
+981 left up
+989 up
+990 left up
+991 up
+1008 right
+1013 right up run
+1032 up run
+1033 left up run
+1035 left
+1053
+1057 action
+1058
+1137 confirm
+1138
+1197 action
+1198
+1235 up
+1571 up run
+1644 left up run
+1645 up run
+1655 left up run
+1656 up run
+1661 left
+1665 left up run
+1678 up run
+1690 left up run
+1691 up run
+1695 right up
+1704 up
+1721 right up
+1722 up
+1731 right up
+1732 right
+1742
+1746 action
+1747
+1806 confirm
+1807
+1874 up
+2180 right
+2184 right up run
+2196 up run
+2213 right up run
+2214 up run
+2263 left up run
+2264 up run
+2277
+3986 up
+3987
+3990 left up run
+3992 up run
+4032 left up run
+4033 up run
+4036 right up run
+4037 up run
+4040 left up run
+4041 up run
+4043 left up
+4048 up
+4078 left up
+4079 up
+4103 right up
+4104 up
+4109 left
+4119 action
+4120
+4199 right up
+4226 up
+4238 right up
+4239 up
+4242 left up run
+4243 up run
+4250 left up run
+4251 up run
+4299 right up run
+4300 up run
+4321 left up run
+4322 up run
+4328 right up run
+4329 up run
+4331 right
+4334 right up
+4356 right
+4358 right up
+4363 left
+4369 action
+4370
+4429 up
+4722 left
+4726 left up run
+4740 up run
+4748 right up run
+4749 up run
+4750 right up run
+4751 up run
+4759 right up run
+4760 left up run
+4769 up run
+4794 left up run
+4795 up run
+4801 right up run
+4802 right
+4805 right up run
+4818 up run
+4820 right up run
+4821 up run
+4837 left up run
+4838 up run
+4841 right up run
+4842 up run
+4845 left up run
+4846 up run
+4847 left up run
+4848 left
+4859 action
+4860
+4919 up
+5200 left up run
+5204 up run
+5233 left up run
+5234 up run
+5304 right up run
+5306 left
+5307 right
+5308 left
+5309 right
+5310 left
+5311 right
+5312 left
+5313 right
+5314 left
+5315 right
+5316 left
+5317 right
+5318 left
+5319 right
+5320 left
+5321 right
+5322 left
+5323 right
+5324 left
+5325 right
+5326 left
+5327 right
+5328 left
+5329 right
+5330 left
+5331 right
+5332 left
+5333 right
+5334 left
+5335 right
+5336 left
+5337 right
+5338 left
+5339 right
+5340 left
+5341 right
+5342 left
+5343 right
+5344 left
+5345 right
+5346 left
+5347 right
+5348 up run
+5350 left up run
+5351 up run
+5363 right
+5364 left
+5365 right
+5366 left
+5367 right
+5368 left
+5369 right
+5370 left
+5371 right
+5372 left
+5373 right
+5374 left
+5375 right
+5376 left
+5377 right
+5378 left
+5379 right
+5380 left
+5381 right
+5382 left
+5383 right
+5384 left
+5385 right
+5386 left
+5387 right
+5388 left
+5389 right
+5390 left
+5391 right
+5392 left
+5393 right
+5394 left
+5395 right
+5396 left
+5397 right
+5398 left
+5399 right
+5400 left
+5401 right
+5402 left
+5403 right
+5404 left
+5405 right up run
+5406 up run
+5421 right up run
+5422 up run
+5435 left up run
+5436 up run
+5440 right up run
+5441 up run
+5442 action
+5444
+5454 action
+5456
+5466 action
+5468
+5478 action
+5480
+5490 action
+5491 up
+5513 right up
+5514 up
+5534 right up
+5535 up
+5536 left
+5538 action
+5539
+5578 confirm
+5580
+5598 confirm
+5600
+5618 confirm
+5620
+5638 confirm
+5640
+5658 confirm
+5659
+5679 confirm
+5680
+5709 confirm
+5710
+6343 up
+6589
+6601

@@ -1,0 +1,136 @@
+# claire_a_30a_308: Claire A from 30A back up Irons's lift to 21B for Sherry and down again with her (#896): 30A's lift
+# (door 6) is only a message until Sherry is with Claire (1:3), so door 5 (event 16's message turns it on) back into
+# 309, which the G adult's death left empty, east and down the corridor to door 2 (event 19's message, then the ladder
+# up), 300's gap and east side to door 0, 308 round the north and south to the lift (door 0), in 21B Sherry's scene on
+# arrival (event 33, 3:8, 1:3), and the lift (door 3: a message, then a second press) down into 308's hand back with
+# Sherry
+354 left
+368 left up
+369 left
+371 left up
+372 left
+374 left up
+375 left
+378 left up
+379 left
+383 left up
+384 left
+390 left up
+391 right
+396
+400 action
+401
+460 confirm
+461
+520 up
+834 left up run
+845 right up run
+846 up run
+849 right up run
+850 up run
+861 left up run
+862 up run
+867 right up run
+868 up run
+873 right
+877 right up run
+895 left up
+901 up
+906 left up
+907 up
+1095 left up
+1096 up
+1102
+1106 action
+1107
+1166 confirm
+1167
+1226 up
+1540 left
+1544 left up run
+1551 left
+1553 left up run
+1556 left
+1558 left up run
+1560 left
+1562 left up run
+1567 right
+1580 right up run
+1591 up run
+1592 left
+1597 left up run
+1611 up run
+1622 left up run
+1623 up run
+1624 left up run
+1625 up run
+1628 right up run
+1629 right up
+1644 up
+1652 right up
+1653 up
+1664 left
+1670
+1674 action
+1675
+1711 up
+2002 left
+2005 left up run
+2008 left
+2010 left up run
+2013 left
+2015 left up run
+2016 left
+2018 left up run
+2019 left
+2021 left up run
+2022 left
+2024 left up run
+2025 right
+2042 right up run
+2054 up run
+2092 right up run
+2093 up run
+2097 right up run
+2098 right
+2101 right up run
+2113 up run
+2160 left
+2165 left up run
+2183 up run
+2186 left up run
+2187 right up
+2195 up
+2206 right up
+2207 up
+2223 left
+2236
+2240 action
+2241
+4542 up
+4543 left
+4549 left up
+4551 left
+4553 left up
+4555 left
+4557 left up
+4558 left
+4560 left up
+4562 left
+4565 left up
+4566 left
+4569 left up
+4570 left
+4573 left up
+4574 left
+4578 left up
+4579 left
+4586
+4592 action
+4593
+4652 confirm
+4653
+4712 action
+4713
+4871 up
+5145
