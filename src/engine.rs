@@ -6360,16 +6360,20 @@ impl GameSession {
     }
 
     /// `SsInit2`: each group the close marked starts again from its first
-    /// sample while the music is on and its fade isn't running; false with
-    /// the music off.
+    /// sample while the music is on and its fade flag (`Music::faded`) is
+    /// down, and the flags go down; false with the music off.
     fn re2_sound_init(&mut self) -> bool {
         let music = self.game.re2_music_place().system & 0x2000 == 0;
-        let Some(mixer) = self.music.as_mut().filter(|_| music) else {
+        if !music {
             return false;
+        }
+        let started = self.game.re2.music.ss_init2();
+        let Some(mixer) = self.music.as_mut() else {
+            return true;
         };
         let groups: [&[usize]; 3] = [&[0, 1, 2], &[3], &[4]];
         for (sequence, channels) in groups.into_iter().enumerate() {
-            if !self.re2_music_closed[sequence] || self.game.re2.music.fading(sequence) {
+            if !started[sequence] {
                 continue;
             }
             self.re2_music_closed[sequence] = false;
@@ -6423,12 +6427,13 @@ impl GameSession {
     /// `SsStopAll` stops every sound and marks the music that was playing:
     /// one word for the main's three channels, set when any of them plays,
     /// and one for each sub. `SsInit2` rebuilds the banks and, with the
-    /// music on, starts every marked group again from its first sample,
-    /// unless its fade (`ss_timer`) was running; a mark whose group didn't
-    /// start waits for the next `SsInit2`. The sounds asked for before
-    /// `movie_on` in this tick play and stop at once, so the trace lists them
-    /// as the original's `SsPlay` does; those after it play on. Without a
-    /// sound device (`pMarniSnd == 0`) neither does anything.
+    /// music on and a bank named, starts every marked group again from its
+    /// first sample unless its fade flag is up ([`crate::bgm2::Music::ss_init2`]);
+    /// a mark whose group didn't start waits for the next `SsInit2`. The
+    /// sounds asked for before `movie_on` in this tick play and stop at once,
+    /// so the trace lists them as the original's `SsPlay` does; those after
+    /// it play on. The game's model of the music runs whether or not there is
+    /// a sound device; the mixer follows it when there is one.
     fn re2_sound_close_and_init(&mut self, pack: &Pack) {
         if let Some(before) = self.game.re2.sound_close.take() {
             let mut after = std::mem::take(&mut self.game.re2.sounds);
@@ -6447,6 +6452,7 @@ impl GameSession {
             );
             self.game.re2.sounds = after;
             self.game.re2.effect_sounds = effects;
+            self.game.re2.music.ss_close();
             if let Some(mixer) = &mut self.music {
                 mixer.stop_all_sfx();
                 mixer.stop_voice();
@@ -9904,8 +9910,9 @@ impl GameSession {
             }
         }
         // A door's `Pl_init` keeps the speed the last room left.
-        let carried =
-            (frame.load && session.door.re2.is_some()).then_some(self.game.re2.player.spd);
+        if frame.load && session.door.re2.is_some() {
+            self.game.re2.door_spd = Some(self.game.re2.player.spd);
+        }
         self.transition = Some(session);
         if frame.load {
             self.enter_transition_destination(pack);
@@ -9918,9 +9925,9 @@ impl GameSession {
                 &mut self.npc_models,
                 Some(&mut self.enemy_lua),
             );
-        }
-        if let Some(spd) = carried {
-            re2_door_set_room_player(&mut self.game, spd);
+            // A transition that loaded no RE2 room (only a camera, or a room
+            // without scripts) leaves no speed for a later load's move.
+            self.game.re2.door_spd = None;
         }
         if frame.finished {
             self.end_transition(pack);
@@ -21626,14 +21633,18 @@ fn run_re2_init(
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
     crate::character2::pl_init_atd(game);
-    if game.re2.player.title_first_move {
-        // A game the title starts: `Set_room`'s `Pl_init` comes before
-        // `Sce_scheduler_set`, so a scene the load pass starts on the player
-        // (`plc_motion`, `plc_dest`) stands, and `Game_loop`'s first live
-        // tick runs `Player_move` from there (the routines `1, 0, 0, 0` on
-        // clip 2's first frame, unblended), not an assumed first tick of
-        // `pl_mv_00`.
-        game.re2.player = game.re2.player.clone().after_pl_init();
+    // `Set_room`'s case 6 runs `Player_move` once before `Sce_scheduler_set`,
+    // with `fg_stop` down: `Game_loop` zeroes it before `Set_door` (`pG +
+    // 0x39F4`), and `Init_global` before the title's game. Its routine 0 is
+    // `Pl_init`, so a scene the load pass starts on the player (`plc_motion`,
+    // `plc_dest`) stands, and the next `Player_move` runs from there (the
+    // routines `1, 0, 0, 0` on clip 2's first frame, unblended), not an
+    // assumed first tick of `pl_mv_00`. Its poison steps first, as any
+    // tick's does: a save's load restored the timer (`Load_pop`).
+    // A second pass of the init (`again`) is the same load: its move ran.
+    let door_spd = game.re2.door_spd.take();
+    if !again && (game.re2.player.title_first_move || door_spd.is_some()) {
+        re2_set_room_player(game, door_spd);
     }
     game.re2.player.floor = crate::sca::floor_of(game.entities[0].pos[1]);
     game.camera.locked = false;
@@ -22172,12 +22183,13 @@ fn re2_player_part_world(
     crate::player2::part_world(&mut context.game.re2.player, context.player, &tick, part)
 }
 
-/// A door's load of the player (`Set_room`): `Pl_init`, which keeps the speed
-/// the last room left, then the one `Player_move` of its case 6, whose poison
-/// steps as any tick's does.
-fn re2_door_set_room_player(game: &mut game::GameState, spd: [i16; 3]) {
+/// `Set_room`'s case 6 `Player_move`: its poison step, then `Pl_init`, which
+/// keeps the speed a door's last room left.
+fn re2_set_room_player(game: &mut game::GameState, door_spd: Option<[i16; 3]>) {
     game.re2.player = game.re2.player.clone().after_pl_init();
-    game.re2.player.spd = spd;
+    if let Some(spd) = door_spd {
+        game.re2.player.spd = spd;
+    }
     if let Some(player) = game.entities.first_mut() {
         crate::player2::poison_tick(&mut game.re2.player, &mut player.health);
     }
@@ -42594,6 +42606,13 @@ off_0010:
         session.game.re2.music.channels[0].track = Some(1);
         session.game.re2.music.channels[3].track = Some(2);
         session.game.re2.music.channels[4].track = Some(3);
+        for (sequence, playing) in [true, false, true].into_iter().enumerate() {
+            session
+                .game
+                .re2
+                .music
+                .set_test_sequence(sequence, playing, false);
+        }
         session.music = Some(mixer);
         session.game.re2.sound_close = Some(0);
         session.re2_sound_close_and_init(&pack);
@@ -42638,6 +42657,7 @@ off_0010:
         session.game.re2.music.channels[4].track = Some(3);
         session.game.re2.music.channels[4].volume = 65;
         session.re2_music_closed = [false, false, true];
+        session.game.re2.music.set_test_sequence(2, false, true);
         session.music = Some(mixer);
         session.end_re2_movie();
         assert!(!session.game.re2.sound_init);
@@ -50776,21 +50796,54 @@ end
         assert_eq!(game.re2.scroll, 0);
     }
 
-    /// Room 405's door into 40B with Ada poisoned: the load's `Player_move`
-    /// (`Set_room` case 6) takes the timer's step on the load's tick.
+    /// A load's `Player_move` (`Set_room` case 6) takes the poison's step
+    /// and `Pl_init` before the room's scripts: room 405's door into 40B
+    /// with Ada poisoned steps the timer on the load's tick, a save's load
+    /// does too, and room 410's event 10, which its load pass starts as
+    /// Ada comes in from 409, keeps the `plc_dest` it gives her.
     #[test]
-    fn a_doors_load_steps_the_poison() {
-        let mut game = game::GameState::default();
-        game.entities[0].health = 165;
-        game.re2.player.poisoned = true;
-        game.re2.player.poison_timer = 2;
-        re2_door_set_room_player(&mut game, [7, 0, 9]);
+    fn a_loads_player_move_comes_before_the_rooms_scripts() {
+        let load = |body: &str, door: bool, title: bool, timer: u8| {
+            let text = format!(
+                "#version 1\n#game re2\nproc init_00 {{ {body} evt_end(0); }}\nproc main_00 {{ evt_end(0); }}"
+            );
+            let scripts = crate::scd2::akscr::compile(&text).unwrap();
+            let mut game = game::GameState::default();
+            game.entities[0].health = 165;
+            game.re2.player.poisoned = true;
+            game.re2.player.poison_timer = timer;
+            game.re2.player.title_first_move = title;
+            if door {
+                game.re2.door_spd = Some([7, 0, 9]);
+            }
+            let mut vm = crate::scd2::vm::Vm::new(&scripts);
+            run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
+            game
+        };
+        let game = load("nop();", true, false, 2);
         assert_eq!(game.re2.player.poison_timer, 1);
         assert_eq!(game.re2.player.spd, [7, 0, 9]);
-        re2_door_set_room_player(&mut game, [0; 3]);
-        re2_door_set_room_player(&mut game, [0; 3]);
+        assert_eq!(game.re2.door_spd, None);
+        assert_eq!(
+            game.re2.player.routine,
+            [crate::player2::MODE_MOVE, 0, 0, 0]
+        );
+        let game = load("nop();", true, false, 0);
         assert_eq!(game.re2.player.poison_timer, 0x1E);
         assert_eq!(game.entities[0].health, 164);
+        let game = load("nop();", false, true, 2);
+        assert_eq!(game.re2.player.poison_timer, 1, "a save's load");
+        let game = load(
+            "work_set(1, 0); plc_dest(0, 4, 0, -253, -7842);",
+            true,
+            false,
+            2,
+        );
+        assert_eq!(
+            game.re2.player.routine[..2],
+            [crate::player2::MODE_SCENARIO, 4]
+        );
+        assert_eq!(game.re2.player.dest, [-253, -7842]);
     }
 
     #[test]
