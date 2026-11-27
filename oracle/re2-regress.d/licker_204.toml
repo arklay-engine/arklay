@@ -143,7 +143,7 @@ setup_script = "licker_204_shotgun.lua"
 input = "licker_204_kill.txt"
 input_shift = 344
 fields = "rng,esp"
-expect = { tick = 595, fields = ["esp81", "esp82", "esp83", "esp84", "esp85"], note = "the shotgun's hit on the licker: its five kind 1 row 2 slots (update 9) start on the hit point in arklay, where the original's sit 71 to 111 off it, each its own way, and stay there; the kinds, frames and the trace match" }
+expect = "match"
 record = "--warp 204:-15400:0:-8000:3072 --flag 4:85 --life 2000 --equip 7 --give 0:7:200"
 
 # The revisit's licker (flag 4:86): `main_02` hangs it from the corridor's ceiling (`Type` 0x0512, `Routine_1`
