@@ -497,7 +497,7 @@ pub struct Work {
     pub(crate) parts: Vec<Option<Matrix>>,
     /// Where the body stood when `parts` were composed, so they can follow
     /// what moves it before the draw ([`move_parts`]).
-    parts_at: Option<[i32; 3]>,
+    pub(crate) parts_at: Option<[i32; 3]>,
     /// `parts` as the last frame's `Joint_trans2` left them, before this
     /// tick's move: what another work reads at its `pSin_parts_ptr`.
     pub(crate) drawn_parts: Vec<Option<Matrix>>,

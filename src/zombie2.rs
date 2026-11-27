@@ -701,6 +701,29 @@ impl Zombie {
         }
     }
 
+    /// A pulled arm on `part`, with `M` under the player's part 0, as a
+    /// shove leaves it.
+    #[cfg(test)]
+    pub(crate) fn test_pull(&mut self, part: u8, local: player2::Matrix) {
+        self.pulled = Some(PulledArm {
+            part,
+            behind: false,
+            left: 0x38,
+            done: false,
+            world: player2::Matrix::default(),
+            hand: player2::Matrix::default(),
+            below: None,
+            local,
+            hold: [0; 3],
+        });
+    }
+
+    /// The pulled arm's `Workm`, as the draw composed it.
+    #[cfg(test)]
+    pub(crate) fn test_pulled_world(&self) -> Option<player2::Matrix> {
+        self.pulled.as_ref().map(|arm| arm.world)
+    }
+
     /// `Parts_down` on each thrown part, then the redraw. A part that
     /// lands for the last time this tick is drawn there once more: the
     /// original leaves its `Workm` where it landed, for the blood that
@@ -2489,7 +2512,16 @@ impl Em<'_, '_, '_> {
         let Some(mut arm) = self.z.pulled.take() else {
             return;
         };
-        let Some(root) = self.world.pl.root else {
+        // `Super`: the player's part 0 as the last draw composed it.
+        let Some(root) = self
+            .world
+            .pl
+            .parts
+            .first()
+            .copied()
+            .flatten()
+            .or(self.world.pl.root)
+        else {
             return;
         };
         if arm.done {

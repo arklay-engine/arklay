@@ -1926,6 +1926,12 @@ impl Re2State {
         sca: Option<&crate::state::Sca>,
         player: Option<([i32; 3], &mut i16)>,
     ) {
+        // The draw composes the player's parts where the pushes and the
+        // scripts left the body, before the enemies' `Joint_trans2` reads
+        // part 0 for a pulled arm.
+        if let Some((pos, _)) = &player {
+            crate::player2::move_parts(&mut self.player, *pos);
+        }
         self.tick_parts_down(sca);
         self.tick_esp_move(sca, player);
     }
@@ -4516,6 +4522,42 @@ mod tests {
     /// `Esp_move` reads a following effect's matrix through its pointer each
     /// tick: the player's part `Workm`, or an enemy's, as this tick's draw
     /// left them.
+    /// The draw composes a pulled arm under the player's part 0 where the
+    /// pushes left the body (`move_parts` first), not under the move's
+    /// `root`.
+    #[test]
+    fn a_pulled_arm_is_drawn_under_the_pushed_part_0() {
+        use crate::player2::Matrix;
+        let at = |t: [i32; 3]| Matrix {
+            m: [[4096, 0, 0], [0, 4096, 0], [0, 0, 4096]],
+            t,
+        };
+        let mut game = GameState::default();
+        game.id = crate::state::RoomId::parse("1020").unwrap();
+        let zombie = [
+            0, 2, 0x1F, 70, 128, 0, 7, 0, 54, 20000, 20000, 20000, 4056, 0, 0,
+        ];
+        exec(&mut game, "sce_em_set", &zombie);
+        let state = &mut game.re2;
+        let local = at([300, -900, 100]);
+        let character = state.characters.0[2].as_deref_mut().unwrap();
+        character.zombie.as_mut().unwrap().test_pull(0xC, local);
+        state.player.root = Some(at([0, 0, 0]));
+        state.player.parts = vec![Some(at([1000, -800, 2000]))];
+        state.player.parts_at = Some([1000, 0, 2000]);
+        let mut life = 200;
+        // A push of 50 in x after the move.
+        state.tick_effects(None, Some(([1050, 0, 2000], &mut life)));
+        let zombie = state.characters.0[2]
+            .as_deref()
+            .unwrap()
+            .zombie
+            .as_ref()
+            .unwrap();
+        let world = at([1350, -1700, 2100]);
+        assert_eq!(zombie.test_pulled_world(), Some(world));
+    }
+
     /// A part with no drawn matrix keeps the one the slot last took.
     #[test]
     fn an_effect_on_a_part_follows_the_bodys_drawn_matrix() {
