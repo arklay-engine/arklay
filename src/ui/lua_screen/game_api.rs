@@ -167,6 +167,12 @@ pub(super) fn add_methods<'a, M: UserDataMethods<Api<'a>>>(methods: &mut M) {
         Ok(mlua::Value::Table(table))
     });
 
+    // `re2_status_sheet()`: the `st<n>_jp` sheet the status screen draws
+    // from (`St_load_gfx`).
+    methods.add_method("re2_status_sheet", |_lua, api, ()| {
+        Ok(api.game().map_or(0, GameState::re2_status_sheet))
+    });
+
     // `re2_portrait()`: the status screen's portrait rows' texels on the
     // portrait sheet by the player's id (`St_init_disp_face`), a sequence of
     // three `{ u, v }`.

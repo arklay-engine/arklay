@@ -1,0 +1,152 @@
+# Chris's game as special_ex_chris_f14 plays it into room F14, a START that ends the lift's door animation on 2060, then EQUIP of the Beretta (slot 4) from 2160 and aiming down F14's corridor from 2340, firing every 16 ticks at the zombies `Sce_em_set2` placed, through its 15 rounds and on.
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+740 right
+743
+860 down
+863
+890 up
+893
+920 confirm
+923
+1250 left
+1253
+1290 left
+1293
+1350 confirm
+1353
+1600 confirm
+1603
+1700 up
+1750 left
+1761 up
+1902 right
+1909
+1920 confirm
+1923
+2060 start
+2063
+2160 start
+2163
+2200 down
+2203
+2210 down
+2213
+2230 confirm
+2233
+2250 confirm
+2253
+2290 start
+2293
+2340 aim fire
+2343 aim
+2356 aim fire
+2359 aim
+2372 aim fire
+2375 aim
+2388 aim fire
+2391 aim
+2404 aim fire
+2407 aim
+2420 aim fire
+2423 aim
+2436 aim fire
+2439 aim
+2452 aim fire
+2455 aim
+2468 aim fire
+2471 aim
+2484 aim fire
+2487 aim
+2500 aim fire
+2503 aim
+2516 aim fire
+2519 aim
+2532 aim fire
+2535 aim
+2548 aim fire
+2551 aim
+2564 aim fire
+2567 aim
+2580 aim fire
+2583 aim
+2596 aim fire
+2599 aim
+2612 aim fire
+2615 aim
+2628 aim fire
+2631 aim
+2644 aim fire
+2647 aim
+2660 aim fire
+2663 aim
+2676 aim fire
+2679 aim
+2692 aim fire
+2695 aim
+2708 aim fire
+2711 aim
+2724 aim fire
+2727 aim
+2740 aim fire
+2743 aim
+2756 aim fire
+2759 aim
+2772 aim fire
+2775 aim
+2788 aim fire
+2791 aim
+2804 aim fire
+2807 aim
+2820 aim fire
+2823 aim
+2836 aim fire
+2839 aim
+2852 aim fire
+2855 aim
+2868 aim fire
+2871 aim
+2884 aim fire
+2887 aim
+2900 aim fire
+2903 aim
+2916 aim fire
+2919 aim
+2932 aim fire
+2935 aim
+2948 aim fire
+2951 aim
+2964 aim fire
+2967 aim
+2980 aim fire
+2983 aim
+2996 aim fire
+2999 aim
+3012 aim fire
+3015 aim
+3028 aim fire
+3031 aim
+3044 aim fire
+3047 aim
+3060 aim fire
+3063 aim
+3076 aim fire
+3079 aim
+3092 aim fire
+3095 aim
+3111

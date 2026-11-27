@@ -472,8 +472,8 @@ pub const RECIPES: &[Recipe] = &[
 /// scenario's character at u 0, HUNK (0xC) at u 0x58, Ada and Sherry (0xE
 /// up) at u 0x2C, all from v 0x48, 0x56 and 0x6B; and TO-FU (0xD) at
 /// (0x2A, 0x34) for the first row and (0, 0x34) for the other two. The
-/// sheet is the scenario's (`St_load_gfx` by `St_is_leon`), so Ada's face is
-/// on Leon's sheet and Sherry's on Claire's.
+/// sheet is [`status_sheet`]'s, so Ada's face is on Leon's sheet and
+/// Sherry's on Claire's.
 pub fn portrait_texels(pl_id: u8) -> [(u8, u8); 3] {
     if pl_id == 0xD {
         return [(0x2A, 0x34), (0, 0x34), (0, 0x34)];
@@ -484,6 +484,20 @@ pub fn portrait_texels(pl_id: u8) -> [(u8, u8); 3] {
         _ => 0,
     };
     [(u, 0x48), (u, 0x56), (u, 0x6B)]
+}
+
+/// The `st<n>_jp` sheet `St_load_gfx` (`0x5016F0`) loads as the status
+/// screen's textures 0x12 to 0x19: in Extreme Battle (`fg_system`'s
+/// `0x1000000`) by the character's index (`WORD_0098EB20`): ST0 for Leon (0)
+/// and Ada (2), ST1 for Claire (1) and ST2 for Chris (3); otherwise the
+/// scenario's (`St_is_leon`), ST1 in Claire's.
+pub fn status_sheet(claire: bool, ex_character: Option<u16>) -> u8 {
+    match ex_character {
+        Some(1) => 1,
+        Some(3) => 2,
+        Some(_) => 0,
+        None => u8::from(claire),
+    }
 }
 
 /// The x offset from its place of the partner's panel (`0x691FA0`), which
@@ -980,6 +994,14 @@ const EASY_AMMO: u8 = 0x14;
 const EASY_AMMO_COUNT: u8 = 120;
 
 impl GameState {
+    /// [`status_sheet`] for this game.
+    pub fn re2_status_sheet(&self) -> u8 {
+        use crate::scd2::host::{FG_SYSTEM_EXTREME, VAR_EX_CHARACTER};
+        let claire = self.state_bytes[usize::from(super::STATE_BYTE_CHARACTER)] & 1 != 0;
+        let ex = self.re2.flag(0, FG_SYSTEM_EXTREME);
+        status_sheet(claire, ex.then(|| self.re2.vars[VAR_EX_CHARACTER]))
+    }
+
     /// Open the item page with the screen: the inventory takes its slots'
     /// places, empty ones included, until [`GameState::close_re2_items`].
     pub fn open_re2_items(&mut self) {
