@@ -1,7 +1,7 @@
 # `Sce_fade_adjust`'s hold in stage 6 (oracle/re2-deviations.md, "Script fades").
 
-# Room 60D from room 60C's door: its init sets fade 1 (`sce_fade_set(1, 1, 7, -32768)`) and adjusts it to 4096, which
-# `Sce_fade_adjust` would skip if `FUN_00442e40` read `Marni`'s 0x6000; the recording's frames have the adjusted fade,
+# Room 60D from room 60C's door: its main procedure 3, which runs every tick, sets fade 1 (`sce_fade_set(1, 1, 7,
+# -32768)`) and adjusts it to 4096, which `Sce_fade_adjust` would skip if `FUN_00442e40` read `Marni`'s 0x6000; the recording's frames have the adjusted fade,
 # then a walk.
 [[run]]
 name = "fade_60d"
@@ -10,9 +10,11 @@ setup_script = "fade_60d.lua"
 input = "fade_60d.txt"
 input_shift = 344
 ticks = 700
-fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat"
+fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,snd,msg,fgstat,om4,om5,om6"
 frames = [360, 699]
-# 15.4 measured (45.9 with the fade held): the room's lighting isn't the original's
-frame_max_mean = 16.0
+# 16.22 measured (45.9 with the fade held, before #999): at least part of it is the mist planes (objects 4 to 6, which
+# the room's procedure 4 shows by the cut each time flag 1:11 rises), grey where the original's are white (#1008);
+# from cut 1, on reference tick 534, plane 5 covers more of the floor
+frame_max_mean = 16.5
 expect = "match"
 record = "--no-enemies --life 200 --warp 60D:-20729:0:-24149:2160"
