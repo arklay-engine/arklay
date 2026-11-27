@@ -450,6 +450,55 @@ pub fn targets(game: &GameState) -> Vec<crate::weapon2::Target> {
     targets_of(&game.re2)
 }
 
+/// `+0x1EE` (`Eff_at_r`), which widens a shot's first box (`Weapon_at_ck`)
+/// and a blast's (`FUN_004d7e30`) by a quarter of it: each kind's init
+/// (`enemy_init_table`, `Em_move_tbl_set`) writes it once, and a licker's
+/// box sets (`Em22_Atd_set_1`, `Em22_Atd_set_2`) by its surface.
+/// `Sce_em_set` doesn't clear a new work, and nothing in `Em_24` writes it,
+/// so 0x24's is whatever the memory held: arklay gives it the zombies' 500.
+fn eff_at_r(id: u8, licker: Option<&crate::zombie2::licker::Licker>) -> u16 {
+    use crate::zombie2 as z;
+    if let Some(licker) = licker {
+        return licker.widen();
+    }
+    match id {
+        // `Em20_Init`.
+        z::DOG_ID => 600,
+        // `FUN_0045fd50`.
+        z::CROW_ID => 300,
+        // `FUN_00468a10`.
+        z::ALLIGATOR_ID => 0x44C,
+        // `FUN_0046f0c0`.
+        z::SPIDER_ID => 800,
+        // `FUN_004736a0`.
+        z::YOUNG_ID => 0x14,
+        // `FUN_004742e0`, for every `Type`.
+        z::EMBRYO_ID => 300,
+        // `FUN_004771d0`.
+        z::ADULT_ID => 800,
+        // `FUN_0047c0e0`.
+        z::ROACH_ID => 800,
+        // `MrX_init`.
+        z::MRX_ID => 800,
+        // `FUN_00483eb0`.
+        0x2D => 800,
+        // `FUN_00484c90`, which `Em_2E` runs for the poison ivy (0x39) too.
+        z::IVY_ID | z::POISON_IVY_ID => 800,
+        // `FUN_00488a70`.
+        z::VINE_ID => 0x4B0,
+        // `FUN_004903f0`.
+        z::G2_ID => 800,
+        // `FUN_00496a80`.
+        z::G3_ID => 900,
+        // `FUN_004acd70`.
+        z::MOTH_ID => 0x384,
+        // `FUN_004b03d0`, for the kinds it ports.
+        z::LARVA_ID => 200,
+        // `Em10_Init`'s, and G1's (`FUN_0048a540`).
+        _ => 500,
+    }
+}
+
 /// [`targets`], from the RE 2 state alone.
 pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Target> {
     let characters = re2.characters.0.iter().enumerate();
@@ -470,35 +519,7 @@ pub fn targets_of(re2: &crate::scd2::host::Re2State) -> Vec<crate::weapon2::Targ
                 at: [zombie.atd.at[0], zombie.atd.at[2]],
                 at_y: zombie.atd.at[1],
                 at_w: zombie.atd.at_w,
-                widen: if character.id == crate::zombie2::DOG_ID {
-                    600
-                } else if character.id == crate::zombie2::ALLIGATOR_ID {
-                    // `FUN_00468a10`.
-                    0x44C
-                } else if character.id == crate::zombie2::MOTH_ID {
-                    // `FUN_004acd70`.
-                    0x384
-                } else if character.id == crate::zombie2::LARVA_ID {
-                    // `FUN_004b03d0`, for the kinds it ports.
-                    200
-                } else if character.id == crate::zombie2::ADULT_ID {
-                    // The G adult's init, `FUN_004771d0`.
-                    800
-                } else if matches!(
-                    character.id,
-                    crate::zombie2::CROW_ID
-                        | crate::zombie2::MRX_ID
-                        | crate::zombie2::SPIDER_ID
-                        | crate::zombie2::YOUNG_ID
-                        | crate::zombie2::ROACH_ID
-                        | crate::zombie2::EMBRYO_ID
-                ) {
-                    // Not yet ported from these kinds' inits: 0 here is
-                    // arklay's, not their `+0x1EE`.
-                    0
-                } else {
-                    zombie.licker.as_ref().map_or(500, |licker| licker.widen())
-                },
+                widen: eff_at_r(character.id, zombie.licker.as_deref()),
                 neck_y: character.work.neck.position.map_or(pos[1], |neck| neck[1]),
                 ofs_y: zombie.atd.ofs_y,
                 at_h: zombie.atd.at_h,
@@ -3016,6 +3037,39 @@ mod tests {
             oba_ck_em2(&mut game, &mut player, [-850, 0, 0]);
             assert_eq!(player.pos, [x, 0, 0], "player {player_flag}");
             assert_eq!(game.re2.player.at_em_flg, u32::from(player_flag == 0));
+        }
+    }
+
+    /// Each kind's `+0x1EE` as its init writes it (#974): one row per
+    /// writer in the decompile, by the kind `Em_move_tbl_set` gives it.
+    #[test]
+    fn each_kinds_eff_at_r_is_its_inits() {
+        use crate::zombie2 as z;
+        let kinds = [
+            (0x10, 500),
+            (0x1F, 500),
+            (z::DOG_ID, 600),
+            (z::CROW_ID, 300),
+            (z::ALLIGATOR_ID, 1100),
+            (0x24, 500),
+            (z::SPIDER_ID, 800),
+            (z::YOUNG_ID, 20),
+            (z::EMBRYO_ID, 300),
+            (z::ADULT_ID, 800),
+            (z::ROACH_ID, 800),
+            (z::MRX_ID, 800),
+            (0x2D, 800),
+            (z::IVY_ID, 800),
+            (z::POISON_IVY_ID, 800),
+            (z::VINE_ID, 1200),
+            (z::G1_ID, 500),
+            (z::G2_ID, 800),
+            (z::G3_ID, 900),
+            (z::MOTH_ID, 900),
+            (z::LARVA_ID, 200),
+        ];
+        for (id, widen) in kinds {
+            assert_eq!(eff_at_r(id, None), widen, "kind {id:#x}");
         }
     }
 
