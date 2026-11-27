@@ -8542,12 +8542,26 @@ mod weapon_tests {
     fn each_gun_has_its_own_timing_and_leg() {
         assert!(
             [
-                KNIFE, 2, 3, 5, 6, 7, 8, 9, 0xC, COLT, SPARK, ROCKET, GATLING, BERETTA
+                KNIFE,
+                2,
+                3,
+                CUSTOM_HANDGUN,
+                5,
+                6,
+                7,
+                8,
+                9,
+                0xC,
+                COLT,
+                SPARK,
+                ROCKET,
+                GATLING,
+                BERETTA
             ]
             .iter()
             .all(|&id| weapon(id).aims())
         );
-        assert!(![0, 4, 0x14].iter().any(|&id| weapon(id).aims()));
+        assert!(![0, 0x14].iter().any(|&id| weapon(id).aims()));
         // The knife's row: a slash let go of past frame 0x32 stops at once.
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);
@@ -10981,9 +10995,9 @@ mod tests {
 
     #[test]
     fn only_a_handgun_raises_into_the_stance() {
-        // The custom handgun (4) isn't ported.
+        // Ammunition (0x14) is no weapon.
         let mut setup = armed(true, false);
-        setup.weapon.id = 4;
+        setup.weapon.id = 0x14;
         setup.tick(aiming(false, false), 200);
         assert_eq!(setup.work.routine[1], MOVE_IDLE);
 
