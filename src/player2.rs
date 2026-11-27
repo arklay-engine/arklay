@@ -8566,6 +8566,7 @@ mod weapon_tests {
         assert!(weapon(KNIFE).is_knife() && !weapon(2).is_knife());
         assert_eq!(weapon(KNIFE).fire_cancel_frame(), 0x32);
         assert_eq!(weapon(2).fire_cancel_frame(), 8);
+        assert_eq!(weapon(CUSTOM_HANDGUN).fire_cancel_frame(), 15);
         assert_eq!(weapon(7).fire_cancel_frame(), 28);
         assert_eq!(weapon(8).tilt_down_frame(), 8);
         assert_eq!(weapon(5).foot_chain(0), &AIM_FOOT_CHAIN);
@@ -11260,40 +11261,125 @@ mod tests {
     }
 
     /// `pl_mv05_w4_t2`: the custom handgun fires on frame 0, then on 3 and 6
-    /// while the trigger is held, a round each; a trigger let go by frame 3,
-    /// or `fg_common`'s 0x7E (MANUAL) up, takes it to frame 10 after the
-    /// first (`custom_equip_118`, `custom_manual_118`).
+    /// while the trigger is held and `Tama_ck_i` finds a round, a round and
+    /// a look by `Weapon_at_ck` each; `pl_w04_t2_move` flashes on 1, 4 and 7
+    /// and throws a case on 3, 6 and 10. A trigger let go, an empty gun, or
+    /// `fg_common`'s 0x7E (MANUAL) up at frame 3 takes it to frame 10 with
+    /// hokan 3 instead, and with aim let go it is cut once past frame 15
+    /// (`custom_equip_118`, `custom_manual_118`).
     #[test]
-    fn the_custom_handgun_bursts_three_unless_let_go_or_manual() {
-        // The rounds spent and the frame reached after each of 8 ticks.
-        let run = |held: u8, manual: bool| {
+    fn the_custom_handgun_bursts_three_unless_let_go_empty_or_manual() {
+        const FLASH: [u32; 2] = [0x30A_0D00, 0x100_0D00];
+        const CASE: [u32; 3] = [0x308_0900, 0x308_0900, 0x200_0700];
+        /// After each tick: the routine's step, the frame and hokan joint
+        /// move left, the rounds spent, whether a body was hit, and the
+        /// effects' words.
+        type Tick = (u8, u8, u8, u8, bool, Vec<u32>);
+        let run = |held: u8, aimed: u8, manual: bool, loaded: bool| -> Vec<Tick> {
             let mut setup = bursting(CUSTOM_HANDGUN, 18);
             setup.weapon.manual = manual;
-            (0..8u8)
+            setup.weapon.loaded = loaded;
+            let [x, _, z] = setup.player.pos;
+            // Straight ahead of the body at angle 0, in reach.
+            setup.targets = vec![crate::weapon2::Target {
+                slot: 3,
+                id: 0x1F,
+                be_flg: 1 | 0x400_0000 | 0x800_0000,
+                life: 50,
+                pos: [x + 1500, 0, z],
+                at: [x + 1500, z],
+                at_w: 500,
+                neck_y: -1500,
+                ..Default::default()
+            }];
+            setup.player.angle = 0;
+            setup.work.hit = None;
+            (0..20u8)
                 .map(|tick| {
-                    setup.tick(aiming(tick < held, false), 200);
-                    (setup.work.spent, setup.work.move_cnt)
+                    let mut input = aiming(tick < held, false);
+                    input.aim = tick < aimed;
+                    setup.tick(input, 200);
+                    let hit = setup.work.hit.take().is_some_and(|hit| {
+                        assert_eq!((hit.slot, hit.weapon), (3, CUSTOM_HANDGUN));
+                        true
+                    });
+                    let calls = burst_calls(&mut setup);
+                    for &(word, dir, point) in &calls {
+                        if FLASH.contains(&word) {
+                            assert_eq!((dir, point), (0, [0x78, 600, -0x8A]));
+                        } else {
+                            assert_eq!(point, [0xA0, 200, 0x3C]);
+                            assert_eq!(dir, if word == CASE[2] { 0x514 } else { 0 });
+                        }
+                    }
+                    let words = calls.into_iter().map(|(word, ..)| word).collect();
+                    let work = &setup.work;
+                    (
+                        work.routine[2],
+                        work.move_cnt,
+                        work.hokan,
+                        work.spent,
+                        hit,
+                        words,
+                    )
                 })
+                .collect()
+        };
+        let frames = |ticks: &[Tick]| ticks.iter().map(|tick| tick.1).collect::<Vec<_>>();
+        let hits = |ticks: &[Tick]| {
+            (0..ticks.len())
+                .filter(|&tick| ticks[tick].4)
                 .collect::<Vec<_>>()
         };
-        let burst = run(8, false);
-        assert_eq!(
-            burst.iter().map(|&(spent, _)| spent).max(),
-            Some(3),
-            "{burst:?}"
-        );
-        for (held, manual) in [(2, false), (8, true)] {
-            let one = run(held, manual);
-            assert_eq!(
-                one.iter().map(|&(spent, _)| spent).max(),
-                Some(1),
-                "{one:?}"
-            );
-            assert!(
-                one.iter().any(|&(_, frame)| frame > CUSTOM_BURST_END),
-                "held {held}, manual {manual}: {one:?}"
-            );
+        let spent = |ticks: &[Tick]| ticks.iter().map(|tick| tick.3).collect::<Vec<_>>();
+        let words_at = |ticks: &[Tick], frame: u8| {
+            ticks
+                .iter()
+                .find(|tick| tick.1 == frame)
+                .map(|tick| tick.5.clone())
+        };
+
+        // Held: three shots, each looking on its own tick only.
+        let burst = run(20, 20, false, true);
+        assert_eq!(frames(&burst), (1..=20).collect::<Vec<_>>());
+        assert_eq!(hits(&burst), [0, 3, 6]);
+        assert_eq!(spent(&burst)[..8], [1, 1, 1, 2, 2, 2, 3, 3]);
+        assert_eq!(burst[19].3, 3);
+        for frame in 1..=20 {
+            let expected = match frame {
+                1 | 4 | 7 => FLASH.to_vec(),
+                3 | 6 | 10 => CASE.to_vec(),
+                _ => Vec::new(),
+            };
+            assert_eq!(words_at(&burst, frame), Some(expected), "frame {frame}");
         }
+        assert!(burst.iter().all(|tick| tick.0 == 2));
+
+        // Let go before frame 6: two shots, then frame 10's jump, which
+        // joint move takes on to 11 with hokan 2.
+        let two = run(5, 20, false, true);
+        assert_eq!(frames(&two)[..8], [1, 2, 3, 4, 5, 6, 11, 12]);
+        assert_eq!(two[6].2, 2);
+        assert_eq!(hits(&two), [0, 3]);
+        assert_eq!(two[19].3, 2);
+
+        // MANUAL, or an empty gun: the first shot only, jumping at frame 3.
+        for (manual, loaded) in [(true, true), (false, false)] {
+            let one = run(20, 20, manual, loaded);
+            assert_eq!(frames(&one)[..5], [1, 2, 3, 11, 12], "manual {manual}");
+            assert_eq!(one[3].2, 2);
+            assert_eq!(hits(&one), [0]);
+            assert_eq!(one[19].3, 1);
+            assert!(one[3..].iter().all(|tick| tick.5.is_empty()));
+        }
+
+        // Aim let go: the shot plays on to frame 16 and is cut on the tick
+        // after, past `DAT_0053a305`'s 15.
+        let cut = run(20, 0, false, true);
+        assert!(cut[..16].iter().all(|tick| tick.0 == 2));
+        assert_eq!(cut[15].1, 16);
+        assert_eq!(cut[16].0, 1);
+        assert_eq!(hits(&cut), [0, 3, 6]);
     }
 
     /// `Tama_decrease_i` returns before the bursts' counter for a gun at
