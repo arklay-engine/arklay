@@ -1476,7 +1476,7 @@ fn the_portraits_texels_follow_the_players_id() {
 #[test]
 fn the_status_sheet_is_the_scenarios_or_the_extreme_battle_characters() {
     use super::status_sheet;
-    use crate::scd2::host::{FG_SYSTEM_EXTREME, VAR_EX_CHARACTER};
+    use crate::scd2::host::{FG_SYSTEM_EXTREME, STATUS_BANK, STATUS_PLAYER, VAR_EX_CHARACTER};
     assert_eq!(status_sheet(false, None), 0);
     assert_eq!(status_sheet(true, None), 1);
     for claire in [false, true] {
@@ -1485,7 +1485,8 @@ fn the_status_sheet_is_the_scenarios_or_the_extreme_battle_characters() {
         }
     }
     let mut game = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
-    game.state_bytes[usize::from(crate::game::STATE_BYTE_CHARACTER)] = 1;
+    assert_eq!(game.re2_status_sheet(), 0);
+    game.re2.set_flag(STATUS_BANK, STATUS_PLAYER, 1);
     assert_eq!(game.re2_status_sheet(), 1);
     game.re2.set_flag(0, FG_SYSTEM_EXTREME, 1);
     game.re2.vars[VAR_EX_CHARACTER] = 3;

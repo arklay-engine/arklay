@@ -490,7 +490,8 @@ pub fn portrait_texels(pl_id: u8) -> [(u8, u8); 3] {
 /// screen's textures 0x12 to 0x19: in Extreme Battle (`fg_system`'s
 /// `0x1000000`) by the character's index (`WORD_0098EB20`): ST0 for Leon (0)
 /// and Ada (2), ST1 for Claire (1) and ST2 for Chris (3); otherwise the
-/// scenario's (`St_is_leon`), ST1 in Claire's.
+/// scenario's (`St_is_leon`), ST1 in Claire's. Another index skips the load
+/// and uploads whatever the buffer last held; arklay's indices are 0 to 3.
 pub fn status_sheet(claire: bool, ex_character: Option<u16>) -> u8 {
     match ex_character {
         Some(1) => 1,
@@ -996,8 +997,9 @@ const EASY_AMMO_COUNT: u8 = 120;
 impl GameState {
     /// [`status_sheet`] for this game.
     pub fn re2_status_sheet(&self) -> u8 {
-        use crate::scd2::host::{FG_SYSTEM_EXTREME, VAR_EX_CHARACTER};
-        let claire = self.state_bytes[usize::from(super::STATE_BYTE_CHARACTER)] & 1 != 0;
+        use crate::scd2::host::{FG_SYSTEM_EXTREME, STATUS_BANK, STATUS_PLAYER, VAR_EX_CHARACTER};
+        // `St_is_leon`: `IsScenarioClaire`, `fg_status`'s top bit.
+        let claire = self.re2.flag(STATUS_BANK, STATUS_PLAYER);
         let ex = self.re2.flag(0, FG_SYSTEM_EXTREME);
         status_sheet(claire, ex.then(|| self.re2.vars[VAR_EX_CHARACTER]))
     }
