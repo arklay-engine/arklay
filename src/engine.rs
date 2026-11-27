@@ -9945,6 +9945,12 @@ impl GameSession {
             }
         }
         if frame.place {
+            // `Game_loop` zeroes `fg_stop` before `Set_door` (`pG + 0x39F4`):
+            // a stop the room's scripts left up (room 401's enemies' bit) is
+            // gone in the next room, whose own load starts with none.
+            if session.door.re2.is_some() {
+                *self.game.re2.fg_stop_mut() = 0;
+            }
             // `Set_door`'s `Snd_bgm_ck`.
             let target = self.game.origins.of(session.target);
             if session.door.re2.is_some()
@@ -30184,6 +30190,36 @@ mod tests {
             session.game.re2.vars[var],
             u16::from(a.stage) << 8 | u16::from(a.room)
         );
+    }
+
+    /// `Game_loop` zeroes `fg_stop` before `Set_door`: the enemies' stop a
+    /// room's scripts raised (room 401's) doesn't hold the next room's.
+    #[test]
+    fn re2_a_door_drops_the_stop_the_room_left_up() {
+        let dir = TempDir::new();
+        let (pack, a, b) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        session.game.is_re2_room = true;
+        let pos = session.player.pos;
+        re2_area_at(&mut session, pos, true);
+        let door = session.game.doors[1].as_mut().unwrap();
+        door.next_room = b.room;
+        door.re2 = Some(crate::scd2::host::Re2Door {
+            stage: 1,
+            room: b.room,
+            cut: 0,
+        });
+        session.game.re2.set_enemies_stopped(true);
+        re2_tick(&mut session, &pack, UiInput::default());
+        assert!(session.transition.is_some(), "the door is taken");
+        for _ in 0..300 {
+            if session.game.id == b || session.transition.is_none() {
+                break;
+            }
+            session.tick_transition(&pack, false);
+        }
+        assert_eq!(session.game.id, b, "the door led into the other room");
+        assert!(!session.game.re2.enemies_stopped());
     }
 
     /// `Sce_Status` sets `Game` to 1: the status screen opens on the next
