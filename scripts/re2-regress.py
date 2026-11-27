@@ -273,6 +273,29 @@ def no_enemies_lua(run: dict) -> str | None:
     return f"game:set_re2_no_enemies({kept}{room})"
 
 
+def play_flags_lua(run: dict) -> str | None:
+    """For a run from the title, the record's `--flag`s raised as `record --boot` raises them: once, when play begins
+    (the player's life has been set for more than the recorder's SETTLE_TICKS ticks). None for a run whose record
+    raises none."""
+    if "record" not in run:
+        return None
+    flags = record_args(run).flag
+    if not flags:
+        return None
+    sets = " ".join(
+        f"game:set_re2_flag({int(bank, 0)}, {int(index, 0)})" for bank, index in (flag.split(":") for flag in flags))
+    settle = load_recorder().SETTLE_TICKS
+    return (
+        "local play_settled = 0\n"
+        "function after_tick()\n"
+        f"    if play_settled <= {settle} and mode() == \"play\" and game:health() ~= 0 then\n"
+        "        play_settled = play_settled + 1\n"
+        f"        if play_settled > {settle} then {sets} end\n"
+        "    end\n"
+        "end"
+    )
+
+
 def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input_path: Path, setup: Path | None,
                saves_dir: Path, frames_dir: Path | None, voice: list[int] | None, films: list[int] | None = None) -> str:
     """The arklay driver script of one run: the boot, the setup, the trace and the scripted input."""
@@ -307,6 +330,9 @@ def driver_lua(run: dict, ctx: dict, screen: str, ticks: int, trace: Path, input
         if voice is not None:
             trace_options.append(voice_option(voice))
         lines.append(f"trace_start({lua_str(str(trace))}, {{ {', '.join(trace_options)} }})")
+        flags = play_flags_lua(run)
+        if flags:
+            lines.append(flags)
     else:
         options += choice_options(run)
         lines.append(f"load_game_pack({lua_str(str(ctx['pack']))}, {{ {', '.join(options)} }})")
@@ -876,12 +902,23 @@ def self_test() -> int:
         print(f"re2-regress self-test FAILED: compare_from {starts} {bad}", file=sys.stderr)
         return 1
     problem = (self_test_fields() or self_test_gallery_hold() or self_test_keys() or self_test_pace() or self_test_pictures()
-               or self_test_save_images() or self_test_title_voice() or self_test_no_enemies())
+               or self_test_save_images() or self_test_title_voice() or self_test_no_enemies()
+               or self_test_play_flags())
     if problem:
         print(f"re2-regress self-test FAILED: {problem}", file=sys.stderr)
         return 1
     print("re2-regress self-test ok")
     return 0
+
+
+def self_test_play_flags() -> str | None:
+    """`play_flags_lua`: a title run's record's flags, raised once when play begins; none without them."""
+    lua = play_flags_lua({"name": "t", "ui": "title", "record": "--flag 0:10 --flag 1:0x11"})
+    if lua is None or "game:set_re2_flag(0, 10) game:set_re2_flag(1, 17)" not in lua:
+        return f"play_flags_lua: {lua!r}"
+    if play_flags_lua({"name": "t", "ui": "title", "record": ""}) is not None:
+        return "play_flags_lua: a record with no --flag raises one"
+    return None
 
 
 def self_test_save_images() -> str | None:

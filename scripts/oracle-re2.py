@@ -2481,6 +2481,24 @@ def exbattle_opening_trace(game: Game) -> str:
     )
 
 
+def ex_end_trace(game: Game) -> str:
+    """Extreme Battle's end while task 0 runs `Result` under `fg_system`'s `0x1000000` (`Result_4B7B00`). `exe`: the
+    task's `+8` and `+10`, `FUN_004B7910`'s count and wait (`0x995C38`, `0x6897A8`), the lines' state, line, column,
+    count and delay index (`0x995B40`, `0x99CE1C`, `0x995C28`, `0x995C2C`, `0x99C874`), fade 0's level and step
+    (`0x995B46`, `0x995B88`), the last page's flag and the page's first line (`0x995C30`, `0x99C871`) and the
+    sprites' shown mask (`0x52CD20`, bit n for sprite n)."""
+    if game.u32(TASKS + 4) != RESULT or not game.u32(FG_SYSTEM) & 0x1000000:
+        return "exe=-"
+    task = game.read(TASKS, 0x14)
+    records = game.read(0x52CD20, 12 * 8)
+    mask = sum(1 << n for n in range(12) if records[n * 8] & 1)
+    return (
+        f"exe={task[8]},{task[10]},{game.u32(0x995C38)},{game.u16(0x6897A8)},{game.u32(0x995B40)},"
+        f"{game.u32(0x99CE1C)},{game.u32(0x995C28)},{game.u32(0x995C2C)},{game.u32(0x99C874)},"
+        f"{game.u16(0x995B46)},{game.u16(0x995B88)},{game.u8(0x995C30)},{game.u8(0x99C871)},{mask:x}"
+    )
+
+
 def prologue_trace(game: Game) -> str:
     """The prologue's state while its task runs (`Prologue`, `0x4CEFF0`). `pro`: the task's three steps, the
     sequence, its step and count, the routine, the fade's flags and slot, the skip's gate and state, the frames
@@ -2636,6 +2654,7 @@ def boot_trace_line(game: Game, tick: int, pad: int) -> str:
         "galv=" + gallery_view_trace(game),
         key_config_trace(game),
         result_trace(game),
+        ex_end_trace(game),
     ]
     game.sounds.clear()
     return " ".join(fields)
@@ -2668,6 +2687,7 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
             held_keys = 0
             kb_press = KbPress()
             tick = 0
+            settled = 0
             films = FilmPads()
             while tick <= args.ticks:
                 tid, regs = game.run_to_break()
@@ -2675,6 +2695,14 @@ def record_boot(args: argparse.Namespace, trace_path: Path, work: Path) -> None:
                     game.resume_from_break(tid, regs, original)
                     continue
                 films.ended(f"before boot tick {tick}", tick - 1 if tick > 0 else -1, pace, tick_log)
+                # `--flag` as `record` applies it: once, when play begins (the player's life has been set for more
+                # than SETTLE_TICKS ticks), before the tick runs.
+                if settled <= SETTLE_TICKS and game.i16(PL + ENTITY_LIFE) != 0:
+                    settled += 1
+                    if settled > SETTLE_TICKS and args.flag:
+                        for flag in args.flag:
+                            set_flag(game, flag)
+                        print(f"play begins on boot tick {tick}: --flag raised")
                 # This stop is the end of the tick before it.
                 if tick > 0:
                     pace.reached(tick - 1)
