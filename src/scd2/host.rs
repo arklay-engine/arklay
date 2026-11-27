@@ -126,6 +126,10 @@ pub struct Re2State {
     /// A door's load is under way: the speed the last room left, which the
     /// load's `Pl_init` keeps.
     pub door_spd: Option<[i16; 3]>,
+    /// `St_exit`'s stash (`0x692D64`, marked by `0x692D63`) of the equipped
+    /// item and its slot, which a used Valve Handle (0x32) or item 0x43 or
+    /// 0x4B puts down until the status screen's next start.
+    pub equip_stash: Option<(Option<u8>, Option<usize>)>,
     /// What each task's `work_set` selected.
     pub work: [Work; TASK_SLOTS],
     /// Each task's `Speed_set`s: speeds of position and rotation, then what
@@ -1076,6 +1080,7 @@ impl Default for Re2State {
             objects_key_stop: false,
             script_door: false,
             door_spd: None,
+            equip_stash: None,
             work: [Work::Player; TASK_SLOTS],
             speeds: [[0; 12]; TASK_SLOTS],
             pending_player: PendingPlayer::default(),
