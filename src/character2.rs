@@ -1079,9 +1079,11 @@ fn run_zombie(
     for (record, pos) in game.objects.records.iter_mut().zip(objects) {
         record.pos = pos;
     }
+    // The alligator's `DAT_0098a814 = 0`: the tank's whole `Be_flg` goes.
     for index in hidden_objects {
         if let Some(record) = game.objects.record_mut(index) {
-            record.flag &= !crate::objects::OBJECT_FLAG_ACTIVE;
+            record.be_flg = 0;
+            record.sync_active_from_be_flg();
         }
     }
     if let Some(cut) = cut {
@@ -1178,6 +1180,12 @@ fn run_zombie(
         if let Some(id) = enemy_sound(sound) {
             re2.sounds
                 .push(crate::scd2::host::SoundRequest::enemy(id, pos));
+        }
+    }
+    for (word, pos) in zombie.se_on.drain(..) {
+        if let Some(id) = crate::se2::SoundId::decode(word) {
+            re2.sounds
+                .push(crate::scd2::host::SoundRequest::new(id, pos));
         }
     }
     let mine = character.body.angle;

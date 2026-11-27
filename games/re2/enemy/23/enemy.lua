@@ -690,9 +690,11 @@ local function tank(e)
     end
 end
 
--- The tank in its jaws, placed on part 6 as the last draw left it.
+-- The tank in its jaws, placed on part 6 as the last draw left it, from
+-- the bite (3) until the blast (0xD) leaves it where it was drawn.
 local function hold_tank(e)
-    if e:var(TANK) >= 3 then
+    local tank = e:var(TANK)
+    if tank >= 3 and tank <= 7 then
         local x, y, z = e:drawn_part_point(6, i16(e:var(TANK_X)), i16(e:var(TANK_Y)), i16(e:var(TANK_Z)))
         e:set_object_pos(TANK_OBJECT, x, y, z)
     end
@@ -1019,6 +1021,9 @@ local function explode(e)
         e:set_status(4)
         e:set_var(FLAGS, e:var(FLAGS) | 2)
         e:set_var(SHAKE, 1)
+        -- The tank's `Pos` from its `Workm` (the last draw's), its parent the
+        -- world's from here.
+        hold_tank(e)
         e:set_var(TANK, 0xD)
         e:set_var(JAW_B, 0)
         e:set_var(JAW_A, 0)
@@ -1029,6 +1034,7 @@ local function explode(e)
         -- the head's `FUN_0046b700`. The parts they throw aren't ported.
         blast_blood(e)
         tank_blasts(e)
+        e:se_on(0x20F0001)
         e:set_var(BLAST_DIR, (e:angle() + 0xA0) & 0xFFFF)
         -- `Timer3`: the ticks the burst tank is still drawn.
         e:set_timer(3, 9)

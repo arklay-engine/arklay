@@ -3991,6 +3991,17 @@ impl Host for GameHost<'_> {
                 }
                 self.game.re2.set_partner_bit(true);
             }
+            // `Sce_heal` (opcode 0x83, `0x4E8FB0`): the player's life back to
+            // `Max_life`, and the poison and its timer gone (room 410's scene
+            // as Ada takes over).
+            "sce_heal" => {
+                let max = self.game.max_health;
+                if let Some(player) = self.game.entities.first_mut() {
+                    player.health = max;
+                }
+                self.game.re2.player.poisoned = false;
+                self.game.re2.player.poison_timer = 0;
+            }
             "heal_partner" => self.game.re2.heal_partner(),
             // `Sce_84` (`0x4E8FE0`): the status screen opens on the map.
             "sce_84" => self.game.request_re2_script_map(at(0) as u8),
@@ -8159,6 +8170,19 @@ mod tests {
         let partner = sherry.partner.as_deref().unwrap();
         assert_eq!((partner.life, partner.max_life), (120, 200));
         assert_eq!(partner.state & crate::partner2::STATE_LOST, 0, "not lost");
+    }
+
+    #[test]
+    fn sce_heal_fills_the_players_life_and_ends_the_poison() {
+        let mut game = GameState::default();
+        game.max_health = 200;
+        game.entities[0].health = 111;
+        game.re2.player.poisoned = true;
+        game.re2.player.poison_timer = 12;
+        exec(&mut game, "sce_heal", &[]);
+        assert_eq!(game.entities[0].health, 200);
+        assert!(!game.re2.player.poisoned);
+        assert_eq!(game.re2.player.poison_timer, 0);
     }
 
     #[test]

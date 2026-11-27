@@ -649,6 +649,9 @@ pub struct Zombie {
     /// each slot with the body's position at the call, since `Snd_se_3D` pans
     /// it there and then, before `Oba_ck_em` and `Sca_ck_em` push the body.
     pub sounds: Vec<(u8, [i32; 3])>,
+    /// `Snd_se_on`'s words this tick, each with the body's position at the
+    /// call: the alligator's blast plays the room bank's 0xF.
+    pub se_on: Vec<(u32, [i32; 3])>,
     /// `pEnemy_ptr`: the slot of the ivy a vine grew from.
     pub parent: Option<u8>,
     /// Where G3's frame grips a knocked-back player (`0x49a890`): the part

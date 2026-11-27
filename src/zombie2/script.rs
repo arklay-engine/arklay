@@ -325,6 +325,13 @@ impl UserData for Api {
             em.z.sounds.push((slot as u8, em.mover.player.pos));
             Ok(())
         });
+        // `Snd_se_on(word, &Pos_x)`: a sound of any bank, from the body's
+        // place at the call, after the tick's `Snd_se_enem`s.
+        methods.add_method_mut("se_on", |_, e, word: u32| {
+            let em = e.em();
+            em.z.se_on.push((word, em.mover.player.pos));
+            Ok(())
+        });
         methods.add_method_mut("rnd", |_, e, ()| Ok(e.em().rnd()));
         // `At_em_no` is the player or their partner.
         methods.add_method_mut("touching", |_, e, ()| {
@@ -1400,7 +1407,7 @@ impl UserData for Api {
             Ok((x, y, z))
         });
         methods.add_method_mut("cut", |_, e, ()| Ok(e.em().world.camera_cut));
-        // A room object's `Be_flg` cleared: it's gone (`Om_explosion_set`'s end).
+        // A room object's `Be_flg` zeroed: it's gone (`Om_explosion_set`'s end).
         methods.add_method_mut("hide_object", |_, e, index: usize| {
             e.em().world.hidden_objects.push(index);
             Ok(())
@@ -6774,6 +6781,49 @@ mod tests {
             assert_eq!(flame.effects[0], [5, 4, 0x2000, -1]);
             assert_eq!(flame.effects[3], [5, 4, 0x2800, -1]);
             assert_eq!(flame.drawn, 8);
+        }
+
+        /// `FUN_00469e90`'s blast with the tank held: the room bank's 0xF
+        /// (`Snd_se_on(0x20F0001)`), the tank left where it was last drawn
+        /// (placed once, on the blast's tick, and not after), and taken out
+        /// (`Be_flg` 0) when `Timer3`'s 9 has counted out.
+        #[test]
+        fn the_alligators_blast_sounds_and_leaves_the_tank_where_it_was() {
+            let (lua, budget) = crate::lua::new_sandboxed_state().unwrap();
+            budget.begin();
+            lua.load(format!(
+                "ROUTINES = {{ [0] = 2, 2, 0, 0 }}; VARS = {{ [7] = 7 }}
+                 DRAWS = {{}}
+                 for i = 1, 256 do DRAWS[i] = 0 end
+                 {ZEROS}
+                 SE, PLACED, HIDDEN, TIMER = {{}}, 0, 0, 0
+                 function e:se_on(word) SE[#SE + 1] = word end
+                 function e:set_object_pos() PLACED = PLACED + 1 end
+                 function e:hide_object() HIDDEN = HIDDEN + 1 end
+                 function e:timer() return TIMER end
+                 function e:set_timer(_, v) TIMER = v end
+                 function e:player_life() return 100 end
+                 -- Clip 9 plays on through the count.
+                 function e:joint() return false end
+                 {ALLIGATOR}
+                 E = e"
+            ))
+            .exec()
+            .unwrap();
+            let update = || {
+                budget.begin();
+                lua.load("update(E)").exec().unwrap();
+                lua.load("return SE[1] or 0, #SE, PLACED, HIDDEN")
+                    .eval::<(i64, i64, i64, i64)>()
+                    .unwrap()
+            };
+            // The blast's tick: the sound, and the tank placed once.
+            assert_eq!(update(), (0x20F_0001, 1, 1, 0));
+            for _ in 0..8 {
+                assert_eq!(update(), (0x20F_0001, 1, 1, 0), "left where it was");
+            }
+            // Nine ticks after the blast, it is taken out.
+            assert_eq!(update(), (0x20F_0001, 1, 1, 1));
         }
 
         const SPIDER: &str = include_str!("../../games/re2/enemy/25/enemy.lua");
