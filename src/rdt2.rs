@@ -187,13 +187,26 @@ pub fn character_anims(data: &[u8]) -> Vec<(u8, crate::model::RoomAnim)> {
 }
 
 fn room_anim_of(data: &[u8], wanted: u32) -> Option<(&[u8], &[u8])> {
-    let start = offset(data, RBJ_SLOT).ok()? as usize;
-    if start == 0 {
-        return None;
-    }
-    let section = data.get(start..)?;
-    let table = u32_at(section, 0).ok()? as usize;
-    let count = u32_at(section, 4).ok()? as usize;
+    rbj_banks(data)
+        .into_iter()
+        .rfind(|&(_, mask, ..)| mask & wanted != 0)
+        .map(|(_, _, emr, edd)| (emr, edd))
+}
+
+/// The room's animation banks in `Rbj_set`'s order, as `(index, mask, EMR,
+/// EDD)`: a bank that can't be read is left out, and the others keep their
+/// index in the RDT's table.
+pub fn rbj_banks(data: &[u8]) -> Vec<(usize, u32, &[u8], &[u8])> {
+    let Some(start) = offset(data, RBJ_SLOT).ok().filter(|&start| start != 0) else {
+        return Vec::new();
+    };
+    let Some(section) = data.get(start as usize..) else {
+        return Vec::new();
+    };
+    let (Ok(table), Ok(count)) = (u32_at(section, 0), u32_at(section, 4)) else {
+        return Vec::new();
+    };
+    let table = table as usize;
     let bank = |index: usize| {
         let at = table + index * 8;
         Some((
@@ -201,17 +214,47 @@ fn room_anim_of(data: &[u8], wanted: u32) -> Option<(&[u8], &[u8])> {
             u32_at(section, at + 4).ok()? as usize,
         ))
     };
-    let (mask, edd) = (0..count)
-        .filter_map(bank)
-        .rfind(|&(mask, _)| u32_at(section, mask).is_ok_and(|bits| bits & wanted != 0))?;
-    // A bank runs up to whatever comes next: another bank, or the table.
-    let end = (0..count)
-        .filter_map(bank)
-        .map(|(mask, _)| mask)
-        .chain([table])
-        .filter(|&at| at > edd)
-        .min()?;
-    Some((section.get(mask + 4..edd)?, section.get(edd..end)?))
+    let banks: Vec<_> = (0..count as usize)
+        .filter_map(|index| Some((index, bank(index)?)))
+        .collect();
+    banks
+        .iter()
+        .filter_map(|&(index, (mask, edd))| {
+            // A bank runs up to whatever comes next: another bank, or the table.
+            let end = banks
+                .iter()
+                .map(|&(_, (mask, _))| mask)
+                .chain([table])
+                .filter(|&at| at > edd)
+                .min()?;
+            Some((
+                index,
+                u32_at(section, mask).ok()?,
+                section.get(mask + 4..edd)?,
+                section.get(edd..end)?,
+            ))
+        })
+        .collect()
+}
+
+/// [`rbj_banks`] parsed, when two of them share a mask bit: what
+/// `Replace_rdt` (`rbj_reset`) can choose between. Room 404's player has two.
+pub fn shared_rbj_banks(data: &[u8]) -> Vec<(usize, u32, crate::model::RoomAnim)> {
+    let banks = rbj_banks(data);
+    let shared = banks.iter().enumerate().any(|(at, &(_, mask, ..))| {
+        banks[at + 1..]
+            .iter()
+            .any(|&(_, other, ..)| other & mask != 0)
+    });
+    if !shared {
+        return Vec::new();
+    }
+    banks
+        .into_iter()
+        .filter_map(|(index, mask, emr, edd)| {
+            Some((index, mask, crate::emd2::parse_room_anim(emr, edd).ok()?))
+        })
+        .collect()
 }
 
 /// Section slot of the room's sound table (EDT); slot 1 is its VAB header.
