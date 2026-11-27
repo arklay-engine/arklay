@@ -1038,6 +1038,12 @@ impl GameState {
         }
         // `Pad_rep_set(0xF01C, 0x60A)`, in `Status`'s start.
         self.pad_repeat.set(super::pad_repeat::STATUS_SETTING);
+        // The equipment `St_exit` put down after a used Valve Handle comes
+        // back.
+        if let Some((item, slot)) = self.re2.equip_stash.take() {
+            self.set_equipped(item);
+            self.equipped_slot = slot;
+        }
         // `Sort_item` (`0x502690`), at the end of `Status`'s start: the
         // slots after the first empty one move up one and the last is
         // cleared. Only a start that leaves a gap (EASY's bullets in slot
@@ -1067,6 +1073,20 @@ impl GameState {
         }
         if self.re2.gets_easy_ammo() {
             self.set_re2_slot(EASY_AMMO_SLOT, [EASY_AMMO, EASY_AMMO_COUNT]);
+        }
+    }
+
+    /// `St_exit` (`0x501EA0`) after USE handed the room the Valve Handle
+    /// (0x32) or item 0x43 or 0x4B: the equipped item and its slot go to
+    /// the stash, and the player holds nothing (`St+8` 0x80, `St+0xA` 0)
+    /// until the screen's next start puts them back.
+    pub fn put_down_re2_equip(&mut self) {
+        if matches!(
+            self.re2.vars[crate::scd2::host::VAR_USED_ITEM],
+            0x32 | 0x43 | 0x4B
+        ) {
+            self.re2.equip_stash = Some((self.equipped, self.equipped_slot));
+            self.set_equipped(None);
         }
     }
 

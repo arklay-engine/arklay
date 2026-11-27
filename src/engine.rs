@@ -9447,6 +9447,7 @@ impl GameSession {
         if ticks == RE2_STATUS_UNCUT_TICK {
             self.game.re2.bg_load = true;
             self.game.exit_re2_key_map();
+            self.game.put_down_re2_equip();
         }
         // The box's routines and its draw run through the close's seventh
         // tick, the last before the screen's task reaches `St_exit`.
@@ -9485,7 +9486,9 @@ impl GameSession {
 
     /// `Game_loop`'s game mode 3 on the room's return from a screen
     /// (`0x4C000D`): the player's routines restart (`Player_move`'s
-    /// `Pl_init`), mode 5 fades the room in, and the pass still runs the
+    /// `Pl_init`, after its poison step: `fg_stop` is still down, and the
+    /// tail raises it to 0xEF after the call), mode 5 fades the room in, and
+    /// the pass still runs the
     /// enemy slots under `fg_stop`'s 0xEF, each doing its `Root_ck`, with
     /// the effects moving, every kind of them.
     fn return_re2_room(&mut self, pack: &Pack) {
@@ -9495,7 +9498,7 @@ impl GameSession {
         // door do: a direction held through the close moves the player a
         // tick later (room 108's status screen on Leon A's route).
         self.game.re2.door_key_stop = true;
-        crate::player2::pl_init(&mut self.game.re2.player);
+        re2_return_player_move(&mut self.game);
         self.game.re2.player.init_pose = false;
         self.place_re2_neck(true);
         if self.game.is_re2_room {
@@ -9928,6 +9931,10 @@ impl GameSession {
             // A transition that loaded no RE2 room (only a camera, or a room
             // without scripts) leaves no speed for a later load's move.
             self.game.re2.door_spd = None;
+            // `Set_room`'s first scheduler pass runs under the door, and its
+            // `se_on`s play there: room 403's lift arrival plays door sound 1
+            // on its load, not on the door's end.
+            self.play_re2_load_sounds(pack);
         }
         if frame.finished {
             self.end_transition(pack);
@@ -9939,6 +9946,24 @@ impl GameSession {
         // frame or the bars would still be fading when the destination's
         // first traced tick is drawn.
         self.tick_screen_intensity();
+    }
+
+    /// The sounds an RE2 room's load queued, played on the load's tick.
+    fn play_re2_load_sounds(&mut self, pack: &Pack) {
+        if !self.game.is_re2_room || self.game.re2.sounds.is_empty() {
+            return;
+        }
+        let cut = self.sound_cut();
+        play_re2_sounds(
+            &mut self.music,
+            &mut self.sfx_cache,
+            &mut self.re2_sounds,
+            pack,
+            &self.loaded.room,
+            &mut self.game,
+            &mut self.player,
+            cut,
+        );
     }
 
     /// Whether a door has the screen: not yet during RE2's hold, which keeps
@@ -19372,7 +19397,25 @@ fn play_re2_sounds(
         logged
     };
     let room_200 = (game.id.stage, game.id.room) == (2, 0);
+    let room_408 = (game.id.stage, game.id.room) == (4, 8);
     for request in requests {
+        if room_408 && request.id.kind == Kind::Room && request.id.slot == 0xF {
+            // `Snd_se_on`'s case for room 408: `SsPlay(2, 0x2F, 1)` starts
+            // slot 0x2F first, at the full level nothing else sets for it,
+            // from the centre. Its loop, and its stop on slot 0xE or 0x10,
+            // aren't ported.
+            play(
+                SoundId {
+                    slot: 0x2F,
+                    positional: false,
+                    ..request.id
+                },
+                request.pos,
+                Some((0x7F, 0)),
+                request.cut,
+                false,
+            );
+        }
         let logged = play(request.id, request.pos, None, request.cut, request.enemy);
         if room_200 && request.id.kind == Kind::Room && request.id.slot == 0x12 {
             // `Snd_se_on`'s case for room 200 (`0x4EDC77`): slot 0x13 starts
@@ -22181,6 +22224,19 @@ fn re2_player_part_world(
         key_trg: 0,
     };
     crate::player2::part_world(&mut context.game.re2.player, context.player, &tick, part)
+}
+
+/// Game mode 3's `Player_move` on a screen's return
+/// ([`crate::player2::return_move`]), unless `fg_stop`'s top bit holds the
+/// player, when `Pl_init` alone restarts the routines.
+fn re2_return_player_move(game: &mut game::GameState) {
+    if !game.re2.player_stopped()
+        && let Some(player) = game.entities.first_mut()
+    {
+        crate::player2::return_move(&mut game.re2.player, &mut player.health);
+    } else {
+        crate::player2::pl_init(&mut game.re2.player);
+    }
 }
 
 /// `Set_room`'s case 6 `Player_move`: its poison step, then `Pl_init`, which
@@ -38096,6 +38152,64 @@ mod tests {
         mixer.state().sfx_bank_volume(sfx_bank_key(bank, slot))
     }
 
+    /// `Snd_se_on`'s case for room 408: the room bank's slot 0xF starts slot
+    /// 0x2F first, at full level from the centre (`leon_a_404_40a`'s bridge,
+    /// `snd=2:2f:127:0/2:f:127:0`); elsewhere it doesn't.
+    #[test]
+    fn room_408s_slot_15_starts_slot_47_first() {
+        let dir = TempDir::new();
+        let (pack, a, _) = two_room_door_pack(&dir);
+        let mut session = fading_door_session(&pack, a);
+        let played = |session: &mut GameSession, room: &str| {
+            session.game.id = RoomId::parse(room).unwrap();
+            let request = crate::scd2::host::SoundRequest::new(
+                crate::se2::SoundId::decode(0x020F_0000).unwrap(),
+                [0; 3],
+            );
+            session.game.re2.sounds.push(request);
+            session.re2_sounds.played.clear();
+            play_re2_sounds(
+                &mut session.music,
+                &mut session.sfx_cache,
+                &mut session.re2_sounds,
+                &pack,
+                &session.loaded.room,
+                &mut session.game,
+                &mut session.player,
+                0,
+            );
+            session.re2_sounds.played.clone()
+        };
+        assert_eq!(
+            played(&mut session, "4080").first(),
+            Some(&(2, 0x2F, 0x7F, 0))
+        );
+        assert!(
+            played(&mut session, "4070")
+                .iter()
+                .all(|sound| sound.1 != 0x2F)
+        );
+    }
+
+    /// A load's `se_on`s play on the load's tick, under the door, rather
+    /// than wait for the room's first tick after it: an RE1 room keeps none.
+    #[test]
+    fn a_loads_sounds_play_under_the_door() {
+        let dir = TempDir::new();
+        let (pack, a, _) = two_room_door_pack(&dir);
+        let mut session = fading_door_session(&pack, a);
+        let request = crate::scd2::host::SoundRequest::new(
+            crate::se2::SoundId::decode(0x0001_0000).unwrap(),
+            [0; 3],
+        );
+        session.game.re2.sounds.push(request);
+        session.play_re2_load_sounds(&pack);
+        assert_eq!(session.game.re2.sounds.len(), 1, "not an RE2 room");
+        session.game.is_re2_room = true;
+        session.play_re2_load_sounds(&pack);
+        assert!(session.game.re2.sounds.is_empty());
+    }
+
     /// `main_loop` runs `UpdateSoundFadeState` under the door's task too:
     /// the sweep steps once per door tick.
     #[test]
@@ -50844,6 +50958,36 @@ end
             [crate::player2::MODE_SCENARIO, 4]
         );
         assert_eq!(game.re2.player.dest, [-253, -7842]);
+    }
+
+    /// Game mode 3 on the status screen's return runs `Player_move` with
+    /// `fg_stop` down, so a poisoned player's timer steps on that tick, as
+    /// after room 405's status screen with Leon poisoned, and `Damage_cnt`
+    /// and the noise step with it; the top bit held stops them.
+    #[test]
+    fn a_screens_return_steps_the_poison() {
+        let dir = TempDir::new();
+        let (pack, a, _) = debug_menu_pack(&dir);
+        let mut session = GameSession::from_room(&pack, a, Path::new("saves")).unwrap();
+        let game = &mut session.game;
+        game.entities[0].health = 70;
+        game.re2.player.poisoned = true;
+        game.re2.player.poison_timer = 24;
+        game.re2.player.damage_cnt = 0x85;
+        game.re2.player.noise = 0x3A;
+        session.return_re2_room(&pack);
+        let game = &mut session.game;
+        assert_eq!(game.re2.player.poison_timer, 23);
+        assert_eq!(game.re2.player.damage_cnt, 0x84, "`Damage_cnt` counts down");
+        assert_eq!(game.re2.player.noise, 0x20, "the noise's low bits go");
+        assert_eq!(
+            game.re2.player.routine,
+            [crate::player2::MODE_MOVE, 0, 0, 0]
+        );
+        *game.re2.fg_stop_mut() = 0x8000_0000;
+        re2_return_player_move(game);
+        assert_eq!(game.re2.player.poison_timer, 23);
+        assert_eq!(game.re2.player.damage_cnt, 0x84);
     }
 
     #[test]

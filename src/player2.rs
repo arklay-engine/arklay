@@ -2292,6 +2292,20 @@ pub fn start_pose(
     ))
 }
 
+/// `Player_move` (`0x4D97B0`) from `Pl_init`'s routines, as game mode 3 runs
+/// it on a screen's return: the noise's low bits go, `Damage_cnt` counts
+/// down, the poison takes its step, and routine 0, 0 is `Pl_init`. Its
+/// `fg_status &= !0x80` and Sherry's colour (`Id` 0xD, `Poly_rgb` by her
+/// life and the poison's fade) aren't modelled here.
+pub fn return_move(work: &mut Work, life: &mut i16) {
+    work.noise &= 0xE0;
+    if work.damage_cnt & !DAMAGE_LOCK != 0 {
+        work.damage_cnt -= 1;
+    }
+    poison_tick(work, life);
+    pl_init(work);
+}
+
 /// `Player_move`'s poison, before its routine: while `poison_status` is set,
 /// a life each time `poison_timer` runs out, never the last one.
 pub fn poison_tick(work: &mut Work, life: &mut i16) {

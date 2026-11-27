@@ -186,6 +186,26 @@ fn a_key_item_is_used_where_fg_use_has_it() {
     assert!(run.game.message.active);
 }
 
+/// `St_exit` after a used Valve Handle puts the handgun down (`St+8` 0x80,
+/// `St+0xA` 0), as room 408's bridge has it in `leon_a_404_40a`, and the
+/// screen's next start takes it up again; any other used item leaves it.
+#[test]
+fn a_used_valve_handle_puts_the_weapon_down_until_the_next_screen() {
+    const VALVE: u8 = 0x32;
+    let mut game = game(&[(0x02, 10), (0x01, 1), (VALVE, 1)]);
+    game.max_health = 200;
+    game.set_equipped(Some(0x02));
+    game.re2.vars[crate::scd2::host::VAR_USED_ITEM] = 0x47;
+    game.put_down_re2_equip();
+    assert_eq!(game.re2_player_trace(), "0,0,200,0,2,0,0,200,0,0");
+    game.re2.vars[crate::scd2::host::VAR_USED_ITEM] = u16::from(VALVE);
+    game.put_down_re2_equip();
+    assert_eq!(game.re2_player_trace(), "0,0,200,128,0,0,0,200,0,0");
+    game.init_re2_status();
+    assert_eq!(game.re2_player_trace(), "0,0,200,0,2,0,0,200,0,0");
+    assert_eq!(game.re2.equip_stash, None);
+}
+
 /// `inv_use`'s second USE: the red herb, which needs a mix.
 #[test]
 fn a_red_herb_is_not_needed_now() {
