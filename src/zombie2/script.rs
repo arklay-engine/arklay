@@ -8698,6 +8698,27 @@ mod tests {
             )
         }
 
+        /// `FUN_0048ff00`, `Type` 5's move (room 410's G1): `Routine_1` 0
+        /// starts the swell and goes on as 1 in the same pass, 1 turns to 2 on
+        /// its seventh pass and 2 back to 1 ten passes later, as in the
+        /// original's `claire_a_40a_409` (ticks 2935, 2941 and 2951).
+        #[test]
+        fn type_5_swells_part_0x12_in_turns() {
+            let setup =
+                "w.kind = 0x4005 w.r = { [0] = 1, 0, 0, 0 } w.vars[30] = 0x1000 w.vars[31] = 0";
+            let r1 = |ticks| eval::<i64>(&run(&g1(), setup, ticks, &[]).0, "return w.r[1]");
+            assert_eq!(r1(1), 1);
+            assert_eq!(r1(6), 1);
+            assert_eq!(r1(7), 2);
+            assert_eq!(r1(16), 2);
+            assert_eq!(r1(17), 1);
+            let (lua, log) = run(&g1(), setup, 7, &["morph"]);
+            let swell: (i64, i64) = eval(&lua, "return w.timers[0], w.vars[31]");
+            assert_eq!(swell, (0xC0, 0x980));
+            // `Sa_parts_allmv` on part 0x12 alone, by the two weights.
+            assert_eq!(log.last().map(String::as_str), Some("morph(18,1664,2432)"));
+        }
+
         /// `FUN_0048a540`'s `Type` 2: routine 11 on clip 20 from its start
         /// (`+0x14c`'s word write), played once more by `Joint_move` 0x100.
         #[test]

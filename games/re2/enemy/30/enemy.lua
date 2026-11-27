@@ -57,6 +57,10 @@ local W1 <const> = 26
 local W2 <const> = 27
 local W4 <const> = 28
 local W5 <const> = 29
+-- `Type` 5's part 0x12: its morph's first two weights (`pSa_dat_head`'s
+-- words at 3 and 4), which its move (`FUN_0048ff00`) swells in turn.
+local PULSE_W3 <const> = 30
+local PULSE_W4 <const> = 31
 
 -- Part 4, the eye.
 local EYE_PART <const> = 4
@@ -229,10 +233,13 @@ local function init(e)
     -- `Type` 5 hangs part 0x12 back on its own part 0 at (0, 0, 0), in play,
     -- on its first weights (0x1000 and 0). Its `Be_flg |= 0xa`, the 0x4000
     -- it gives its first sixteen parts and the byte it clears at
-    -- `+0x16c`'s `+0xe` aren't ported: no room in the runs has a `Type` 5.
+    -- `+0x16c`'s `+0xe` aren't ported: room 410's, the one `Type` 5 in the
+    -- runs, stays out of sight.
     if low == 5 then
         e:hang_part(SPRAY_PART, e:slot(), 0, 0, 0, 0, true)
-        e:morph(SPRAY_PART, 0x1000, 0)
+        e:set_var(PULSE_W3, 0x1000)
+        e:set_var(PULSE_W4, 0)
+        morph_part(e, SPRAY_PART, 0x1000, 0)
     end
 end
 
@@ -1724,9 +1731,70 @@ local AFTER <const> = {
     [12] = lift,
 }
 
+-- `FUN_0048ff00`, `Type` 5's move: part 0x12 swells and shrinks by its two
+-- weights, `Timer0` the step. `Routine_1` 0 starts it at 0x200 and goes on as
+-- 1 in the same pass; 1 moves the second weight up until it passes 0x625 and
+-- the step falls under 0xc0, then 2 moves it back down until it's under 0x200
+-- and the step under 0x90. Room 410's G1, out of sight while Sherry's scene
+-- runs, is one.
+local function pulse(e)
+    local sub = e:routine(1)
+    local step = i16(e:timer(0))
+    local w3, w4 = e:var(PULSE_W3), e:var(PULSE_W4)
+    local function done(r1, t0)
+        if r1 then
+            e:set_routine(1, r1)
+        end
+        e:set_timer(0, t0 & 0xFFFF)
+        e:set_var(PULSE_W3, w3)
+        e:set_var(PULSE_W4, w4)
+        morph_part(e, SPRAY_PART, w3, w4)
+    end
+    if sub == 0 then
+        step = 0x200
+        sub = 1
+        e:set_routine(1, 1)
+    end
+    if sub == 1 then
+        w3 = i16(w3 - step)
+        w4 = i16(w4 + step)
+        if w4 < 0x625 then
+            step = step + 0x40
+            if step > 0x180 then
+                step = 0x180
+            end
+        else
+            step = step - 0x40
+            if step < 0xC0 then
+                return done(2, 0xC0)
+            end
+        end
+    elseif sub == 2 then
+        w3 = i16(w3 + step)
+        w4 = i16(w4 - step)
+        if w4 < 0x200 then
+            step = step - 0x30
+            if step < 0x90 then
+                return done(1, 0x100)
+            end
+        else
+            step = step + 0x30
+            if step > 0x100 then
+                step = 0x100
+            end
+        end
+    end
+    done(nil, step)
+end
+
 -- `FUN_0048ab30`.
 function move(e)
-    if e:kind() & 0x3F > 4 then
+    local low = e:kind() & 0x3F
+    if low == 5 then
+        pulse(e)
+        return
+    end
+    if low > 4 then
         return
     end
     local before = BEFORE[e:routine(1)]
