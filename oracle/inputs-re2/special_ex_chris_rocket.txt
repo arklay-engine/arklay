@@ -1,0 +1,72 @@
+# Chris's game as special_ex_chris_f14 plays it into room F14, a START that ends the lift's door animation on 2060, then EQUIP of the rocket launcher (slot 0) from 2160 and aiming down F14's corridor from 2320, firing every 48 ticks at the zombies `Sce_em_set2` placed, through its five rounds.
+0
+260 down
+263
+290 down
+293
+320 down
+323
+380 confirm
+383
+420 down
+423
+450 confirm
+453
+640 down
+643
+680 confirm
+683
+740 right
+743
+860 down
+863
+890 up
+893
+920 confirm
+923
+1250 left
+1253
+1290 left
+1293
+1350 confirm
+1353
+1600 confirm
+1603
+1700 up
+1750 left
+1761 up
+1902 right
+1909
+1920 confirm
+1923
+2060 start
+2063
+2160 start
+2163
+2200 confirm
+2203
+2220 confirm
+2223
+2260 start
+2263
+2320 aim fire
+2323 aim
+2368 aim fire
+2371 aim
+2416 aim fire
+2419 aim
+2464 aim fire
+2467 aim
+2512 aim fire
+2515 aim
+2560 aim fire
+2563 aim
+2608 aim fire
+2611 aim
+2656 aim fire
+2659 aim
+2704 aim fire
+2707 aim
+2752 aim fire
+2755 aim
+2803

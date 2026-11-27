@@ -512,7 +512,7 @@ local function art(api)
     if s.art then
         return s.art
     end
-    local sheet = api:character() & 1
+    local sheet = api:re2_status_sheet()
     local pages = {}
     for k = 0, 7 do
         pages[ST + k] = api:page(("ui/status/st%d_jp_%d"):format(sheet, k))

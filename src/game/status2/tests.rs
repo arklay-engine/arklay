@@ -1470,6 +1470,29 @@ fn the_portraits_texels_follow_the_players_id() {
     }
 }
 
+/// `St_load_gfx`'s sheet (`0x5016F0`): the scenario's outside Extreme
+/// Battle, whatever the character byte's pick; in it the character's index,
+/// so Chris draws from ST2 (his portrait and name) and Ada from Leon's.
+#[test]
+fn the_status_sheet_is_the_scenarios_or_the_extreme_battle_characters() {
+    use super::status_sheet;
+    use crate::scd2::host::{FG_SYSTEM_EXTREME, STATUS_BANK, STATUS_PLAYER, VAR_EX_CHARACTER};
+    assert_eq!(status_sheet(false, None), 0);
+    assert_eq!(status_sheet(true, None), 1);
+    for claire in [false, true] {
+        for (index, sheet) in [(0, 0), (1, 1), (2, 0), (3, 2)] {
+            assert_eq!(status_sheet(claire, Some(index)), sheet, "{index}");
+        }
+    }
+    let mut game = GameState::new(RoomId::parse("1020").unwrap(), &RoomState::default());
+    assert_eq!(game.re2_status_sheet(), 0);
+    game.re2.set_flag(STATUS_BANK, STATUS_PLAYER, 1);
+    assert_eq!(game.re2_status_sheet(), 1);
+    game.re2.set_flag(0, FG_SYSTEM_EXTREME, 1);
+    game.re2.vars[VAR_EX_CHARACTER] = 3;
+    assert_eq!(game.re2_status_sheet(), 2);
+}
+
 /// The partner's panel (`0x691FA0`) by `inv_check`'s ticks: CHECK's steps 1
 /// and 2 move it 6 left a tick, ten ticks in all (`St_com_inspect`'s cases 1
 /// and 2), and 11 and 12 bring it back (cases 0xB and 0xC); FILE's slide in

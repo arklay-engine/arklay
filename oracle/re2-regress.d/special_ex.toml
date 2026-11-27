@@ -343,3 +343,39 @@ frames = [1427, 4399]
 voice_from_ref = true
 expect = "match"
 record = ""
+
+# Chris's game as `special_ex_chris_f14` plays it into room F14 (with the title's pick of Claire's opening film, so seed 0x80000000), then EQUIP of his rocket launcher and a shot every 48 ticks down the corridor at the zombies `Sce_em_set2` places.
+[[run]]
+name = "special_ex_chris_rocket"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 3000
+compare_from = 1427
+input = "special_ex_chris_rocket.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,fgstat,fgroom,fgitem,esp,pl,exo,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zd"
+frames = [1427, 2999]
+# The status screen, from its open to its close: Chris's sheet (ST2), his portrait and name.
+frame_windows = [[2170, 2260, 0.05]]
+voice_from_ref = true
+expect = "match"
+record = ""
+
+# Chris's game as `special_ex_chris_f14` plays it into room F14 (with the title's pick of Claire's opening film, so seed 0x80000000), then EQUIP of his Beretta and a shot every 16 ticks down the corridor at the zombies `Sce_em_set2` places.
+[[run]]
+name = "special_ex_chris_beretta"
+ui = "title"
+boot = true
+seed = 0x80000000
+offset = 0
+ticks = 3200
+compare_from = 1427
+input = "special_ex_chris_beretta.txt"
+fields = "room,cam,rseed,rng,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,inv,ip,fgstat,fgroom,fgitem,esp,pl,exo,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zd"
+frames = [1427, 3199]
+# The status screen, from its open to its close: Chris's sheet (ST2), his portrait and name.
+frame_windows = [[2170, 2290, 0.05]]
+voice_from_ref = true
+expect = "match"
+record = ""
