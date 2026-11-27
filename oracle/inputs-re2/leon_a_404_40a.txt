@@ -1,0 +1,543 @@
+# leon_a_404_40a: Leon from 404, where leon_a_404_410 hands him back, through 403's box for the Valve Handle, 405's Wolf Medal and 407's panel to 408's bridge and on into 40A
+# 404: north along the passage to the lift (door 1), pressed facing north (403 on 464)
+344
+348
+352 up run left
+371 up run
+378 up run left
+379 up run
+406 up run right
+407 up run
+416 up run left
+417 up run
+422 up run right
+423 up run
+425 up run right
+426 up run
+427 left
+429 action
+431
+# 403: the lift down; south, back north and east to the item box, pressed facing east, which gives up the Valve Handle into slot 5 (down, down, right, confirm, down, confirm); back the same way to the lift, pressed facing south (404 on 3110)
+880 up run left
+1413 up run
+1421 up run left
+1422 up run
+1448 up run right
+1470 up run
+1521 up run left
+1522 up run
+1637 up run right
+1638 up run
+1641 up run left
+1642 up run
+1757 up run right
+1758 up run
+1761 up run left
+1762 up run
+1877 up run right
+1878 up run
+1881 up run left
+1882 up run
+1997 up run right
+1998 up run
+2001 up run left
+2002 up run
+2117 up run right
+2118 up run
+2121 up run left
+2122 up run
+2237 up run right
+2238 up run
+2240 up run left
+2241 up run
+2337 up run right
+2338 up run
+2341 up run left
+2342 up run
+2448
+2454 action
+2457
+2577 down
+2580
+2607 down
+2610
+2637 right
+2640
+2667 confirm
+2670
+2697 down
+2700
+2727 confirm
+2730
+2757 cancel
+2760
+2787 cancel
+2790
+2850 up run right
+2892 up run
+2899 up run left
+2900 up run
+2912 up run left
+2913 up run
+2931 up run left
+2932 up run
+2972 up run left
+2973 up run
+2976 up run left
+2998 up run
+3025 up run right
+3026 up run
+3033 up run left
+3034 up run
+3035 up run left
+3036 up run right
+3055 up run
+3058 left
+3069
+3075 action
+3077
+# 404: south along the passage and west to door 2, pressed facing west (405 on 3482)
+3148 up run left
+3202 up run right
+3303 up run
+3314 up run right
+3315 up run left
+3316 up run
+3347 up run left
+3348 up run
+3350 up run right
+3351 up run
+3352 up run right
+3371 up run
+3432 up run right
+3433 up run
+3439 left
+3441
+3447 action
+3449
+# 405: west off the walkway to the floor, south and back up, east along the upper walkway to the Wolf Medal; down again, north past box 4's east side and round its corner, then west to door 0 (407 on 5116), with both spiders still on the ceiling
+3494 up run right
+3578 up run
+3589 up run right
+3590 up run
+3591 up run left
+3592 up run
+3593 up run left
+3594 up run
+3595 up run left
+3596 up run
+3597 up run right
+3598 up run
+3600 up run left
+3601 up run
+3604 up run right
+3606 up run
+3612 up run left
+3613 up run
+3615 up run left
+3616 up run
+3617 up run right
+3618 up run
+3620 up run left
+3621 up run
+3624 up run right
+3626 up run
+3632 up run left
+3633 up run
+3636 up run left
+3637 up run
+3639 up run right
+3640 up run
+3641 up run left
+3642 up run
+3644 up run right
+3646 up run
+3652 up run left
+3653 up run
+3656 up run left
+3657 up run
+3659 up run right
+3660 up run
+3661 up run left
+3662 up run
+3664 up run right
+3666 up run
+3672 up run left
+3673 up run
+3676 up run left
+3677 up run
+3679 up run right
+3680 up run
+3681 up run left
+3682 up run
+3684 up run right
+3686 up run
+3692 up run left
+3693 up run
+3695 up run left
+3696 up run
+3697 up run right
+3698 up run
+3700 up run left
+3701 up run
+3704 up run right
+3706 up run
+3713 up run left
+3714 up run
+3715 up run left
+3716 up run
+3718 up run right
+3719 up run
+3720 up run left
+3721 up run
+3724 up run right
+3726 up run
+3733 up run left
+3734 up run
+3735 up run left
+3736 up run
+3737 up run right
+3738 up run
+3739 up run left
+3740 up run
+3743 up run right
+3744 up run
+3746 up run right
+3747 up run
+3753 up run left
+3754 up run
+3755 up run left
+3756 up run
+3757 up run right
+3758 up run
+3759 up run left
+3760 up run
+3763 up run right
+3764 up run
+3766 up run right
+3767 up run
+3773 up run left
+3774 up run
+3775 up run left
+3776 up run
+3777 up run right
+3778 up run
+3780 up run left
+3781 up run
+3784 up run right
+3786 up run
+3792 up run left
+3793 up run
+3795 up run left
+3796 up run
+3797 up run right
+3798 up run
+3800 up run left
+3801 up run
+3804 up run right
+3806 up run
+3812 up run left
+3813 up run
+3816 up run left
+3817 up run
+3819 up run right
+3820 up run
+3821 up run left
+3822 up run
+3824 up run right
+3826 up run
+3832 up run left
+3833 up run
+3836 up run left
+3837 up run
+3839 up run right
+3840 up run
+3841 up run left
+3842 up run
+3844 up run right
+3846 up run
+3852 up run left
+3853 up run
+3856 up run left
+3857 up run
+3859 up run right
+3860 up run
+3861 up run left
+3862 up run
+3864 up run right
+3866 up run
+3872 up run left
+3873 up run
+3875 up run left
+3876 up run
+3877 up run right
+3878 up run
+3880 up run left
+3881 up run
+3884 up run right
+3886 up run
+3893 up run left
+3894 up run
+3895 up run left
+3896 up run
+3898 up run right
+3899 up run
+3900 up run left
+3901 up run
+3904 up run right
+3906 up run
+3913 up run left
+3914 up run
+3915 up run left
+3916 up run
+3917 up run right
+3918 up run
+3919 up run left
+3920 up run
+3923 up run right
+3924 up run
+3926 up run right
+3927 up run
+3933 up run left
+3934 up run
+3935 up run left
+3936 up run
+3937 up run right
+3938 up run
+3939 up run left
+3940 up run
+3943 up run right
+3944 up run
+3946 up run right
+3947 up run
+3953 up run left
+3954 up run
+3955 up run left
+3956 up run
+3957 up run right
+3958 up run
+3960 up run left
+3961 up run
+3964 up run right
+3966 up run
+3972 up run left
+3973 up run
+3975 up run left
+3976 up run
+3977 up run right
+3978 up run
+3980 up run left
+3981 up run
+3984 up run right
+3986 up run
+3992 up run left
+3993 up run
+3994 action
+3996
+4056 up run left
+4077 up run
+4141 up run left
+4142 up run
+4151 up run right
+4152 up run
+4155 up run left
+4156 left
+4168 action
+4170
+4210 up run
+4227 up run right
+4228 up run
+4235 up run right
+4236 up run
+4239 left
+4241 action
+4243
+4268 action
+4270
+4295 action
+4297
+4322 action
+4324
+4349 action
+4351
+4416 right
+4716 up run right
+4767 up run
+4774 up run left
+4775 up run
+4776 action
+4778
+4818 up run right
+4837 up run
+4912 up run right
+4913 up run
+4915 up run right
+4916 up run left
+4917 up run
+4924 up run left
+4925 up run
+4972 up run right
+4973 up run
+4984 up run left
+4985 up run
+4989 up run right
+4990 up run
+4991 up run left
+5010 up run
+5033 up run right
+5034 up run
+5068 up run right
+5069 up run
+5074 up run right
+5075 up run
+5078 up run left
+5079 left
+5081 action
+5083
+# 407: west along the channel to the panel (area 5), facing north: the Wolf Medal from the status screen (START, three downs, use) sets 4:117, through its nine messages; a spider bites Leon there (5887, 141 to 111, no poison); then up the ledge (record 6, the action key facing south) and door 1, pressed facing south (408 on 6099)
+5212 up run right
+5220 up run
+5253 up run right
+5254 up run
+5264 up run left
+5265 up run
+5270 up run right
+5272 up run left
+5274 up run
+5324 up run left
+5325 up run
+5330 up run right
+5331 up run
+5364 up run left
+5365 up run
+5366 right
+5380
+5386 start
+5388
+5428 down
+5431
+5446 down
+5449
+5464 down
+5467
+5482 action
+5485
+5500 action
+5503
+5563 action
+5565
+5593 action
+5595
+5623 action
+5625
+5653 action
+5655
+5683 action
+5685
+5713 action
+5715
+5743 action
+5745
+5773 action
+5775
+5803 action
+5805
+5863 action
+5865
+5895 up run right
+5938 up run
+5959 up run right
+5960 up right
+5976 up
+5980 up right
+5981 up
+5985 left
+5988
+5994 action
+5996
+6036 up run
+6058
+6064 action
+6066
+# 408: east and south to area 3: the Valve Handle from the status screen (down, down, right, use) lowers the bridge (4:30), after which the script's status area (aot 10) opens the status screen, cancelled; west over the bridge and south-west to door 1, pressed facing west (40A on 7058)
+6160 up run left
+6210 up run
+6226 up run right
+6227 up run
+6230 up run right
+6231 up run
+6232 up run right
+6251 up run
+6257 up run left
+6258 up run
+6262 up run left
+6267 up run
+6272 up run left
+6273 up run right
+6277 up run
+6284 left
+6297
+6303 start
+6305
+6345 down
+6348
+6363 down
+6366
+6381 right
+6384
+6399 action
+6402
+6417 action
+6420
+6480 action
+6482
+6510 action
+6512
+6540 action
+6542
+6570 action
+6572
+6600 action
+6602
+6630 action
+6632
+6660 action
+6662
+6690 action
+6692
+6796 cancel
+6799
+6839 up run left
+6898 up run
+6902 up run right
+6903 up run
+6905 up run right
+6906 up run
+6907 up run right
+6908 up run
+6909 up run right
+6910 up run
+6911 up run right
+6912 up run
+6914 up run right
+6915 up run
+6918 up run right
+6919 up run
+6923 up run right
+6924 up run
+6927 up run right
+6928 up run
+6959 up run right
+6960 up run
+6977 up run left
+6985 up run
+6993 up run right
+6994 up run
+6998 up run right
+6999 up run
+7006 up run right
+7007 up run
+7013 up run right
+7017
+7023 action
+7025
