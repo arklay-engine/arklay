@@ -1,4 +1,4 @@
-# leon_a_404_409: Ada from 404's ambush through 405's vent, 40B's cockroaches and 409's scene with Annette, to 409's door 0 into 410
+# leon_a_404_410: Ada from 404's ambush through 405's vent, 40B's cockroaches and 409's scene with Annette, through 409's door 0 into 410, whose scene hands the player back to Leon and takes him into 404
 # 404: west along the passage to door 2 (405 on 522)
 344
 348 up run right
@@ -34,6 +34,7 @@
 660 action
 662
 703 up run left
+# Left and right a tick each until the bite: Ada stands at the walkway's end, short of where the draft steered her, and turns on the spot while the spider comes to her
 729 right
 735 left
 736 right
@@ -675,3 +676,4 @@
 6225
 6237 action
 6239
+# 410: no input; event 10 walks Ada in from the door (`plc_dest`), and at its end `save(32, 0)` makes Leon the next player and door 2 (`aot_on`) loads 404 (6751)

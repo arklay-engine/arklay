@@ -1,9 +1,8 @@
--- arklay start for leon_a_404_409: where --var 32:14 --warp 404:-11700:0:-13375:2277:4 leaves the player: Ada, as Set_room's case 10 makes her after Leon's 141 life and items (the handgun with 10 rounds, the knife, the Club Key, the magnum with 1 round and 30 handgun rounds) are stashed, where leon_a_304_404's ambush hands her back in 404, with its flags (Leon wounded, 4:68)
+-- arklay start for leon_a_404_410: where --var 32:14 --warp 404:-11700:0:-13375:2277:4 leaves the player: Ada, as Set_room's case 10 makes her after Leon's 141 life and items (the handgun with 10 rounds, the knife the new game starts with in slot 1, the Club Key, the magnum with 1 round and 30 handgun rounds) are stashed, where leon_a_304_404's ambush hands her back in 404, with its flags (Leon wounded, 4:68)
 local api = ...
 api:set_health(141)
 api:set_re2_rnd(6114)
 api:set_item_slot(0, 0x02, 10)
-api:set_item_slot(1, 0x01, 1)
 api:set_item_slot(2, 0x5C, 1)
 api:set_item_slot(3, 0x05, 1)
 api:set_item_slot(4, 0x14, 30)

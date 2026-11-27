@@ -135,7 +135,8 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # chess plugs, down 111's dust chute to Ben's death in 301, round by 210 for the
 # magnum, past 303's G adult with the plugs, and on from 304 with Ada through
 # 402 and 403 to Annette's ambush in 404, then as Ada through 405's vent, 40B's
-# cockroaches and Annette's scene in 409 to its door into 410;
+# cockroaches and Annette's scene in 409 into 410, whose scene hands the
+# player back to Leon;
 # Claire A is one continuous run from the new game to the Diamond Key, and goes on
 # in warp runs from the Diamond Key down 110's ladder to 209 and 202's bomb half,
 # up to 10A's wall and on to the Heart Key, then through the sewer with Sherry to
