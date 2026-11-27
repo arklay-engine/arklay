@@ -52,7 +52,7 @@ ticks = 7230
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,om3,fgstat,fgitem,fgroom,fgcom,fgkey,pl,spl,spe,spc,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 7229]
 frame_max_mean = 1.05
-# Each room from a tick or two after its load (the music's word changes with it) to its door's press: 404, 403, 404, 405, 407 (its water, #993), 408 to its bridge scene and from it (the scene's overhead cut 1, 6533 to 6715, is #1009), and 40A
+# Each room from a tick or two after its load (the music's word changes with it) to its door's press: 404, 403, 404, 405, 407 and 408 (their water, #993), 408 to its bridge scene and from it (the scene's overhead cut 1, 6533 to 6715, is #1009), and 40A
 frame_windows = [[360,429,0.35],[560,3075,0.55],[3200,3447,0.45],[3580,5081,0.9],[5210,6064,1.75],[6190,6530,1.0],[6716,7023,1.25],[7150,7229,1.35]]
 voice_from_ref = true
 # On the first tick the original already has the warped player's neck point (`pneck`), which arklay's setup leaves at 0 until the first draw. 40A's `main_00` places Ada (0x41) as the partner on 7149, and her `Spl_Auto` words (`spl`) hold what `splayer_work`'s memory held before; nothing has run on them by the run's end

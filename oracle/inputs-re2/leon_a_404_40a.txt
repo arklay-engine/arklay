@@ -17,7 +17,7 @@
 427 left
 429 action
 431
-# 403: the lift down; south, back north and east to the item box, pressed facing east, which gives up the Valve Handle into slot 5 (down, down, right, confirm, down, confirm); back the same way to the lift, pressed facing south (404 on 3110)
+# 403: the lift down; south, back north and east to the item box, pressed facing east, which gives up the Valve Handle into slot 5 (down, down, right, confirm, down, confirm, then cancel twice to close it); back the same way to the lift, pressed facing south (404 on 3110)
 880 up run left
 1413 up run
 1421 up run left
