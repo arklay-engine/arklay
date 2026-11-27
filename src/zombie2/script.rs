@@ -5221,6 +5221,12 @@ mod tests {
         function e:pl_set_sub1() w.pl.sub1 = true end
         function e:set_player_life(v) w.pl.life = v end
         function e:key_trg() return KEYS or 0 end
+        function e:pl_routine(i) return w.pl.r[i] end
+        function e:distance() return DIST or 20000 end
+        function e:damage_no() return w.dno or 0 end
+        function e:set_damage_no(v) w.dno = v end
+        function e:set_move_cnt(v) w.frame = v end
+        function e:call_effect(...) w.effects = w.effects or {}; w.effects[#w.effects + 1] = { ... } end
         function e:set_super_part(part) w.super_part = part end
         function e:sca_ck_hit(x, y, z, radius, mask)
             w.probe = { x, y, z, radius, mask }
@@ -5526,6 +5532,55 @@ mod tests {
             (-7300, -27000, -9000)
         );
         assert_eq!((x(0, -7000), x(0, -28000)), (-7000, -28000));
+    }
+
+    /// `Em_29`'s tread: a roach on the pipe within 0x226 of the player, no
+    /// more than 0x20 above its feet, while the player walks or runs
+    /// (`Routine_1` 1 to 4), is trodden once: routine 3, `FLAGS`' 4, a life of
+    /// -1 and `Be_flg`'s `0xA`. `FUN_0047cd20` then sets `Routine_1` to 0xFF
+    /// and `Damage_no` 1, and `FUN_0047cef0` plays sound 2, shows the wings,
+    /// calls the splat (kind 0, row 0x10, size 0xC00) at the body and holds
+    /// clip 4's first frame.
+    #[test]
+    fn a_roach_underfoot_is_trodden() {
+        let trod = |dist: i64, y: i64, walk: u8, trod: u8| -> [u8; 4] {
+            spawn_roach(
+                &[],
+                &format!(
+                    "ROUTINES = {{ [0] = 1, 9, 0, 0 }}; VARS = {{ [3] = 8, [8] = {trod} }};
+                     POS = {{ -9000, {y}, -25200 }}; PLAYER = {{ -9000, 0, -25200 }}; DIST = {dist}"
+                ),
+            )
+            .eval(&format!("w.pl.r[1] = {walk}; tick(); {ROUTINES}"))
+        };
+        assert_eq!(trod(0x225, -0x1F, 1, 0), [3, 0, 0, 0]);
+        assert_eq!(trod(0x225, 0, 4, 0), [3, 0, 0, 0]);
+        assert_eq!(trod(0x226, 0, 1, 0), [1, 9, 0, 0]);
+        assert_eq!(trod(0x225, -0x20, 1, 0), [1, 9, 0, 0]);
+        assert_eq!(trod(0x225, 0, 0, 0), [1, 9, 0, 0]);
+        assert_eq!(trod(0x225, 0, 5, 0), [1, 9, 0, 0]);
+        assert_eq!(trod(0x225, 0, 1, 1), [1, 9, 0, 0]);
+        let roach = spawn_roach(
+            &[],
+            "ROUTINES = { [0] = 1, 9, 0, 0 }; VARS = { [3] = 8 }; POS = { -9000, 0, -25200 };
+             PLAYER = { -9000, 0, -25200 }; DIST = 0",
+        );
+        roach.run("w.pl.r[1] = 2; tick()");
+        let (flags, trodden, life, be): (i64, i64, i64, i64) =
+            roach.eval("return w.vars[3], w.vars[8], w.life, w.be");
+        assert_eq!((flags, trodden, life, be & 0xA), (0xC, 1, -1, 0xA));
+        roach.run("w.hidden = 0xC; tick()");
+        assert_eq!(roach.eval::<[u8; 4]>(ROUTINES), [3, 0xFF, 1, 0]);
+        let (dno, sounds, hidden, clip): (i64, Vec<i64>, i64, i64) =
+            roach.eval("return w.dno, w.sounds, w.hidden, w.clip");
+        assert_eq!((dno, sounds, hidden, clip), (1, vec![2], 0, 4));
+        let effect: Vec<i64> = roach.eval("return w.effects[1]");
+        assert_eq!(effect, [0, 0x10, 0xC00, 0, -9000, 0, -25200]);
+        // Each tick after starts clip 4 again from its first frame.
+        roach.run("tick(); tick()");
+        let (sounds, effects, frame): (Vec<i64>, i64, i64) =
+            roach.eval("return w.sounds, #w.effects, w.frame");
+        assert_eq!((sounds, effects, frame), (vec![2], 1, 1));
     }
 
     /// `FUN_0047d150`: `Rnd >> 3` among the free points, else the scan, which

@@ -15,8 +15,10 @@
 -- on every tick it runs and nothing else moves the body, so that write
 -- changes nothing and isn't ported.
 --
--- Not ported yet: the tread, the hits and the deaths (`Routine_0` 2 and 3);
--- and the flame count (`+0x228`).
+-- The tread (`Routine_0` 3, `FUN_0047cd20` with `Damage_no` 1, which runs
+-- `FUN_0047cef0`) is ported. Not ported yet: the hits and the shot death
+-- (`Routine_0` 2, `FUN_0047d1b0`'s effects and `FUN_0047cd90`); and the flame
+-- count (`+0x228`).
 
 local ANGLE <const> = 0 -- `+0x218`: the angle round the pipe's axis.
 local STEP <const> = 1 -- `+0x21a`: the last crawl's step round it.
@@ -523,6 +525,36 @@ local function fall_off(e)
     end
 end
 
+-- `FUN_0047cef0`: squashed underfoot, its wings out. It holds clip 4's
+-- first frame.
+local function squashed(e)
+    local sub = e:routine(2)
+    if sub == 0 then
+        e:sound(2)
+        show_wings(e, true)
+        local x, y, z = e:pos()
+        e:call_effect(0, 0x10, 0xC00, 0, x, y, z)
+        e:set_routine(2, 1)
+    elseif sub ~= 1 then
+        return
+    end
+    e:set_move_cnt(0)
+    mot_play(e, 4, 0)
+end
+
+-- `FUN_0047cd20`, for the tread: its first tick sets `Routine_1` to 0xFF
+-- and `Damage_no` by `FLAGS`' 4 (1, trodden), and `funcs_47CD58` runs by
+-- `Damage_no`. `FUN_0047d1b0`'s effects for `Routine_1` 0 are none.
+local function tread(e)
+    if e:routine(1) ~= 0xFF then
+        e:set_routine(1, 0xFF)
+        e:set_damage_no(e:var(FLAGS) & 4 ~= 0 and 1 or 0)
+    end
+    if e:damage_no() == 1 then
+        squashed(e)
+    end
+end
+
 -- `funcs_47C2B2`, by `Routine_1`.
 local MOVES <const> = { [0] = wait, crawl, jump, on_player, fall_off }
 
@@ -535,8 +567,10 @@ function update(e)
         if move then
             move(e)
         end
+    elseif routine == 3 then
+        tread(e)
     end
-    -- 2 and 3 (`FUN_0047cd20`) aren't ported yet; 4 and 7 are `nullsub_1`.
+    -- 2 (`FUN_0047cd20` for a hit) isn't ported yet; 4 and 7 are `nullsub_1`.
     e:seq_sound()
     if e:var(FLAGS) & 8 ~= 0 then
         local x, y, z = e:pos()
@@ -547,7 +581,17 @@ function update(e)
             x = X_MIN
         end
         e:set_pos(x, y, z)
-        -- The tread isn't ported yet.
+        -- The tread: near the player, at its feet, while it walks or runs
+        -- (its `Routine_1` 1 to 4, as the last tick left it).
+        local _, py = e:player_pos()
+        local walk = e:pl_routine(1)
+        if e:distance() < 0x226 and y > py - 0x20 and e:var(TROD) == 0 and walk ~= 0 and walk < 5 then
+            e:set_var(TROD, 1)
+            set_flags(e, 4)
+            e:set_life(-1)
+            e:set_be_flg(e:be_flg() | 0xA)
+            e:routines(3, 0, 0, 0)
+        end
     end
     if e:swarm(ON_PLAYER) < 3 then
         e:set_swarm(ON_TICKS, 0)

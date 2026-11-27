@@ -1461,6 +1461,20 @@ impl Work {
         }
     }
 
+    /// The rest of `Set_room`'s `Player_move` (`0x4DE9D2`), whose routine is
+    /// `Pl_init`: `Pl_init` clears `Neck_flg`, so `Pl_neck` counts its wait
+    /// down there too, once a load. A look that falls due then leaves the
+    /// head on none: arklay takes it that no body is in play before the
+    /// room's scripts and `Em_init_move` place them, so `pEnemy_neck` stays
+    /// on the player, where `Pl_init` put it.
+    pub fn load_pl_neck(&mut self) {
+        if self.neck.wait != 0 {
+            self.neck.wait -= 1;
+        } else {
+            self.neck.wait = NECK_WAIT;
+        }
+    }
+
     /// `Pl_init`, which leaves the routines' first tick to the room's first
     /// `Player_move`.
     pub fn after_pl_init(mut self) -> Self {
@@ -9019,6 +9033,20 @@ mod tests {
         setup.work.neck.wait = 0;
         setup.tick(Input::default(), 200);
         assert_eq!(setup.work.neck.target, None, "else its own");
+    }
+
+    /// `Set_room`'s `Pl_neck` after `Pl_init`: the wait counts down, and when
+    /// it has run out it starts again at 0x2D.
+    #[test]
+    fn a_loads_pl_neck_counts_its_wait_down() {
+        let mut work = Work::default();
+        work.neck.wait = 2;
+        work = work.entering_room();
+        work.load_pl_neck();
+        assert_eq!(work.neck.wait, 1);
+        work.neck.wait = 0;
+        work.load_pl_neck();
+        assert_eq!(work.neck.wait, NECK_WAIT);
     }
 
     /// `pl_br_00` (0x4D9D60): the button going down, with no stairs and no

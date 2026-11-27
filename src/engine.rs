@@ -21697,6 +21697,17 @@ fn run_re2_init(
     crate::game::pl_change2::set_room_change(game);
     // `Pl_init`, which runs before a room's first tick of play.
     game.re2.player = game.re2.player.entering_room();
+    // `Pl_neck`'s count in `Set_room`'s `Player_move`, on every load. It is
+    // gated apart from that move's other effects below
+    // (`re2_set_room_player`): a warp's or a `--room` start's setup stands in
+    // for the routines, the speed and the poison step its load left, but not
+    // for this count, so those loads count it here too. The rerun stands in
+    // for the same `Set_room`, whose `Player_move` has counted already, and
+    // the title's own load is one of the three `Player_move`s
+    // `NECK_WAIT_AT_START` counts.
+    if !again && !game.re2.player.title_first_move {
+        game.re2.player.load_pl_neck();
+    }
     crate::character2::pl_init_atd(game);
     // `Set_room`'s case 6 runs `Player_move` once before `Sce_scheduler_set`,
     // with `fg_stop` down: `Game_loop` zeroes it before `Set_door` (`pG +
@@ -50919,6 +50930,26 @@ end
             assert_eq!(work.routine, routine, "{body}");
             assert!(!work.first_tick_assumed && work.title_first_move);
         }
+    }
+
+    /// `Set_room`'s `Player_move` runs `Pl_init` and then `Pl_neck`, which
+    /// counts the look's wait down once a load, from where the last room left
+    /// it; the rerun of a load's init after a setup's edit is the same load
+    /// and doesn't count again, and the title's load is in the start's count.
+    #[test]
+    fn a_rooms_load_counts_pl_necks_wait_down_once() {
+        let mut game = game::GameState::default();
+        game.re2.player.neck.wait = 10;
+        let mut vm = crate::scd2::vm::Vm::new(&crate::scd2::Scripts::default());
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
+        assert_eq!(game.re2.player.neck.wait, 9);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, true);
+        assert_eq!(game.re2.player.neck.wait, 9, "the rerun");
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
+        assert_eq!(game.re2.player.neck.wait, 8, "the next door's");
+        game.re2.player.title_first_move = true;
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
+        assert_eq!(game.re2.player.neck.wait, 8, "the title's load");
     }
 
     #[test]
