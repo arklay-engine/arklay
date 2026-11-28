@@ -5349,9 +5349,15 @@ impl GameState {
     /// direction is `draw & 3`. The offset is cleared to `[0, 0]` without
     /// drawing when the bit is off, and the renderer applies it to the camera
     /// projection and the background's display origin.
+    ///
+    /// In an RE 2 room this is `WinMain`'s `ResetGeom` instead: the offset is
+    /// cleared, and only this tick's `sce_shake_on` moves the frame.
     pub fn roll_screen_shake(&mut self) {
-        // RE2's shake is its scripts' `Sce_shake_on`, which holds.
+        // RE2's `WinMain` calls `ResetGeom` before every `Psx_main`, so a
+        // script's `Sce_shake_on` (`SetGeomOffset`) moves only the frame it
+        // runs on.
         if self.is_re2_room {
+            self.screen_shake = [0, 0];
             return;
         }
         self.screen_shake = if !self.flags[5].bit(MSF2_SCREEN_SHAKE) {
@@ -16033,6 +16039,20 @@ mod tests {
         state.roll_screen_shake();
         assert_eq!(state.screen_shake(), [0, 1]);
         assert_eq!(state.rand_state, 1_030_492_215, "six draws consumed");
+    }
+
+    #[test]
+    fn re2_resets_a_scripts_shake_at_the_next_frame() {
+        let mut state = game();
+        state.is_re2_room = true;
+        // 40D's quake ends on `sce_shake_on 0, 2`: that frame draws two rows up.
+        state.screen_shake = [0, -2];
+        assert_eq!(state.screen_offset(), [0, -2]);
+        let frozen = state.rand_state;
+        state.roll_screen_shake();
+        assert_eq!(state.screen_shake(), [0, 0]);
+        assert_eq!(state.screen_offset(), [0, 0]);
+        assert_eq!(state.rand_state, frozen);
     }
 
     #[test]

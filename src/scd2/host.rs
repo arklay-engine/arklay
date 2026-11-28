@@ -3830,7 +3830,8 @@ impl Host for GameHost<'_> {
                     re2.effects.kill_matrix(key);
                 }
             }
-            // `Sce_shake_on`: `SetGeomOffset`, which holds until the next one.
+            // `Sce_shake_on`: `SetGeomOffset`, for this frame only (the next tick's
+            // `roll_screen_shake` is `WinMain`'s `ResetGeom`).
             "sce_shake_on" => {
                 let shake = [-(at(0) as i8 as i32), -(at(1) as i8 as i32)];
                 self.game.screen_shake = shake;
