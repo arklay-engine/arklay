@@ -3455,8 +3455,14 @@ pub fn draw_door_scene(
 /// view (Y up, where `Sp_matrix`'s is down) is the row's Y turned over. A
 /// part turned so its normals' Y meets the view's (409's ladder down into
 /// 410, door `0x16`, its rungs and rails) shows it; a level one doesn't.
+/// The turn holds only for a level camera, whose view keeps its Y apart, as
+/// `Door_init`'s always is (from `(10000, 0, 0)` to the origin).
 pub fn re2_door_light(camera: &Camera) -> EntityLight {
     use crate::door2::vm::{COLOUR_MATRIX, LIGHT_MATRIX};
+    debug_assert_eq!(
+        camera.from[1], camera.look_at[1],
+        "a door's camera is level"
+    );
     let view = stored_camera_matrix(camera.from, camera.look_at);
     EntityLight {
         ambient: [0.0; 3],
