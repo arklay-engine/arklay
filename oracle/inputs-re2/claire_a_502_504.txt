@@ -1,0 +1,286 @@
+# claire_a_502_504: Claire A from 502 through 508's four zombies, down 508's ladder to 503 and on to 504 (#896): in
+# 502 through door 1 to 508; in 508 east along the south corridor and north up its east passage, where zombie 3 and
+# then zombie 0 come down at her and the handgun's nine rounds drop them; then the status screen, the grenade
+# launcher equipped, and zombie 2 dropped by one round as it follows; zombie 1 stays in the east corridor. Then west
+# and north up the west hall to the ladder (yes) down to 503. In 503 east to the shelf for the 6 rounds (0x19) and
+# the 6 grenade rounds (0x18), then back west to door 1 into 504; in 504 west to the 15 handgun rounds and a few
+# steps back east
+354 left up
+357 right
+359 action
+361
+371 action
+373
+383 action
+385
+395 action
+396 up
+415 up run
+460 left up run
+461 up run
+468 right up run
+469 left up run
+486 left
+488 left up run
+489 left
+491 left up run
+492 left
+494 left up run
+495 left
+497 left up run
+498 left
+500 left up run
+501 left
+504 left up run
+505 left
+509 left up run
+510 left
+514 left up run
+515 left
+519 left up run
+520 right
+541
+963 aim
+972
+977 aim
+993 aim fire
+1007 aim
+1022 aim fire
+1037 aim
+1052 aim fire
+1067 aim
+1077
+1094 aim
+1103
+1106 aim
+1122 aim fire
+1136 aim
+1151 aim fire
+1153
+1239 aim
+1255 aim fire
+1269 aim
+1284 aim fire
+1299 aim
+1314 aim fire
+1324
+1330 aim
+1341
+1359 aim
+1375 aim fire
+1389 aim
+1404 aim fire
+1410
+1430 start
+1431
+1470 down
+1473
+1500 confirm
+1503
+1530 confirm
+1533
+1590 start
+1591
+1630 left up
+1633 up
+1676 left up
+1677 up
+1702 aim
+1924 aim fire
+1928
+1948 right up run
+1950 up run
+1960 right up run
+1961 up run
+1962 left
+1967 left up run
+1985 up run
+1992 left up run
+1993 up run
+1998 right
+2004 right up run
+2020 up run
+2060 right up run
+2061 up run
+2067 up
+2088 left up
+2089 up
+2108
+2148 action
+2149
+2208 confirm
+2211
+2251 confirm
+2254
+2314 up
+2315
+2316 left up
+2337 up
+2358 left up
+2359 up
+2389 right
+2392 right up
+2414 up
+2422 right up
+2423 up
+2465 right up
+2466 up
+2469 right
+2490 action
+2491
+2530 confirm
+2532
+2550 confirm
+2552
+2570 confirm
+2572
+2590 confirm
+2591
+2611 confirm
+2612
+2641 confirm
+2642
+2671 right
+2680 right up
+2682 right
+2684 right up
+2686 right
+2688 right up
+2695 right
+2697 right up
+2699 right
+2702 right up
+2703 right
+2705 right up
+2706 right
+2709 right up
+2710 right
+2712 right up
+2713 right
+2715 right up
+2716 right
+2718 right up
+2719 right
+2721 right up
+2723 right
+2725 right up
+2727 right
+2729 right up
+2754 up
+2755 left up
+2765 left
+2767 left up
+2768 left
+2771 left up
+2773 left
+2776 left up
+2779 left
+2781 left up
+2805 up
+2806 right up
+2815 right
+2818 right up
+2819 right
+2822 right up
+2824 right
+2826 right up
+2828 right
+2830 right up
+2853 left up
+2861 left
+2865 left up
+2866 left
+2868 left up
+2870 left
+2872 left up
+2874 left
+2876 left up
+2895 up
+2896 right up
+2902 right
+2905 right up
+2906 right
+2908 right up
+2909 right
+2911 right up
+2914 right
+2916 right up
+2936 left up
+2942 left
+2945 left up
+2946 left
+2948 left up
+2949 left
+2951 left up
+2953 left
+2955 left up
+2959 left
+2961 left up
+2973 up
+2974 right up
+2976 left
+3006 action
+3007
+3046 confirm
+3048
+3066 confirm
+3068
+3086 confirm
+3088
+3106 confirm
+3107
+3127 confirm
+3128
+3157 confirm
+3158
+3187 right
+3197 right up
+3219 up
+3222 right up
+3223 up
+3248 right up
+3249 up
+3254 right up
+3255 up
+3257 right up
+3258 up
+3280 right up
+3281 up
+3288 right up
+3289 right
+3303 action
+3305
+3315 action
+3317
+3327 action
+3329
+3339 action
+3340
+3400 up
+3401
+3402 left up
+3424 up
+3434 left up
+3435 up
+3510 left up
+3511 up
+3543 left up
+3544 up
+3579 left
+3587 action
+3588
+3627 confirm
+3629
+3647 confirm
+3649
+3667 confirm
+3669
+3687 confirm
+3688
+3708 confirm
+3709
+3738 confirm
+3739
+3768 left
+3796 left up
+3826
