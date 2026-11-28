@@ -32,9 +32,9 @@ input_drop_early = true
 ticks = 7300
 fields = "room,cam,rng,rseed,p.x,p.y,p.z,p.angle,p.beh,p.as,p.hp,mot,pneck,inv,snd,bgm,xavol,msg,hk,om0,om1,om2,om3,fgstat,fgitem,fgroom,fgcom,fgkey,pl,spl,spe,spc,zm0,zm1,zm2,zm3,zm4,zm5,zm6,zm7,zm8,zm9"
 frames = [360, 7299]
-frame_max_mean = 1.0
-# Each room from a tick or two after its load (the music's word changes with it) to its door's press: 404, 405 (Leon's scene and the vent), 40B's cockroaches, 409 (Annette's scene); then 410's cut 0, which the original draws at half size in the frame's top-left quarter (#1002), and its cut 6 to the scene's door; 404's scene that gets Leon up
-frame_windows = [[360, 486, 0.25], [615, 1190, 0.85], [1320, 1510, 1.25], [1640, 6208, 0.95], [6337, 6606, 2.9], [6609, 6720, 0.45], [6843, 7299, 0.25]]
+frame_max_mean = 0.8
+# Each room from a tick or two after its load (the music's word changes with it) to its door's press: 404, 405 (Leon's scene and the vent), 40B's cockroaches, 409 (Annette's scene); then 409's ladder down into 410 (door `0x16`, its light's Y as Marni takes it) and 410's cut 6 to the scene's door; 404's scene that gets Leon up
+frame_windows = [[360, 486, 0.25], [615, 1190, 0.85], [1320, 1510, 0.9], [1640, 6208, 0.95], [6337, 6606, 0.9], [6609, 6720, 0.45], [6843, 7299, 0.25]]
 voice_from_ref = true
 # On the first tick the original already has the warped player's neck point (`pneck`), which arklay's setup leaves at 0 until the first draw
 ignore = [[344, "pneck"]]
