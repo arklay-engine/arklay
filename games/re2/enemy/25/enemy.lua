@@ -20,8 +20,7 @@
 -- (`Ck_em_id`, `+0x240`), and its hits and deaths send young spiders
 -- (`Em_26`, `send_young`). The engine runs `FUN_004727e0` (the shadow, by
 -- `+0x225`) after the tick's collision checks, as `Em_25` does.
--- `FUN_004732a0`'s `fg_system` `0x1000000` draw, the player's partner
--- (`splayer_work`) as a target and the spit's `Routine_2` 3
+-- `FUN_004732a0`'s `fg_system` `0x1000000` draw and the spit's `Routine_2` 3
 -- (`FUN_0046fbb0`) aren't ported.
 
 local COOLDOWN <const> = 0 -- `+0x218`: the rest waits for it before an attack.
@@ -111,16 +110,26 @@ local function add_speed_xyz(e, ay, az)
     e:add_pos(e:rot_apply(0, e:angle() + ay, cz + az, sx, sy, sz))
 end
 
--- `L_pl`, or `L_spl` & 0x3fffffff when it aims at the partner. Only the
--- player is ported.
+-- `L_pl`, or `L_spl` & 0x3fffffff when it aims at the partner.
 local function distance(e)
+    if e:var(TO_PARTNER) ~= 0 then
+        return e:l_spl() & 0x3FFFFFFF
+    end
     return e:distance()
+end
+
+-- The target's place: `pPl`, or `splayer_work` when it aims at the partner.
+local function target_pos(e)
+    if e:var(TO_PARTNER) ~= 0 then
+        return e:splayer_pos()
+    end
+    return e:player_pos()
 end
 
 -- `FUN_00472aa0`: `Goto00_ck` toward the target, or off the ceiling or a
 -- wall toward the point opposite it.
 local function goto_target(e, rate)
-    local x, _, z = e:player_pos()
+    local x, _, z = target_pos(e)
     if e:var(KIND) ~= 0 then
         local at_x, _, at_z = e:pos()
         x = at_x - (x - at_x)
@@ -133,7 +142,7 @@ end
 -- the floor facing the way the wall does.
 local function toward_player(e, rate)
     local x, _, z = e:pos()
-    local px, _, pz = e:player_pos()
+    local px, _, pz = target_pos(e)
     return e:goto_ck_at(x, z, (e:var(FACING) & 3) << 10, px, pz, rate)
 end
 
@@ -191,7 +200,7 @@ local function player_near_edge(e, record, side)
         return false
     end
     local at = edge(e, record, side)
-    local px, _, pz = e:player_pos()
+    local px, _, pz = target_pos(e)
     local along = side & 1 == 0 and px or pz
     return abs(along - at) < 3000
 end
@@ -426,10 +435,9 @@ local function joint_step(e)
     return e:joint(0x400) and 1 or 0
 end
 
--- The target's place: `pPl`, or `splayer_work` when it aims at the partner.
--- Only the player is ported.
+-- The target's place on the floor.
 local function target_xz(e)
-    local x, _, z = e:player_pos()
+    local x, _, z = target_pos(e)
     return x, z
 end
 
@@ -473,7 +481,7 @@ end
 -- `Routine` 3) when it kills, or `FUN_0045fb00` (2, and 2 or 3 by `Cdir_ck`)
 -- as the dog's bite does.
 local function bite_player(e, reach)
-    if distance(e) >= reach or e:pl_damage_cnt() & 0x80 ~= 0 then
+    if e:distance() >= reach or e:pl_damage_cnt() & 0x80 ~= 0 then
         return false
     end
     if e:pl_life_down(20) == 2 then
@@ -486,17 +494,29 @@ local function bite_player(e, reach)
     return true
 end
 
--- `FUN_00473080(e, reach, height)`: the bite, with the player within `height`
--- up or down, and its sound. The partner's (`fg_status`'s `0x10000000`) isn't
--- ported.
+-- `FUN_00473100(e, 1, reach)`: the bite on the partner within `reach` (`L_spl`),
+-- unless her `+0x1d3`'s 0x80 is set. `Spl_life_down` and her hit reaction are
+-- the host's.
+local function bite_partner(e, reach)
+    if e:l_spl() & 0x3FFFFFFF >= reach or e:splayer_damage_cnt() & 0x80 ~= 0 then
+        return false
+    end
+    e:bite_splayer()
+    return true
+end
+
+-- `FUN_00473080(e, reach, height)`: the bite, on the player within `height`
+-- up or down, or else on the partner with the player (`fg_status`'s
+-- `0x10000000`) within it, and its sound.
 local function bite(e, reach, height)
     local _, y = e:pos()
     local _, py = e:player_pos()
-    local up = y - py
-    if up < 0 then
-        up = -up
+    if abs(y - py) < height and bite_player(e, reach) then
+        e:sound(1)
+        return true
     end
-    if up < height and bite_player(e, reach) then
+    local _, sy = e:splayer_pos()
+    if sy and abs(y - sy) < height and bite_partner(e, reach) then
         e:sound(1)
         return true
     end
@@ -940,7 +960,7 @@ end
 local function wall_arrive(e)
     settle(e)
     local x, y, z = e:pos()
-    local _, py = e:player_pos()
+    local _, py = target_pos(e)
     local below = py - y
     if below > 0xDAC then
         local water = e:water_ck(x, z)
@@ -1355,8 +1375,14 @@ end
 
 -- `FUN_0046f370`.
 local function move(e)
-    -- `FUN_004733d0`: the partner (`fg_status`'s `0x10000000`) isn't ported.
-    e:set_var(TO_PARTNER, 0)
+    -- `FUN_004733d0`: the partner with the player (`fg_status`'s
+    -- `0x10000000`), on its list (`L_spl`'s top bits 01) and nearer, is the
+    -- target.
+    local l_spl = e:l_spl()
+    local near = e:splayer_pos() ~= nil
+        and l_spl & 0xC0000000 == 0x40000000
+        and l_spl & 0x3FFFFFFF < e:distance()
+    e:set_var(TO_PARTNER, near and 1 or 0)
     local states = STATES[e:var(KIND)]
     local state = states and states[e:routine(1)]
     if state then

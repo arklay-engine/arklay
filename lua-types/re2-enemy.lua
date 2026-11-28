@@ -1888,6 +1888,22 @@ function Re2EnemyApi:l_spl() end
 ---@return integer dir_spl
 function Re2EnemyApi:dir_spl() end
 
+---`splayer_work`'s place while `fg_status`'s `0x10000000` keeps the partner
+---with the player, or nothing.
+---@return integer? x
+---@return integer? y
+---@return integer? z
+function Re2EnemyApi:splayer_pos() end
+
+---`splayer_work`'s `+0x1D3`, whose `0x80` holds off another bite.
+---@return integer damage_cnt
+function Re2EnemyApi:splayer_damage_cnt() end
+
+---`FUN_00473100(w, 1, reach)` past its tests: the partner is bitten
+---(`Spl_life_down`, then her stagger or `Routine_0` 3), with this body's
+---facing for `Cdir_ck`.
+function Re2EnemyApi:bite_splayer() end
+
 ---How many enemies the room has.
 ---@return integer count
 function Re2EnemyApi:enemies() end
