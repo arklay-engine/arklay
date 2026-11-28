@@ -1864,6 +1864,21 @@ impl UserData for Api {
         methods.add_method_mut("partner", |_, e, ()| Ok(e.em().world.partner));
         methods.add_method_mut("l_spl", |_, e, ()| Ok(e.em().world.l_spl));
         methods.add_method_mut("dir_spl", |_, e, ()| Ok(e.em().world.dir_spl));
+        // `splayer_work`'s place, or nothing while the partner isn't with the player.
+        methods.add_method_mut("splayer_pos", |_, e, ()| {
+            let at = e.em().world.splayer;
+            Ok((at.map(|p| p[0]), at.map(|p| p[1]), at.map(|p| p[2])))
+        });
+        methods.add_method_mut("splayer_damage_cnt", |_, e, ()| {
+            Ok(e.em().world.splayer_damage_cnt)
+        });
+        // `FUN_00473100(w, 1, reach)` past its tests: the partner is bitten
+        // (`character2`'s `spl_bitten`).
+        methods.add_method_mut("bite_splayer", |_, e, ()| {
+            let em = e.em();
+            em.world.bite_splayer = Some(em.mover.player.angle);
+            Ok(())
+        });
         methods.add_method_mut("enemies", |_, e, ()| Ok(e.em().world.enemies));
         methods.add_method_mut("has_guides", |_, e, ()| Ok(!e.em().world.guides.is_empty()));
         methods.add_method_mut("scene_target", |_, e, ()| {
@@ -2580,6 +2595,12 @@ mod tests {
         function e:set_speed_x(x) w.spd[1] = x end
         function e:add_speed_xz_at(dir) w.moved = w.moved + 1; w.add_dir = dir end
         function e:distance() return dist end
+        function e:l_spl() return L_SPL or 0 end
+        function e:splayer_damage_cnt() return SPLAYER_DC or 0 end
+        function e:bite_splayer() w.bit_splayer = (w.bit_splayer or 0) + 1 end
+        function e:splayer_pos()
+            if SPLAYER then return SPLAYER[1], SPLAYER[2], SPLAYER[3] end
+        end
         function e:pos() return w.pos[1], w.pos[2], w.pos[3] end
         function e:add_pos(x, y, z)
             w.pos = { w.pos[1] + x, w.pos[2] + y, w.pos[3] + z }
@@ -2700,7 +2721,8 @@ mod tests {
                  facing = w.vars[26] or 0, record = w.vars[24] or 0,
                  between = w.vars[28] or 0, top = w.vars[25] or 0,
                  t225 = w.vars[20] or 0, cdir_x = w.cdir[1], cdir_z = w.cdir[2],
-                 room_enemy = w.room_enemy, pos_y = w.pos[2] }}"
+                 room_enemy = w.room_enemy, pos_y = w.pos[2],
+                 bit_splayer = w.bit_splayer or 0 }}"
         ))
         .eval::<mlua::Table>()
         .map(|table| {
@@ -2713,7 +2735,7 @@ mod tests {
             let fields = "r0 r1 r2 life be angle spd moved timer drawn timer1 spd_y spd_z \
                 add_dir cooldown pl0 pl1 pl_life pl_dc sounds bite_sound effect_row \
                 effect_dir rot_dir rot_by bloods blown died y lost revived timer2 kind_var add_dir_var facing record between top t225 \
-                cdir_x cdir_z room_enemy pos_y"
+                cdir_x cdir_z room_enemy pos_y bit_splayer"
                 .split_whitespace()
                 .map(|name| (name.to_string(), table.get::<i64>(name).unwrap()))
                 .collect();
@@ -2823,6 +2845,36 @@ mod tests {
         assert_eq!((spider.get("pl0"), spider.get("pl1")), (3, 0));
     }
 
+    /// `FUN_00473080`'s second bite: with the player out of reach, the lunge
+    /// at the partner it aims at bites her within 1500 (`L_spl`) and under
+    /// 0x10CC up or down unless her `+0x1D3`'s 0x80 is set, with the same
+    /// sound, and leaves the player.
+    #[test]
+    fn a_floor_spider_lunges_at_the_partner_and_bites_her() {
+        let near = "DIST = 5000 TARGET = 0 CLIP_LEN = 4 SPLAYER = { 0, 0, 0 } \
+            L_SPL = 0x40000000 | 1200";
+        let draws = [0; 32];
+        let spider = run_spider_with(0, &draws, 2, near);
+        assert_eq!(spider.get("r1"), 7);
+        let spider = run_spider_with(0, &draws, 8, near);
+        assert_eq!((spider.get("r2"), spider.get("bit_splayer")), (6, 1));
+        assert_eq!((spider.get("pl_life"), spider.get("pl_dc")), (200, 0));
+        assert_eq!((spider.get("sounds"), spider.get("bite_sound")), (1, 1));
+        let spider = run_spider_with(0, &draws, 8, &format!("{near} SPLAYER_DC = 0x80"));
+        assert_eq!((spider.get("bit_splayer"), spider.get("sounds")), (0, 0));
+        // Out of the bite's height (0x10CC up or down) she is missed: the
+        // lunge aims at her place but the bite needs her within it.
+        let apart = |y: i32| {
+            let setup = format!(
+                "DIST = 5000 TARGET = 0 CLIP_LEN = 4 SPLAYER = {{ 0, {y}, 0 }} \
+                 L_SPL = 0x40000000 | 1200"
+            );
+            run_spider_with(0, &draws, 8, &setup).get("bit_splayer")
+        };
+        assert_eq!((apart(0x10CB), apart(-0x10CB)), (1, 1));
+        assert_eq!((apart(0x10CC), apart(-0x10CC)), (0, 0));
+    }
+
     /// A draw of 6, 8 or 9 at the rest picks the spit (`Routine_1` 8):
     /// `Esp_call` 0x1d with the floor's row 8, along the way it faces, then
     /// the rest with `+0x218` at 15 once clip 0xb ends.
@@ -2889,6 +2941,32 @@ mod tests {
         assert_eq!(spider.get("r1"), 1);
         let spider = run_spider(0x43, &draws, 13);
         assert_eq!((spider.get("r1"), spider.get("r2")), (1, 1));
+    }
+
+    /// `FUN_004733d0`: with the partner beside the player (`fg_status`'s
+    /// `0x10000000`), on her list (`L_spl`'s top bits 01) and nearer than the
+    /// player, the spider aims at her. The ceiling's rest walks toward a
+    /// target between 3000 and 7500 away (`Routine_1` 1), so the player at
+    /// 5000 sets it walking unless the partner at 2000 is the target.
+    #[test]
+    fn a_ceiling_spider_aims_at_the_partner_when_she_is_listed_and_nearer() {
+        let draws = [0; 32];
+        let rest = |setup: &str| run_spider_with(0x43, &draws, 2, setup).get("r1");
+        assert_eq!(rest("DIST = 5000"), 1);
+        let near = "DIST = 5000 SPLAYER = { 0, 0, 0 } L_SPL = 0x40000000 | 2000";
+        assert_eq!(rest(near), 0);
+        // Off her list, second on it, or apart from the player: the player.
+        assert_eq!(rest("DIST = 5000 SPLAYER = { 0, 0, 0 } L_SPL = 2000"), 1);
+        assert_eq!(
+            rest("DIST = 5000 SPLAYER = { 0, 0, 0 } L_SPL = 0x80000000 | 2000"),
+            1
+        );
+        assert_eq!(rest("DIST = 5000 L_SPL = 0x40000000 | 2000"), 1);
+        // Listed but farther than the player.
+        assert_eq!(
+            rest("DIST = 5000 SPLAYER = { 0, 0, 0 } L_SPL = 0x40000000 | 6000"),
+            1
+        );
     }
 
     /// `Routine_1` 1 on the ceiling: over a wall's record that faces its way,

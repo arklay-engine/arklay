@@ -443,6 +443,8 @@ const G1_ROOT_Z: usize = 8;
 /// Where leg 1's foot, part 12, was as the last tick ended: the `+0x5C`
 /// that `Game_loop`'s `Joint_trans` left there, x and z.
 pub(crate) const SPIDER_FOOT: usize = 32;
+/// `Em_25`'s `Neck_no`.
+const SPIDER_NECK: usize = 8;
 /// `Ground`, which `Game_loop` finds under the spider between ticks.
 pub(crate) const SPIDER_GROUND: usize = 30;
 /// `+0x225`, `FUN_004727e0`'s state, which the spider's script (its `T225`)
@@ -1236,6 +1238,14 @@ pub struct World<'a> {
     /// `L_spl` and `Dir_spl`, as the partner's `Spl_enemy_ck` left them.
     pub l_spl: u32,
     pub dir_spl: u16,
+    /// `splayer_work`'s place, while `fg_status`'s `0x10000000` keeps the
+    /// partner with the player.
+    pub splayer: Option<[i32; 3]>,
+    /// `splayer_work`'s `+0x1D3`, whose `0x80` holds off another bite.
+    pub splayer_damage_cnt: u8,
+    /// A bite on the partner this tick (`FUN_00473100` with 1), with this
+    /// body's facing as it bit, for `Cdir_ck`.
+    pub bite_splayer: Option<u16>,
 }
 
 /// A water area (`aot_set` kind 7) as `Water_ck` reads it from `aot_table`.
@@ -1508,6 +1518,7 @@ impl Em<'_, '_, '_> {
     /// its height and checks the others and the room with `0x600`.
     fn run_spider(&mut self) {
         if self.world.stopped {
+            self.place_spider_neck();
             return;
         }
         if self.z.damage_cnt & 0x7F != 0 {
@@ -1533,6 +1544,16 @@ impl Em<'_, '_, '_> {
         let [x, _, z] = self.mover.player.pos;
         let wet = water_ck(&self.world.water, x, z) != 0;
         spider_shadow(self.z, self.be_flg, wet);
+        self.place_spider_neck();
+    }
+
+    /// `Neck_no` 8 (`FUN_0046f0c0`) as this tick's draw leaves it, where the
+    /// next tick's `Spl_enemy_ck` (the partner runs first) and the player's
+    /// aim look. The draw's `Joint_trans` places it on a stopped tick too.
+    fn place_spider_neck(&mut self) {
+        let neck = self.mover.part_point(SPIDER_NECK, [0, 0, 0]);
+        self.work().neck.joint = Some(SPIDER_NECK as u8);
+        self.work().neck.position = neck;
     }
 
     /// `Em_26`, which leaves the rest to its script, then finds `nFloor` from
@@ -1978,6 +1999,14 @@ impl Em<'_, '_, '_> {
         self.work().lean_yaw = 0;
         self.script();
         self.pull_arm();
+        // `Em_Zombie` rings the water before `FUN_0045b870`'s bounces draw
+        // `Rnd`. Between the routine and the rings the original also runs
+        // `Rot_neck_em`, which neither reads nor draws for them, and
+        // `FUN_0045b330`, which isn't ported: it works and draws `Rnd` only
+        // with `+0x21a`'s bit 1, which no zombie code sets (`Em10_Init`
+        // clears the word; only other ids' routines, `0x468e20`, `0x485250`
+        // and `0x4a0640`, set the bit on their own works).
+        self.water_rings();
         self.kicked_head();
         let held = self.kind() & TYPE_HELD != 0 || self.z.flags & FLAG_NECK_STILL != 0;
         let neck = &mut self.work().neck;
@@ -2000,6 +2029,66 @@ impl Em<'_, '_, '_> {
         self.oba_ck_em();
         self.sca_ck_em();
         self.mover.place_neck();
+    }
+
+    /// `Em_Zombie`'s water: in a water area (`Water`, which `Sce_at`'s
+    /// `Sce_Water` sets) and while the player's `Life` isn't below 0, a step
+    /// of a walk with the body down near the surface (part 0's `Workm` under
+    /// 500 above it, `Move_cnt` at 1 of every 16 and `Spd_x` over 10) rings
+    /// the water, and so does each frame whose `pNow_seq` top bits are `0x08`
+    /// or `0x48` (`FUN_0045bb80`).
+    fn water_rings(&mut self) {
+        let water = self.work().water;
+        if water == 0 || *self.world.player_life < 0 {
+            return;
+        }
+        let low = self
+            .z
+            .drawn
+            .first()
+            .copied()
+            .flatten()
+            .map_or(self.mover.player.pos[1], |part| part.t[1]);
+        let work = self.work();
+        if low - 500 < i32::from(water) && work.move_cnt & 0xF == 1 && work.spd[0] > 10 {
+            self.ring_water(water);
+        }
+        let seq = self.mover.now_seq() & 0xF800_0000;
+        if seq == 0x0800_0000 || seq == 0x4800_0000 {
+            self.ring_water(water);
+        }
+    }
+
+    /// `FUN_0045bb80`: four ripples (kind 0x1A) at the water's level, two 300
+    /// ahead of part 0 along `M` and two under it, each a quarter turn on from
+    /// the last with up to 0x3FC taken off `Cdir_y`, and a size of 0xC00 and
+    /// up to 0x3FC more. Its `CompM` puts part 0 on `M` as the last draw left
+    /// them, which is the drawn part's place.
+    fn ring_water(&mut self, water: i16) {
+        let part = self
+            .z
+            .drawn
+            .first()
+            .copied()
+            .flatten()
+            .map_or(self.mover.player.pos, |part| part.t);
+        let under = [part[0] as i16, water, part[2] as i16];
+        let turn = self
+            .work()
+            .drawn_turn
+            .unwrap_or_else(|| self.mover.work.body_rotation(self.mover.player.angle));
+        let ahead: [i16; 3] = std::array::from_fn(|axis| {
+            let along = (i32::from(turn[axis][0]) * 300) >> 12;
+            under[axis].wrapping_add(along as i16)
+        });
+        let angle = self.angle();
+        for (quarter, at) in [(0, ahead), (0x400, ahead), (0x800, under), (0xC00, under)] {
+            let dir = angle
+                .wrapping_sub((u16::from(self.rnd()) * 4) as i16)
+                .wrapping_add(quarter);
+            let size = u16::from(self.rnd()) * 4 + 0xC00;
+            self.world.effects.call(0x1A, 0, size, dir, at, false);
+        }
     }
 
     /// `update` of the id's script. A pack without one leaves the zombie

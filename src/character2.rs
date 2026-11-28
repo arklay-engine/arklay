@@ -870,6 +870,19 @@ fn run_zombie(
         .get(SPLAYER_SLOT)
         .is_some_and(|other| other.as_deref().is_some_and(|other| other.be_flg & 1 != 0));
     let root_target = zombie_root_target(game, room, character, pending_place);
+    let splayer = game
+        .re2
+        .partner_bit()
+        .then(|| {
+            game.re2
+                .characters
+                .0
+                .get(SPLAYER_SLOT)
+                .and_then(Option::as_deref)
+        })
+        .flatten();
+    let splayer_damage_cnt = splayer.map_or(0, |other| other.work.damage_cnt);
+    let splayer = splayer.map(|other| other.body.pos);
     let stopped = game.re2.character_stopped(slot);
     let easy = game.re2.flag(0, FG_SYSTEM_EASY);
     let difficulty = game.re2.difficulty();
@@ -1039,6 +1052,9 @@ fn run_zombie(
         root_target,
         l_spl: character.l_spl,
         dir_spl: character.dir_spl,
+        splayer,
+        splayer_damage_cnt,
+        bite_splayer: None,
     };
     crate::zombie2::em_zombie(character, zombie, &tick, &mut world);
     let spawns = std::mem::take(&mut world.spawns);
@@ -1057,6 +1073,7 @@ fn run_zombie(
     let knocks = std::mem::take(&mut world.knocks);
     let kin = std::mem::take(&mut world.kin);
     let work0_routines = world.work0_routines.take();
+    let bite_splayer = world.bite_splayer;
     if let Some(angle) = world.turn_player {
         re2.player.turn_to = Some(angle);
     }
@@ -1092,6 +1109,9 @@ fn run_zombie(
     }
     if cut_load {
         game.re2.bg_load = true;
+    }
+    if let Some(angle) = bite_splayer {
+        spl_bitten(&mut game.re2, angle);
     }
     // `fg_status`'s `0x100` is the camera's lock, which `Cut_check` obeys.
     if status_or & 0x100 != 0 {
@@ -2091,6 +2111,29 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
         game.re2.player.noise |= world.noise;
         game.re2.spl_pos_ck_timer = timer;
         None
+    } else if player2::in_damage(&character.work) && (sherry || ada) && character.partner.is_some()
+    {
+        let mut started = false;
+        // The sound pans from where she stood before the stagger's step.
+        let before = character.body.pos;
+        player2::spl_auto(&mut character.work, &mut character.body, tick, |mover| {
+            started = mover.spl_damage();
+        });
+        if started {
+            // `Snd_se_enem(0)`, then `Be_flg`'s 4 cleared.
+            let slot = if character.be_flg & 0x2000 != 0 {
+                0x10
+            } else {
+                0
+            };
+            if let Some(id) = crate::se2::SoundId::decode(3 << 24 | slot << 16 | 1) {
+                game.re2
+                    .sounds
+                    .push(crate::scd2::host::SoundRequest::enemy(id, before));
+            }
+            character.be_flg &= !4;
+        }
+        None
     } else {
         None
     };
@@ -2124,6 +2167,45 @@ fn partner_ground(room: &RoomState, pos: [i32; 3]) -> i16 {
     room.sca.as_ref().map_or(0, |sca| {
         crate::sca::ground_at(sca, pos, 0, crate::sca::PLAYER_MASK).height as i16
     })
+}
+
+/// `FUN_00473100(w, 1, reach)` past its reach: `Spl_life_down(w, 20, 0)`
+/// (30 under `hard_mode`), which takes the life from the partner and
+/// `saved_splayer_health` unless her `+0x1D3` is set at all, then her
+/// `Routine_0` 3 (`FUN_004b0050`) when the life went below 0, or else 2 with
+/// `Routine_1` 2, 3 from behind (`Cdir_ck`), and `+0x1D3`'s 0x80
+/// (`FUN_0045fb00`). `angle` is the biter's facing.
+fn spl_bitten(re2: &mut crate::scd2::host::Re2State, angle: u16) {
+    let down = if re2.difficulty().hard { 30 } else { 20 };
+    let Some(partner) = re2
+        .characters
+        .0
+        .get_mut(SPLAYER_SLOT)
+        .and_then(Option::as_deref_mut)
+    else {
+        return;
+    };
+    let behind = u8::from(cdir_ck(angle, partner.body.angle));
+    let mut died = false;
+    if partner.work.damage_cnt == 0
+        && let Some(words) = partner.partner.as_deref_mut()
+    {
+        words.life = words.life.wrapping_sub(down);
+        re2.partner_life = re2.partner_life.wrapping_sub(down);
+        died = words.life < 0;
+    }
+    partner.work.routine = if died {
+        [3, 0, 0, 0]
+    } else {
+        partner.work.damage_cnt |= 0x80;
+        [2, 2 + behind, 0, 0]
+    };
+}
+
+/// `Cdir_ck`: whether a body facing `angle` has `target`, facing
+/// `target_angle`, turned away from it.
+fn cdir_ck(angle: u16, target_angle: u16) -> bool {
+    target_angle.wrapping_sub(angle).wrapping_add(0x400) & 0xFFF < 0x800
 }
 
 /// `Em_Zombie`'s `Root_ck` target: the partner, when she has this zombie
@@ -3385,6 +3467,40 @@ mod tests {
         assert!(game.re2.player.at_em_partner);
     }
 
+    /// A spider's bite on the partner (`FUN_00473100` with 1): 20 off her
+    /// life and the saved life, her stagger from in front or behind with
+    /// `+0x1D3` locked, nothing more while it is set, and `Routine_0` 3 when
+    /// the life goes below 0.
+    #[test]
+    fn a_bite_on_the_partner_takes_her_life_and_staggers_her() {
+        let bitten = |life: i16, angle: u16, damage_cnt: u8| {
+            let mut partner = sherry(0x400);
+            partner.partner.as_deref_mut().unwrap().life = life;
+            partner.body.angle = 0;
+            partner.work.damage_cnt = damage_cnt;
+            let mut game = GameState::default();
+            game.re2.partner_life = life;
+            game.re2.characters.0 = vec![None; SPLAYER_SLOT + 1];
+            game.re2.characters.0[SPLAYER_SLOT] = Some(Box::new(partner));
+            spl_bitten(&mut game.re2, angle);
+            let partner = game.re2.characters.0[SPLAYER_SLOT].take().unwrap();
+            let life = partner.partner.as_deref().unwrap().life;
+            (
+                life,
+                game.re2.partner_life,
+                partner.work.routine,
+                partner.work.damage_cnt,
+            )
+        };
+        // Facing her (half a turn round) bites her from in front, facing her
+        // way from behind.
+        assert_eq!(bitten(200, 0x800, 0), (180, 180, [2, 2, 0, 0], 0x80));
+        assert_eq!(bitten(200, 0, 0), (180, 180, [2, 3, 0, 0], 0x80));
+        // `Spl_life_down` takes nothing while `+0x1D3` is set at all.
+        assert_eq!(bitten(200, 0x800, 3), (200, 200, [2, 2, 0, 0], 0x83));
+        assert_eq!(bitten(10, 0x800, 0), (-10, -10, [3, 0, 0, 0], 0));
+    }
+
     fn sherry(kind: u16) -> Character {
         let mut body = crate::player::spawn(RoomId::parse("21B1").unwrap(), &RoomState::default());
         body.pos = [0, 0, 0];
@@ -3704,6 +3820,36 @@ mod tests {
         }
     }
 
+    /// `_Spl`'s `Routine_0` 2 on the partner, `Spl_Damage`: the first tick
+    /// plays `Snd_se_enem(0)` (slot 0x10 under `Be_flg`'s 0x2000) from where
+    /// she stood before the stagger's step and clears `Be_flg`'s 4; the
+    /// clip's end gives her back to `Spl_Auto`.
+    #[test]
+    fn a_bitten_partner_cries_from_where_she_stood_and_staggers() {
+        let mut game = GameState::default();
+        let mut character = sherry(0x400);
+        character.be_flg = 0x2005;
+        character.body.pos = [1000, 0, 2000];
+        character.body.angle = 0;
+        character.work.routine = [2, 2, 0, 0];
+        let tick = spl_tick(&RoomState::default(), &Default::default());
+        spl(&mut game, &mut character, &tick);
+        let cry = crate::se2::SoundId::decode(3 << 24 | 0x10 << 16 | 1).unwrap();
+        assert_eq!(
+            game.re2.sounds,
+            [crate::scd2::host::SoundRequest::enemy(cry, [1000, 0, 2000])]
+        );
+        assert_ne!(character.body.pos, [1000, 0, 2000], "the stagger steps");
+        assert_eq!(character.be_flg, 0x2001);
+        assert_eq!(character.work.routine[..3], [2, 2, 2]);
+        // No cry on the later ticks; the end hands her back.
+        game.re2.sounds.clear();
+        spl(&mut game, &mut character, &tick);
+        assert!(game.re2.sounds.is_empty());
+        assert_eq!(character.work.routine, [1, 0, 0, 0]);
+        assert_eq!(character.work.damage_cnt, 0);
+    }
+
     #[test]
     fn a_partner_sherry_raises_the_partner_bit_and_keeps_routine_1() {
         let mut game = GameState::default();
@@ -3960,6 +4106,59 @@ mod tests {
         let drawn = zombie.drawn[0x12].unwrap();
         assert_eq!(drawn.m, bens_part_8().m);
         assert_eq!(drawn.t, [1000, -500 - 0xFB, 2000 - 0xF6]);
+    }
+
+    /// `Em_25`'s `Neck_no` 8 is where this tick's draw leaves it, after the
+    /// pushes that moved the body, not where the last tick's did: the
+    /// partner runs first next tick and looks there (`Spl_enemy_ck`).
+    #[test]
+    fn a_spiders_neck_is_where_this_ticks_pushes_leave_it() {
+        let model = posable_model();
+        let pack = Pack::from_bytes(crate::pack::PackWriter::new().to_bytes().unwrap()).unwrap();
+        // A wall from x 100 east, which the room check pushes the body out of.
+        let room = RoomState {
+            sca: Some(crate::state::Sca {
+                cell_x: -10000,
+                cell_z: -10000,
+                records: vec![crate::state::ScaRect {
+                    x: 100,
+                    z: -5000,
+                    width: 5000,
+                    depth: 10000,
+                    id: 0xFC80,
+                    kind: 0x90C3,
+                    floor: 0xF,
+                }],
+                ..crate::state::Sca::default()
+            }),
+            ..RoomState::default()
+        };
+        let mut spider = sherry(0);
+        spider.id = crate::zombie2::SPIDER_ID;
+        spider.model = crate::zombie2::SPIDER_ID;
+        spider.partner = None;
+        spider.work.routine = [1, 0, 0, 0];
+        spider.work.bank = player2::Bank::Pld;
+        spider.body.pos = [300, 0, 0];
+        let mut zombie = crate::zombie2::Zombie::default();
+        let mut game = GameState::default();
+        game.re2.characters.0 = vec![None, None];
+        let _ = run_zombie(
+            &mut game,
+            &room,
+            &pack,
+            None,
+            &mut spider,
+            &mut zombie,
+            1,
+            &model,
+            false,
+            false,
+        );
+        let neck = spider.work.neck.position.expect("the neck is placed");
+        assert_ne!(spider.body.pos[0], 300, "the body was pushed");
+        assert_eq!([neck[0], neck[2]], [spider.body.pos[0], spider.body.pos[2]]);
+        assert_eq!(spider.work.neck.joint, Some(8));
     }
 
     /// `Game_loop` runs `splayer_work`, then the enemy slots from 0: slot 0's

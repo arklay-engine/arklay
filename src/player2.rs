@@ -5577,6 +5577,59 @@ impl Mover<'_, '_> {
         }
     }
 
+    /// `Spl_Damage` (`0x4f0450`), `_Spl`'s `Routine_0` 2: a partner's hit
+    /// reaction on her main bank's clips (`pKan_t_ptr`). `Routine_1` 2
+    /// and 3 stagger forward or back (clip 3 or 4, `Spd_x` -200 or 200 as a
+    /// 32-bit word) as `Hokan_flg` lasts; the others play clip 5 where she
+    /// stands. The first tick locks `+0x1D3` and raises `+0x1C0`'s 0x12 and
+    /// answers true, for `Snd_se_enem(0)` and `Be_flg`'s 4 cleared; the clip's
+    /// end gives her back `Routine_0` 1. `Routine_1` 4, the death on `pSub1`,
+    /// isn't reached by the bites ported, and neither `Spl_Die` (`Routine_0`
+    /// 3, which a bite below 0 life starts) nor `Spl_Dead` is ported: she
+    /// stands still.
+    pub(crate) fn spl_damage(&mut self) -> bool {
+        let kind = self.work.routine[1];
+        if kind == 4 || kind == 5 {
+            return false;
+        }
+        let stagger = kind == 2 || kind == 3;
+        let started = match self.work.routine[2] {
+            0 => {
+                let back = kind & 1;
+                self.work.routine[2] = 1;
+                self.work.move_cnt = 0;
+                self.work.move_no = if stagger { 3 + back } else { 5 };
+                self.work.hokan = DAMAGE_BLEND;
+                self.work.spd[0] = if stagger {
+                    i16::from(back) * 400 - 200
+                } else {
+                    0
+                };
+                self.work.spd[1] = if stagger { i16::from(back) - 1 } else { 0 };
+                self.work.spd[2] = 0;
+                self.work.neck.flags |= 0x12;
+                self.work.damage_cnt |= DAMAGE_LOCK;
+                true
+            }
+            1 => false,
+            2 => {
+                self.work.routine = [MODE_MOVE, 0, 0, 0];
+                self.work.damage_cnt = 0;
+                self.work.neck.flags &= 0xED;
+                return false;
+            }
+            _ => return false,
+        };
+        if stagger && self.work.hokan != 0 {
+            self.add_speed_xz();
+        }
+        self.work.bank = Bank::Pld;
+        if self.joint_move_late(0x400) {
+            self.work.routine[2] += 1;
+        }
+        started
+    }
+
     /// `Gacha_ch`: a button pressed this tick, which shortens a fall's wait.
     fn gacha(&self) -> u16 {
         u16::from(self.work.key_trg & 0x34F != 0)
@@ -6104,14 +6157,60 @@ impl Mover<'_, '_> {
             self.em3a_held(held);
             return;
         }
-        if self.work.routine[0] == MODE_HELD_DIE {
+        let root = self.part_matrix(0);
+        let dying = self.work.routine[0] == MODE_HELD_DIE;
+        if dying {
             self.held_dying(held);
+        } else {
+            match self.work.routine[1] {
+                0 | 1 => self.held_standing(held),
+                2 | 3 => self.held_low(held),
+                _ => self.held_dying(held),
+            }
+        }
+        self.held_water(held, root, dying);
+    }
+
+    /// The end of `FUN_0045a820` (the hold) and `FUN_0045b000` (the kill): in
+    /// water, with part 0's `Workm` under 500 above it, every 16th frame
+    /// rings the water around the player as a zombie's walk does
+    /// (`FUN_0045bb80`, [`crate::zombie2`]'s `ring_water`), and the kill's
+    /// plays the splash (`Snd_se_on(0x2020001)`). `root` is part 0 as the
+    /// last draw left it.
+    fn held_water(&mut self, held: &mut Held<'_>, root: Option<Matrix>, dying: bool) {
+        let water = self.work.water;
+        let root = root.map_or(self.player.pos, |part| part.t);
+        if water == 0 || root[1] - 500 >= i32::from(water) || self.work.move_cnt & 0xF != 1 {
             return;
         }
-        match self.work.routine[1] {
-            0 | 1 => self.held_standing(held),
-            2 | 3 => self.held_low(held),
-            _ => self.held_dying(held),
+        let under = [root[0] as i16, water, root[2] as i16];
+        let turn = self
+            .work
+            .drawn_turn
+            .unwrap_or_else(|| self.work.body_rotation(self.player.angle));
+        let ahead: [i16; 3] = std::array::from_fn(|axis| {
+            let along = (i32::from(turn[axis][0]) * 300) >> 12;
+            under[axis].wrapping_add(along as i16)
+        });
+        let angle = self.player.angle as i16;
+        for (quarter, at) in [(0, ahead), (0x400, ahead), (0x800, under), (0xC00, under)] {
+            let dir = angle
+                .wrapping_sub((u16::from(held.rnd.draw()) * 4) as i16)
+                .wrapping_add(quarter);
+            let size = u16::from(held.rnd.draw()) * 4 + 0xC00;
+            self.work.effects.push(EffectCall {
+                kind: 0x1A,
+                row: 0,
+                size,
+                dir,
+                at,
+                motion: None,
+                on: None,
+                turn: None,
+            });
+        }
+        if dying {
+            self.work.sounds.push(0x202_0001);
         }
     }
 
@@ -8509,6 +8608,11 @@ pub fn in_auto(work: &Work) -> bool {
     work.routine[0] == MODE_MOVE
 }
 
+/// `_Spl`'s `Routine_0` 2, `Spl_Damage`.
+pub fn in_damage(work: &Work) -> bool {
+    work.routine[0] == MODE_DAMAGE
+}
+
 impl Work {
     /// A part's `Workm` as the last tick left it ([`Work::parts`]), the
     /// neck's turn included, or `None` before any tick has left one.
@@ -10351,6 +10455,147 @@ mod tests {
             }
         }
         panic!("never got there: {:?}", setup.work.routine);
+    }
+
+    /// `Spl_Damage`'s stagger: `Routine_1` 2 plays the main bank's clip 3
+    /// with `Spd_x` -200 (the 32-bit word's -1 in `Spd_y`), 3 plays clip 4 at
+    /// 200, both locking `+0x1D3` and raising `+0x1C0`'s 0x12 on the first
+    /// tick only; the clip's end gives `Routine_0` 1 back and clears them.
+    #[test]
+    fn a_partners_bite_staggers_her_on_her_main_banks_clip() {
+        for (kind, clip, spd) in [(2, 3, [-200, -1]), (3, 4, [200, 0])] {
+            let mut setup = Setup::new(0);
+            setup.work.routine = [MODE_DAMAGE, kind, 0, 0];
+            setup.work.bank = Bank::Weapon;
+            assert!(setup.with_mover(|mover| mover.spl_damage()));
+            assert_eq!((setup.work.move_no, setup.work.bank), (clip, Bank::Pld));
+            assert_eq!(setup.work.spd[..2], spd);
+            assert_eq!(setup.work.damage_cnt, DAMAGE_LOCK);
+            assert_eq!(setup.work.neck.flags & 0x12, 0x12);
+            assert_ne!(setup.player.pos[0], 0, "kind {kind}");
+            let mut ticks = 0;
+            while setup.work.routine[0] == MODE_DAMAGE {
+                assert!(!setup.with_mover(|mover| mover.spl_damage()));
+                ticks += 1;
+                assert!(ticks < 100, "kind {kind} never ended");
+            }
+            assert_eq!(setup.work.routine, [MODE_MOVE, 0, 0, 0]);
+            assert_eq!(setup.work.damage_cnt, 0);
+            assert_eq!(setup.work.neck.flags & 0x12, 0);
+        }
+    }
+
+    /// `FUN_0045bb80` on a held player: four rings, each drawing its turn
+    /// off the facing and then its size; the first two 300 ahead along `M`'s
+    /// first column and the last two under part 0, at the water's height. The
+    /// kill's (`FUN_0045b000`) adds the splash `0x2020001`.
+    #[test]
+    fn a_held_players_water_rings_draw_turn_then_size_ahead_then_under() {
+        let mut setup = Setup::new(0);
+        setup.work.water = -100;
+        setup.work.move_cnt = 0x11;
+        setup.player.pos = [1000, 0, 2000];
+        setup.player.angle = 0;
+        setup.work.drawn_turn = None;
+        let mut rnd = crate::zombie2::Rnd(0x1234);
+        let mut expected = crate::zombie2::Rnd(0x1234);
+        let mut life = 100;
+        let mut held = Held {
+            holder: [0; 3],
+            holder_angle: 0,
+            holder_aim: 0,
+            holder_id: 0x10,
+            holder_move_cnt: 0,
+            holder_grip: None,
+            draw_buffer: 0,
+            rnd: &mut rnd,
+            life: &mut life,
+            released: false,
+            die: false,
+            knocks: 0,
+        };
+        setup.with_mover(|mover| mover.held_water(&mut held, None, true));
+        let under = [1000, -100, 2000];
+        let ahead = [1300, -100, 2000];
+        let rings: Vec<_> = setup
+            .work
+            .effects
+            .iter()
+            .map(|call| (call.kind, call.dir, call.size, call.at))
+            .collect();
+        let want: Vec<_> = [(0, ahead), (0x400, ahead), (0x800, under), (0xC00, under)]
+            .into_iter()
+            .map(|(quarter, at)| {
+                let turn = i16::from(expected.draw()) * 4;
+                let size = u16::from(expected.draw()) * 4 + 0xC00;
+                (0x1A, (quarter as i16).wrapping_sub(turn), size, at)
+            })
+            .collect();
+        assert_eq!(rings, want);
+        assert_eq!(setup.work.sounds, [0x202_0001]);
+        // Out of step (`Move_cnt & 0xF` not 1) nothing rings or draws.
+        let mut setup = Setup::new(0);
+        setup.work.water = -100;
+        setup.work.move_cnt = 2;
+        let mut rnd = crate::zombie2::Rnd(0x1234);
+        let mut held = Held {
+            holder: [0; 3],
+            holder_angle: 0,
+            holder_aim: 0,
+            holder_id: 0x10,
+            holder_move_cnt: 0,
+            holder_grip: None,
+            draw_buffer: 0,
+            rnd: &mut rnd,
+            life: &mut life,
+            released: false,
+            die: false,
+            knocks: 0,
+        };
+        setup.with_mover(|mover| mover.held_water(&mut held, None, true));
+        assert!(setup.work.effects.is_empty() && setup.work.sounds.is_empty());
+        assert_eq!(rnd.0, 0x1234);
+    }
+
+    /// `FUN_0045a820`'s end: a zombie's hold in water rings it four times
+    /// (`FUN_0045bb80`) on a frame with `Move_cnt & 0xF` 1, two draws each;
+    /// out of the water it never does.
+    #[test]
+    fn a_zombies_hold_in_water_rings_it_every_sixteenth_frame() {
+        let mut setup = Setup::new(0);
+        setup.tick(Input::default(), 190);
+        (setup.clips, setup.keyframes) = bank(0x11, 4, 0);
+        setup.work.routine = [MODE_HELD, 0, 0, 0];
+        setup.work.water = -100;
+        let mut life = 190;
+        run_held(&mut setup, &mut life, |work| {
+            work.effects.iter().any(|call| call.kind == 0x1A)
+        });
+        let rings: Vec<_> = setup
+            .work
+            .effects
+            .iter()
+            .filter(|call| call.kind == 0x1A)
+            .collect();
+        assert_eq!(rings.len(), 4);
+        assert_eq!(setup.work.move_cnt & 0xF, 1);
+        assert!(
+            rings
+                .iter()
+                .all(|call| call.at[1] == -100 && call.size >= 0xC00)
+        );
+
+        let mut dry = Setup::new(0);
+        dry.tick(Input::default(), 190);
+        (dry.clips, dry.keyframes) = bank(0x11, 4, 0);
+        dry.work.routine = [MODE_HELD, 0, 0, 0];
+        let mut life = 190;
+        let ticks = std::cell::Cell::new(0);
+        run_held(&mut dry, &mut life, |work| {
+            assert!(work.effects.iter().all(|call| call.kind != 0x1A));
+            ticks.set(ticks.get() + 1);
+            ticks.get() == 40
+        });
     }
 
     /// `Pl_Em_damage` raises `fg_status`'s `0x40` on each held tick, so a hold
