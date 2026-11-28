@@ -10045,8 +10045,11 @@ impl GameSession {
             }
         }
         // A door's `Pl_init` keeps the speed the last room left.
-        if frame.load && session.door.re2.is_some() {
+        if frame.load
+            && let Some(door) = session.door.re2
+        {
             self.game.re2.door_spd = Some(self.game.re2.player.spd);
+            self.game.re2.door_floor = Some(door.floor);
         }
         self.transition = Some(session);
         if frame.load {
@@ -10064,6 +10067,7 @@ impl GameSession {
             // A transition that loaded no RE2 room (only a camera, or a room
             // without scripts) leaves no speed for a later load's move.
             self.game.re2.door_spd = None;
+            self.game.re2.door_floor = None;
             // `Set_room`'s first scheduler pass runs under the door, and its
             // `se_on`s play there: room 403's lift arrival plays door sound 1
             // on its load, not on the door's end.
@@ -21885,7 +21889,13 @@ fn run_re2_init(
     if !again && (game.re2.player.title_first_move || door_spd.is_some()) {
         re2_set_room_player(game, door_spd);
     }
-    game.re2.player.floor = crate::sca::floor_of(game.entities[0].pos[1]);
+    // `Set_door` gives the player the door's `nFloor`; anything else loading
+    // a room places it by the height.
+    game.re2.player.floor = game
+        .re2
+        .door_floor
+        .take()
+        .unwrap_or_else(|| crate::sca::floor_of(game.entities[0].pos[1]));
     game.camera.locked = false;
     // `Set_room` runs `Esp_init_R` and `Snd_bgm_set` and `Snd_bgm_play_ck` before the scripts.
     let origin = game.origin();
@@ -28503,6 +28513,7 @@ mod tests {
             stage,
             room,
             cut: 0,
+            floor: 0,
         };
         let f12 = RoomId::parse("f120").unwrap();
         assert!(!re2_door_changes_stage(door(6, 0x14), f12));
@@ -30153,6 +30164,7 @@ mod tests {
                     stage: 1,
                     room: 0x0A,
                     cut: 0,
+                    floor: 0,
                 }),
             });
         }
@@ -30251,6 +30263,7 @@ mod tests {
             stage: 1,
             room: b.room,
             cut: 0,
+            floor: 0,
         });
         re2_tick(&mut session, &pack, UiInput::default());
         assert!(session.transition.is_some(), "the door is taken");
@@ -30277,6 +30290,7 @@ mod tests {
             stage: 1,
             room: b.room,
             cut: 0,
+            floor: 0,
         });
         let var = crate::scd2::host::VAR_LAST_RDT;
         session.game.re2.vars[var] = 0x1234;
@@ -30311,6 +30325,7 @@ mod tests {
             stage: 1,
             room: b.room,
             cut: 0,
+            floor: 0,
         });
         session.game.re2.set_enemies_stopped(true);
         re2_tick(&mut session, &pack, UiInput::default());
@@ -30553,6 +30568,7 @@ mod tests {
             stage: 1,
             room: b.room,
             cut: 0,
+            floor: 0,
         });
         session.game.message_flags |= START_MESSAGE_BITS;
         let start = UiInput {
@@ -51143,6 +51159,23 @@ end
         game.re2.player.title_first_move = true;
         run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
         assert_eq!(game.re2.player.neck.wait, 8, "the title's load");
+    }
+
+    /// `Set_door` puts the player on the door's `nFloor`, whatever the
+    /// height: room 501's door 1 needs floor 0 beside the platform's step.
+    /// A load without a door places the player by the height.
+    #[test]
+    fn a_doors_load_puts_the_player_on_its_floor() {
+        let mut game = game::GameState::default();
+        game.entities[0].pos = [0, -1800 * 2, 0];
+        let mut vm = crate::scd2::vm::Vm::new(&crate::scd2::Scripts::default());
+        game.re2.door_floor = Some(5);
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
+        assert_eq!(game.re2.player.floor, 5);
+        assert_eq!(game.re2.door_floor, None, "the door's floor is used once");
+        run_re2_init(Some(&mut vm), &Default::default(), &mut game, false);
+        assert_eq!(game.re2.player.floor, crate::sca::floor_of(-3600));
+        assert_ne!(game.re2.player.floor, 5);
     }
 
     #[test]

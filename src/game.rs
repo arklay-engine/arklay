@@ -21919,6 +21919,7 @@ mod tests {
                 stage: 1,
                 room,
                 cut: 0,
+                floor: 0,
             }),
             ..door(room, 0)
         };
@@ -21975,6 +21976,7 @@ mod tests {
                 stage: 1,
                 room: 0x0A,
                 cut: 0,
+                floor: 0,
             }),
             ..door(0x0A, lock)
         };
