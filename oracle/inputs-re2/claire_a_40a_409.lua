@@ -1,5 +1,6 @@
 -- arklay start for claire_a_40a_409: where --start claire --warp 40A:-9175:-1800:-855:2064:8 leaves the player: Claire A
--- from 40A through 410 to 409 (#896): 40A's corridor west and south, east into the alligator's scene, back west and
+-- from 40A through 408 and 410 to 409 (#896): back to 408, where the Valve Handle at the west panel raises the bridge
+-- again (4:30 clear); in 40A the corridor west and south, east into the alligator's scene, back west and
 -- north to the gas tank's button (the action key, facing east), then aimed south and firing as the alligator comes up
 -- until the tank's blast kills it; east to the lock panel (its question answered yes) and north through door 0 (410); in
 -- 410 the scene with Sherry (the action key facing east at area 2, then through its lines), the Wolf Medal, up box 10
