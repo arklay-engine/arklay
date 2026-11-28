@@ -3450,15 +3450,26 @@ pub fn draw_door_scene(
 /// camera `C` and part rotation `R`, so each `door_ll` row goes through
 /// `C`'s transpose, negated and scaled by `(door_lc >> 4) / 128` at a colour
 /// of `0x80`: `Marni` draws a corner's colour doubled, as it does a body's,
-/// whose `0x80` is full.
+/// whose `0x80` is full. Each row's Y is negated first: `FUN_004462e0` hands
+/// Marni `door_ll * M` with its Y column negated, which against `C`'s
+/// view (Y up, where `Sp_matrix`'s is down) is the row's Y turned over. A
+/// part turned so its normals' Y meets the view's (409's ladder down into
+/// 410, door `0x16`, its rungs and rails) shows it; a level one doesn't.
+/// The turn holds only for a level camera, whose view keeps its Y apart, as
+/// `Door_init`'s always is (from `(10000, 0, 0)` to the origin).
 pub fn re2_door_light(camera: &Camera) -> EntityLight {
     use crate::door2::vm::{COLOUR_MATRIX, LIGHT_MATRIX};
+    debug_assert_eq!(
+        camera.from[1], camera.look_at[1],
+        "a door's camera is level"
+    );
     let view = stored_camera_matrix(camera.from, camera.look_at);
     EntityLight {
         ambient: [0.0; 3],
         sources: std::array::from_fn(|light| {
             let scale = f64::from(COLOUR_MATRIX[0][light] >> 4) / 128.0;
-            let row = LIGHT_MATRIX[light];
+            let [x, y, z] = LIGHT_MATRIX[light];
+            let row = [x, -y, z];
             EntityLightSource {
                 dir: std::array::from_fn(|axis| {
                     let world: f64 = (0..3)
@@ -11668,7 +11679,8 @@ mod tests {
         let light = re2_door_light(&camera);
         assert_eq!(light.ambient, [0.0; 3]);
         let stored = stored_camera_matrix(camera.from, camera.look_at);
-        for rotation in [[0, 0, 0], [0, 1024, 0], [300, -700, 90]] {
+        // The last is door `0x16`'s ladder as it comes down into 410.
+        for rotation in [[0, 0, 0], [0, 1024, 0], [300, -700, 90], [2048, 0, -600]] {
             let world = anim::rotation_matrix(rotation[0], rotation[1], rotation[2]);
             let draw_matrix = mul_matrix0(&stored, &world)
                 .map(|row| row.map(|entry| f32::from(entry as i16) / 4096.0));
@@ -11693,11 +11705,15 @@ mod tests {
                         .sum::<f64>()
                         / 4096.0
                 });
+                // Marni's light matrix has its Y column negated against the
+                // Y-up view's normal.
                 let expected = LIGHT_MATRIX
                     .iter()
                     .map(|row| {
                         let l = (0..3)
-                            .map(|k| f64::from(row[k]) * view_normal[k])
+                            .map(|k| {
+                                f64::from(row[k]) * view_normal[k] * if k == 1 { -1.0 } else { 1.0 }
+                            })
                             .sum::<f64>()
                             / (4096.0 * 4096.0);
                         200.0 * l.max(0.0)
