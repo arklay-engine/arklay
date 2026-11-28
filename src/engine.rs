@@ -22665,7 +22665,8 @@ fn tick_room_timed(
     // of the rendered frame, before the game task runs its scripts and its
     // per-frame random draw. Doing it here (rather than at render time) keeps
     // the three shake draws ahead of this tick's `g_RandSeed` draw and on the
-    // frame the shake bit takes effect, matching the reference stream.
+    // frame the shake bit takes effect, matching the reference stream. In
+    // RE 2 it is `WinMain`'s `ResetGeom`, before the scripts' `sce_shake_on`.
     context.game.roll_screen_shake();
     if let Some(viewer) = context.game.model_viewer.as_deref_mut() {
         viewer.tick();
