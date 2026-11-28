@@ -1,0 +1,1134 @@
+# leon_a_40a_405: Leon from 40A, where leon_a_404_40a leaves him, through the alligator, 410's scene, 408's west panel, 409's Eagle Medal and 40B into 405, up to the tick before Ada's first shot at its crawling zombies (her attack, Aida_mv05, isn't ported)
+# 40A: east along the corridor into the alligator's scene, back to the gas tank's button (the action key, facing east), aimed south and firing until the tank's blast kills it; east to the lock panel (yes) and north through door 0 (410 on 2373)
+344
+348 up run right
+350 up run
+395 up run right
+396 up run
+417 up run left
+439 up run
+540 up run right
+541 up run
+553 up run left
+571 up run
+588 up run left
+589 up run
+676 up run right
+677 up run
+683 up run left
+853
+1128 up run right
+1130 up run
+1150 up run right
+1151 up run
+1188 up run left
+1189 up run right
+1207 up run
+1219 up run right
+1220 up run
+1269 right
+1281
+1287 action
+1290
+1296 right
+1310 aim
+1566 aim fire
+1570 aim
+1596 aim fire
+1600 aim
+1626 aim fire
+1630 aim
+1656 aim fire
+1660 aim
+1686 aim fire
+1690 aim
+1716 aim fire
+1720 aim
+1746 aim fire
+1750 aim
+1776
+1797 up run
+1869 up run right
+1870 up run
+1871 up run left
+1891 up run
+1934 up run left
+1935 up run
+2007 up run right
+2008 up run
+2012 up run right
+2013 up run
+2014 up run left
+2018 up run
+2023 up run left
+2024 right
+2028
+2034 action
+2036
+2156 action
+2158
+2198 action
+2200
+2240 action
+2242
+2282 up run left
+2318 right
+2331
+2337 action
+2339
+# 410: up box 10's ledge into the room's scene (events 10 and 11), whose `sce_heal` gives Leon 200 life; he (player id 4) and Ada are put in 409 (3610)
+2504 up run left
+2513 up run
+2516 up run left
+2517 up run
+2557 up run left
+2558 up run
+2563 up run right
+2564 up run
+2566 up run right
+2567 up run
+2568 up run left
+2575 up run
+2596 up run left
+2597 right
+2604
+2610 action
+2612
+3244
+# 409: west to door 0's ladder (yes) back up to 410 (4415), the bridge being up (4:30)
+3741 up run right
+3788 up run
+3789 up run left
+3795 up run
+3800 up run right
+3801 up run
+3806 up run left
+3807 up run
+3812 up run left
+3813 up run
+3816 up run right
+3817 up run
+3818 up run right
+3819 up run
+3826 up run left
+3827 up run
+3833 up run left
+3834 up run
+3836 up run right
+3837 up run
+3839 up run right
+3840 up run
+3846 up run left
+3847 up run
+3853 up run left
+3854 up run
+3856 up run right
+3857 up run
+3859 up run right
+3860 up run
+3866 up run left
+3867 up run
+3873 up run left
+3874 up run
+3876 up run right
+3877 up run
+3879 up run right
+3880 up run
+3886 up run left
+3887 up run
+3893 up run left
+3894 up run
+3896 up run right
+3897 up run
+3899 up run right
+3900 up run
+3906 up run left
+3907 up run
+3913 up run left
+3914 up run
+3916 up run right
+3917 up run
+3919 up run right
+3920 up run
+3926 up run left
+3927 up run
+3933 up run left
+3934 up run
+3936 up run right
+3937 up run
+3939 up run right
+3940 up run
+3946 up run left
+3947 up run
+3953 up run left
+3954 up run
+3956 up run right
+3957 up run
+3959 up run right
+3960 up run
+3966 up run left
+3967 up run
+3973 up run left
+3974 up run
+3976 up run right
+3977 up run
+3979 up run right
+3980 up run
+3986 up run left
+3987 up run
+3993 up run left
+3994 up run
+3996 up run right
+3997 up run
+3999 up run right
+4000 up run
+4006 up run left
+4007 up run
+4013 up run left
+4014 up run
+4016 up run right
+4017 up run
+4019 up run right
+4020 up run
+4026 up run left
+4027 up run
+4033 up run left
+4034 up run
+4036 up run right
+4037 up run
+4038 up run right
+4039 up run
+4046 up run left
+4047 up run
+4052 up run left
+4053 up run
+4056 up run right
+4057 up run
+4058 up run right
+4059 up run
+4066 up run left
+4067 up run
+4072 up run left
+4073 up run
+4075 up run right
+4076 up run
+4079 up run right
+4080 up run
+4086 up run left
+4087 up run
+4093 up run left
+4094 up run
+4096 up run right
+4097 up run
+4099 up run right
+4100 up run
+4106 up run left
+4107 up run
+4113 up run left
+4114 up run
+4116 up run right
+4117 up run
+4119 up run right
+4120 up run
+4126 up run left
+4127 up run
+4133 up run left
+4134 up run
+4136 up run right
+4137 up run
+4139 up run right
+4140 up run
+4146 up run left
+4147 up run
+4153 up run left
+4154 up run
+4156 up run right
+4157 up run
+4159 up run right
+4160 up run
+4166 up run left
+4167 up run
+4173 up run left
+4174 up run
+4176 up run right
+4177 up run
+4179 up run right
+4180 up run
+4186 up run left
+4187 up run
+4193 up run left
+4194 up run
+4196 up run right
+4197 up run
+4199 up run right
+4200 up run
+4206 up run left
+4207 up run
+4213 up run left
+4214 up run
+4216 up run right
+4217 up run
+4219 up run right
+4220 up run
+4226 up run left
+4227 up run
+4233 up run left
+4234 up run
+4236 up run right
+4237 up run
+4239 up run right
+4240 up run
+4246 up run left
+4247 up run
+4253 up run left
+4254 up run
+4256 up run right
+4257 up run
+4258 up run right
+4259 up run
+4266 up run left
+4267 up run
+4272 up run left
+4273 up run
+4276 up run right
+4277 up run
+4278 up run right
+4279 up run
+4286 up run left
+4287 up run
+4292 up run left
+4293 up run
+4295 up run right
+4296 up run
+4299 up run right
+4300 up run
+4306 up run left
+4307 up run
+4313 up run left
+4314 up run
+4316 up run right
+4317 up run
+4319 up run right
+4320 up run
+4326 up run left
+4327 up run
+4333 up run left
+4334 up run
+4336 up run right
+4337 up run
+4339 up run right
+4340 up run
+4341 left
+4343
+4347 action
+4349
+4379 action
+4381
+# 410: off the ledge, south to door 1, pressed facing south (40A on 4712)
+4422 up run left
+4511 up run
+4514 up run right
+4515 up run
+4516 up run right
+4520 up run
+4521 up run right
+4522 up run
+4523 up run right
+4524 right
+4530
+4534 action
+4536
+4583 up run left
+4592 up run
+4607 up run left
+4608 up run
+4609 up run left
+4610 up run
+4611 up run right
+4620 up run
+4656 up run right
+4657 up run
+4668 up run left
+4670 up run
+4671 right
+4673
+4677 action
+4679
+# 40A: west along the south leg and up the west leg to door 1 into 408, pressed facing east (6305)
+4719 up run right
+5336 up run
+5415 up run right
+5416 up run
+5458 up run right
+5475 up run
+5507 up run right
+5508 up run
+5586 up run left
+5587 up run
+5591 up run right
+5610 up run
+5614 up run right
+5615 up run
+5664 up run left
+5668 up run right
+5669 up run
+5670 up run right
+5671 up run left
+5672 up run
+5674 up run right
+5677 up run left
+5679 up run right
+5680 up run
+5682 up run left
+5683 up run
+5685 up run left
+5686 up run
+5687 up run right
+5688 up run
+5689 up run left
+5690 up run
+5693 up run right
+5695 up run left
+5696 up run right
+5697 up run
+5699 up run left
+5700 up run right
+5701 up run
+5703 up run left
+5705 up run
+5707 up run right
+5708 up run
+5710 up run left
+5711 up run
+5714 up run right
+5717 up run left
+5719 up run right
+5720 up run
+5722 up run left
+5723 up run
+5725 up run left
+5726 up run
+5727 up run right
+5728 up run
+5729 up run left
+5730 up run
+5733 up run right
+5735 up run left
+5736 up run right
+5737 up run
+5739 up run left
+5740 up run right
+5741 up run
+5743 up run left
+5745 up run
+5747 up run right
+5748 up run
+5750 up run left
+5751 up run
+5754 up run right
+5757 up run left
+5759 up run right
+5760 up run
+5762 up run left
+5763 up run
+5765 up run left
+5766 up run
+5767 up run right
+5768 up run
+5769 up run left
+5770 up run
+5773 up run right
+5775 up run left
+5776 up run right
+5777 up run
+5779 up run left
+5780 up run right
+5781 up run
+5783 up run left
+5785 up run
+5787 up run right
+5788 up run
+5790 up run left
+5791 up run
+5794 up run right
+5797 up run left
+5799 up run right
+5800 up run
+5802 up run left
+5803 up run
+5805 up run left
+5806 up run
+5807 up run right
+5808 up run
+5809 up run left
+5810 up run
+5813 up run right
+5815 up run left
+5816 up run right
+5817 up run
+5819 up run left
+5820 up run right
+5821 up run
+5823 up run left
+5825 up run
+5827 up run right
+5828 up run
+5830 up run left
+5831 up run
+5834 up run right
+5837 up run left
+5839 up run right
+5840 up run
+5842 up run left
+5843 up run
+5845 up run left
+5846 up run
+5847 up run right
+5848 up run
+5849 up run left
+5850 up run
+5853 up run right
+5855 up run left
+5856 up run right
+5857 up run
+5859 up run left
+5860 up run right
+5861 up run
+5863 up run left
+5865 up run
+5867 up run right
+5868 up run
+5870 up run left
+5871 up run
+5874 up run right
+5877 up run left
+5879 up run right
+5880 up run
+5882 up run left
+5883 up run
+5885 up run left
+5886 up run
+5887 up run right
+5888 up run
+5889 up run left
+5890 up run
+5893 up run right
+5895 up run left
+5896 up run right
+5897 up run
+5899 up run left
+5900 up run right
+5901 up run
+5903 up run left
+5905 up run
+5907 up run right
+5908 up run
+5910 up run left
+5911 up run
+5914 up run right
+5917 up run left
+5919 up run right
+5920 up run
+5922 up run left
+5923 up run
+5925 up run left
+5926 up run
+5927 up run right
+5928 up run
+5929 up run left
+5930 up run
+5933 up run right
+5935 up run left
+5936 up run right
+5937 up run
+5939 up run left
+5940 up run right
+5941 up run
+5943 up run left
+5945 up run
+5947 up run right
+5948 up run
+5950 up run left
+5951 up run
+5954 up run right
+5957 up run left
+5959 up run right
+5960 up run
+5962 up run left
+5963 up run
+5965 up run left
+5966 up run
+5967 up run right
+5968 up run
+5969 up run left
+5970 up run
+5973 up run right
+5975 up run left
+5976 up run right
+5977 up run
+5979 up run left
+5980 up run right
+5981 up run
+5983 up run left
+5985 up run
+5987 up run right
+5988 up run
+5990 up run left
+5991 up run
+5994 up run right
+5997 up run left
+5999 up run right
+6000 up run
+6002 up run left
+6003 up run
+6005 up run left
+6006 up run
+6007 up run right
+6008 up run
+6009 up run left
+6010 up run
+6013 up run right
+6015 up run left
+6016 up run right
+6017 up run
+6019 up run left
+6020 up run right
+6021 up run
+6023 up run left
+6025 up run
+6027 up run right
+6028 up run
+6030 up run left
+6031 up run
+6034 up run right
+6037 up run left
+6039 up run right
+6040 up run
+6042 up run left
+6043 up run
+6045 up run left
+6046 up run
+6047 up run right
+6048 up run
+6049 up run left
+6050 up run
+6053 up run right
+6055 up run left
+6056 up run right
+6057 up run
+6059 up run left
+6060 up run right
+6061 up run
+6063 up run left
+6065 up run
+6067 up run right
+6068 up run
+6070 up run left
+6071 up run
+6074 up run right
+6077 up run left
+6079 up run right
+6080 up run
+6082 up run left
+6083 up run
+6085 up run left
+6086 up run
+6087 up run right
+6088 up run
+6089 up run left
+6090 up run
+6093 up run right
+6095 up run left
+6096 up run right
+6097 up run
+6099 up run left
+6100 up run right
+6101 up run
+6103 up run left
+6105 up run
+6107 up run right
+6108 up run
+6110 up run left
+6111 up run
+6114 up run right
+6117 up run left
+6119 up run right
+6120 up run
+6122 up run left
+6123 up run
+6125 up run left
+6126 up run
+6127 up run right
+6128 up run
+6129 up run left
+6130 up run
+6133 up run right
+6135 up run left
+6136 up run right
+6137 up run
+6139 up run left
+6140 up run right
+6141 up run
+6143 up run left
+6145 up run
+6147 up run right
+6148 up run
+6150 up run left
+6151 up run
+6154 up run right
+6157 up run left
+6159 up run right
+6160 up run
+6162 up run left
+6163 up run
+6165 up run left
+6166 up run
+6167 up run right
+6168 up run
+6169 up run left
+6170 up run
+6173 up run right
+6175 up run left
+6176 up run right
+6177 up run
+6179 up run left
+6180 up run right
+6181 up run
+6183 up run left
+6185 up run
+6187 up run right
+6188 up run
+6190 up run left
+6191 up run
+6194 up run right
+6197 up run left
+6199 up run right
+6200 up run
+6202 up run left
+6203 up run
+6205 up run left
+6206 up run
+6207 up run right
+6208 up run
+6209 up run left
+6210 up run
+6213 up run right
+6215 up run left
+6216 up run right
+6217 up run
+6219 up run left
+6220 up run right
+6221 up run
+6223 up run left
+6225 up run
+6227 up run right
+6228 up run
+6230 up run left
+6231 up run
+6234 up run right
+6237 up run left
+6239 up run right
+6240 up run
+6242 up run left
+6243 up run
+6245 up run left
+6246 up run
+6247 up run right
+6248 up run
+6249 up run left
+6250 up run
+6253 up run right
+6255 up run left
+6256 up run right
+6257 up run
+6259 up run left
+6260 up run right
+6261 up run
+6263 up run left
+6264 right
+6266
+6270 action
+6272
+# 408: to the west panel, the Valve Handle from the status screen (down, down, right, action, action), which raises 408's bridge and lowers 409's (4:30 clear); START closes the screen the scene reopens; west to door 1 (40A on 8317)
+6312 up run right
+6401 up run
+6419 up run left
+6420 up run
+6421 up run left
+6422 up run
+6423 up run left
+6427 up run
+6430 up run right
+6431 up run left
+6473 right
+6481
+6487 start
+6489
+6529 down
+6531
+6549 down
+6551
+6569 right
+6571
+6589 action
+6591
+6609 action
+6611
+7511 cancel
+7513
+7573 cancel
+7575
+7635 up run left
+7658 up run
+7659 up run right
+8268 up run
+8272 up run right
+8273 up run
+8275 up run left
+8278
+8282 action
+8284
+# 40A: west, down the west leg and east along the south leg to door 0 (410 on 8836)
+8324 up run left
+8413 up run
+8447 up run right
+8452 up run
+8478 up run left
+8479 up run
+8481 up run left
+8504 up run
+8608 up run right
+8609 up run
+8615 up run left
+8616 up run
+8617 up run left
+8635 up run
+8750 up run left
+8751 up run
+8757 up run left
+8758 up run
+8759 up run left
+8787 right
+8797
+8801 action
+8803
+# 410: north up box 10's ledge and west to door 0 (409 on 9812)
+8843 up run left
+8933 up run
+8936 up run left
+8937 up run
+8977 up run left
+8978 up run
+8983 up run right
+8984 up run
+8986 up run right
+8987 up run
+8988 up run left
+8995 up run
+9016 up run left
+9017 right
+9024
+9028 action
+9030
+9080 up run left
+9099 up run
+9114 up run right
+9115 up run
+9118 up run left
+9119 up run
+9134 up run right
+9135 up run
+9138 up run left
+9139 up run
+9154 up run right
+9155 up run
+9158 up run left
+9159 up run
+9174 up run right
+9175 up run
+9178 up run left
+9179 up run
+9194 up run right
+9195 up run
+9198 up run left
+9199 up run
+9214 up run right
+9215 up run
+9218 up run left
+9219 up run
+9234 up run right
+9235 up run
+9238 up run left
+9239 up run
+9254 up run right
+9255 up run
+9258 up run left
+9259 up run
+9274 up run right
+9275 up run
+9278 up run left
+9279 up run
+9294 up run right
+9295 up run
+9298 up run left
+9299 up run
+9314 up run right
+9315 up run
+9318 up run left
+9319 up run
+9334 up run right
+9335 up run
+9338 up run left
+9339 up run
+9354 up run right
+9355 up run
+9358 up run left
+9359 up run
+9374 up run right
+9375 up run
+9378 up run left
+9379 up run
+9394 up run right
+9395 up run
+9398 up run left
+9399 up run
+9414 up run right
+9415 up run
+9418 up run left
+9419 up run
+9434 up run right
+9435 up run
+9438 up run left
+9439 up run
+9454 up run right
+9455 up run
+9458 up run left
+9459 up run
+9474 up run right
+9475 up run
+9478 up run left
+9479 up run
+9494 up run right
+9495 up run
+9498 up run left
+9499 up run
+9514 up run right
+9515 up run
+9518 up run left
+9519 up run
+9534 up run right
+9535 up run
+9538 up run left
+9539 up run
+9554 up run right
+9555 up run
+9558 up run left
+9559 up run
+9574 up run right
+9575 up run
+9578 up run left
+9579 up run
+9594 up run right
+9595 up run
+9598 up run left
+9599 up run
+9614 up run right
+9615 up run
+9618 up run left
+9619 up run
+9634 up run right
+9635 up run
+9638 up run left
+9639 up run
+9654 up run right
+9655 up run
+9658 up run left
+9659 up run
+9674 up run right
+9675 up run
+9678 up run left
+9679 up run
+9680
+9684 action
+9686
+9776 action
+9778
+# 409: east, north over the bridge and west, down the ramp to the Eagle Medal (the action key, yes), up the ledge again, east and south to the lift's valve (the Valve Handle again), and north to door 1's ladder (yes; 40B on 11907)
+9819 up run left
+9909 up run
+9925 up run left
+9926 up run
+9930 up run left
+9950 up run
+9953 up run left
+9954 up run
+9958 up run right
+9959 up run
+9960 up run right
+9962 up run
+9963 up run right
+9964 up run
+9965 up run left
+9966 up run
+10018 up run right
+10019 up run
+10022 up run right
+10023 up run
+10025 up run left
+10045 up run
+10075 up run right
+10076 up run
+10078 up run right
+10079 up run left
+10098 up run
+10126 up run right
+10127 up run
+10131 up run right
+10132 up run
+10133 up run right
+10134 up run
+10135 up run right
+10141 up run left
+10157 up run right
+10161 right
+10176
+10180 action
+10182
+10222 action
+10224
+10264 action
+10266
+10306 action
+10308
+10348 action
+10350
+10390 up run right
+10433 left
+10441
+10445 action
+10447
+10487 action
+10489
+10529 action
+10531
+10571 action
+10573
+10633 up run
+10674 up run left
+10675 up run
+10713 up run left
+10714 up run
+10716 up run left
+10717 up run right
+10737 up run
+10741 up run left
+10742 up run
+10743 up run right
+10745 up run
+10786 up run right
+10787 up run
+10799 up run left
+10800 up run
+10802 up run left
+10803 up run right
+10817 up run
+10820 up run right
+10825 up run
+10836 up run right
+10837 up run
+10839 up run left
+10840 up run
+10841 up run left
+10843 up run
+10846 up run right
+10847 left
+10860
+10864 start
+10866
+10906 down
+10908
+10926 down
+10928
+10946 right
+10948
+10966 action
+10968
+10986 action
+10988
+11588 cancel
+11590
+11630 cancel
+11632
+11672 cancel
+11674
+11714 up run right
+11732 up run
+11738 up run left
+11740 right
+11743
+11747 action
+11749
+11809 action
+11811
+11871 action
+11873
+# 40B: walking east, so that Ada keeps up, to area 2's ladder down (yes; 405 on 12655)
+11939 up
+12448 up right
+12449 up
+12478 up left
+12479 up
+12490 up left
+12491
+12495 action
+12497
+12557 action
+12559
+12619 action
+12621
+# 405: north up the channel to the first crawling zombie, aimed at it low
+12687 up run left
+12774 up run
+12998 up run left
+12999 up run
+13006 up run right
+13007 up run
+13013 up run left
+13014 up run
+13016 up run left
+13017 right
+13020
+13022 aim
+13051 aim fire
+13053 aim
+13081 aim fire
+13083 aim
+13111 aim fire
+13113 aim
+13141 aim fire
+13143 aim
+13171 aim fire
+13173 aim
+13201 aim fire
+13203 aim
+13231 aim fire
+13233 aim
+13261 aim fire
+13263 aim
+13291 aim fire
+13293 aim
+13321 aim fire
+13323 aim
+13351 aim fire
+13353 aim
+13381 aim fire
+13383 aim
+13411 aim fire
+13413 aim
+13422
+13423 up run
+13456 up run right
+13457 up run
+13483 up run right
+13484 up run
+13499 right
