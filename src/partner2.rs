@@ -12,8 +12,9 @@
 //! and the water she stands in (`Water`, from `Sce_at`'s water areas) slows
 //! them, keeps her from calling and makes her footfalls ripple.
 
-use crate::player2::{Bank, Mover, direction_ck, goto};
+use crate::player2::{Bank, EffectCall, Mover, direction_ck, goto};
 use crate::state::{Guide, ScaRect};
+use crate::weapon2::{Hit, Target};
 use crate::zombie2::{Rnd, RootCk, RootWorld, root_ck, sca_ck_line, turn_within};
 
 /// `Spl_r_pos` (`0x53cda0`): the follow points' length and two angles from
@@ -186,6 +187,8 @@ pub const STATE_KIND: u16 = 3;
 pub const STATE_WALL_TURN: u16 = 0x1000;
 pub const STATE_LOST: u16 = 0x2000;
 pub const STATE_CHANGED: u16 = 0x8000;
+/// The aim goes on: set by the raise and by a shot that found a body.
+pub const STATE_AIM: u16 = 0x4000;
 
 /// The distances the states decide by.
 const LOST: u16 = 8000;
@@ -230,6 +233,8 @@ const MV_WALK: u8 = 1;
 const MV_RUN: u8 = 2;
 const MV_DODGE: u8 = 3;
 const MV_FACE: u8 = 4;
+/// `Aida_mv05_br` and `Aida_mv05`: the aim and the shots.
+const MV_AIM: u8 = 5;
 const MV_FACE_AHEAD: u8 = 0xB;
 const MV_TURN_ROUND: u8 = 0xC;
 const MV_FACE_POINT: u8 = 0xD;
@@ -351,7 +356,8 @@ pub struct Partner {
     pub timer1: i16,
     pub timer2: i8,
     pub timer3: u8,
-    /// `Root_ck`'s turn (`+0x150`) and `Status_flg`'s sight bit. `Sce_em_set`
+    /// `Root_ck`'s turn (`+0x150`), and `Status_flg`: its sight bit and
+    /// the tilt of Ada's aim in its top three bits. `Sce_em_set`
     /// seeds the turn with the slot's index, 1 for `splayer_work`.
     pub root_cnt: u8,
     pub status: u16,
@@ -363,6 +369,12 @@ pub struct Partner {
     /// `Poison_timer` (`+0x10A`): `Oma_Spl_updown_ck` keeps her facing
     /// there, and `Aida_mv08` turns her back to it.
     pub climb_dir: u16,
+    /// `pEnemy_ptr` (`+0x1B4`): the enemy slot Ada aims at.
+    pub enemy: Option<usize>,
+    /// `Attw_seq_no` and `Attw_timer`: where her shot is in its table of
+    /// looks (`Em_0A_wp_tbl`'s sequence).
+    pub attw_seq: u8,
+    pub attw_timer: u8,
 }
 
 impl Partner {
@@ -428,6 +440,20 @@ pub struct PartnerWorld<'a> {
     pub player_spd_x: i16,
     /// `BYTE_0098ee7b`'s bit 0: the partner is poisoned.
     pub poisoned: bool,
+    /// What Ada's aim and shots see of the enemy slots, and the slots of
+    /// [`Self::nearest`].
+    pub targets: &'a [Target],
+    pub listed: [Option<usize>; 3],
+    /// The player's `pEnemy_ptr` (`DAT_0098a0a4`), for `Spl_pllock_get`.
+    pub player_target: Option<usize>,
+    /// The walls her shot's line of sight is checked against.
+    pub sca: &'a [ScaRect],
+    /// `BYTE_00989eeb`, `hard_mode` and the room's code, for `Weapon_at_ck`.
+    pub enemies: u8,
+    pub hard: bool,
+    pub room_code: u16,
+    /// The body her shot found this tick, for the caller to hurt.
+    pub hit: Option<Hit>,
 }
 
 /// `Spl_soba_pos_set` (`0x4f5a00`): the nearer to the body of the two points
@@ -630,6 +656,14 @@ impl PlayerSceneClimb {
             player_noise: 0,
             player_spd_x: 0,
             poisoned: false,
+            targets: &[],
+            listed: [None; 3],
+            player_target: None,
+            sca: &[],
+            enemies: 0,
+            hard: false,
+            room_code: 0,
+            hit: None,
         };
         let mut kind = 0;
         let out = f(&mut Auto {
@@ -1157,23 +1191,29 @@ impl Auto<'_, '_, '_, '_> {
         }
     }
 
-    /// `Ada_Move_type` (`0x4f24e0` for `Spl_em_pos_ck`'s answer 0): the
-    /// decision from the answer's table (`0x53cdf0`), then the state from
-    /// `0x53ce28`, which is Sherry's but for the stand. The other answers'
-    /// tables (`0x53ce60` to `0x53cf78`, with enemies about) have their own
-    /// stand, walk, run and turns and aren't ported: they take answer 0's.
+    /// `Ada_Move_type` (`Aida_Move_type00` to `0a`, `0x4f24e0` on, by
+    /// `Spl_em_pos_ck`'s answer): the decision from the answer's table
+    /// (`0x53cdf0`, then `0x53ce60` to `0x53d058`), then the state from
+    /// `0x53ce28`, which is Sherry's but for the stand and the aim. Answer
+    /// 0's walk, run and turn round are its own; the others share theirs,
+    /// the odd answers their stand (`Aida_mv00_br_1`) and answers 3, 4 and
+    /// 7 to 10 their turn to Claire's back (`Aida_mv0b_br_1`).
     fn ada_move_type(&mut self) {
-        if *self.kind & 0xF != 0 {
-            log_ada_kind_once(*self.kind & 0xF);
-        }
+        let answer = *self.kind & 0xF;
         match self.routine1() {
+            MV_STAND if answer & 1 != 0 => self.aida_mv00_br_1(),
             MV_STAND => self.ada_mv00_br(),
-            MV_WALK => self.ada_mv01_br(),
-            MV_RUN => self.ada_mv02_br(),
+            MV_WALK if answer == 0 => self.ada_mv01_br(),
+            MV_WALK => self.aida_mv01_br(),
+            MV_RUN if answer == 0 => self.ada_mv02_br(),
+            MV_RUN => self.aida_mv02_br(),
             MV_DODGE => self.aida_mv03_br(),
             MV_FACE => self.aida_mv04_br(),
+            MV_AIM => self.aida_mv05_br(),
+            MV_FACE_AHEAD if matches!(answer, 3 | 4 | 7..=10) => self.aida_mv0b_br_1(),
             MV_FACE_AHEAD => self.aida_mv0b_br(),
-            MV_TURN_ROUND => self.ada_mv0c_br(),
+            MV_TURN_ROUND if answer == 0 => self.ada_mv0c_br(),
+            MV_TURN_ROUND => self.aida_mv0c_br(),
             MV_FACE_POINT => self.aida_mv0d_br(),
             _ => {}
         }
@@ -1183,6 +1223,7 @@ impl Auto<'_, '_, '_, '_> {
             MV_RUN => self.aida_mv02(),
             MV_DODGE | MV_TURN_ROUND => self.aida_mv03(),
             MV_FACE | MV_FACE_AHEAD | MV_FACE_POINT => self.aida_mv04(),
+            MV_AIM => self.aida_mv05(),
             MV_CLIMB => self.aida_mv08(),
             MV_JUMP_DOWN => self.aida_mv09(),
             routine => log_once(routine),
@@ -1194,22 +1235,13 @@ impl Auto<'_, '_, '_, '_> {
     /// away, and turn out of the player's way when the player comes at her
     /// (running within 4000, walking within 1000) and she faces the player.
     /// She is never lost and never sidesteps. With an enemy listed and the
-    /// player's noise up she turns to it (`0x53d0c0` by its `Id`), which
-    /// isn't ported.
+    /// player's noise up she may aim at it (`Aida_em_at00_pl`).
     fn ada_mv00_br(&mut self) {
         if self.routine2() == 0 {
-            let fraction = life_fraction(self.p.life, self.p.max_life);
-            let mut d_life_u = u8::from(self.w.poisoned);
-            if fraction < 2000 {
-                d_life_u = 1;
-            }
-            if fraction < 800 {
-                d_life_u = 2;
-            }
-            self.m.work.d_life_u = d_life_u;
+            self.d_life_u();
         }
-        if self.enemy().is_some() && self.w.player_noise & 1 != 0 {
-            log_ada_kind_once(0x10);
+        if self.w.listed[0].is_some() && self.w.player_noise & 1 != 0 {
+            self.aida_em_at00_pl();
         }
         let [x, z] = self.p.soba;
         let ahead = self.ahead(i32::from(x), i32::from(z), 0x400);
@@ -1763,6 +1795,764 @@ impl Auto<'_, '_, '_, '_> {
     }
 }
 
+/// `Status_flg`'s tilt of Ada's aim (its top three bits): up at a spider
+/// above her, level, and low at a body on the floor or a spider about her
+/// height.
+const TILT_UP: u16 = 0x8000;
+const TILT_LEVEL: u16 = 0x4000;
+const TILT_LOW: u16 = 0x2000;
+/// `Type`'s bit for a body on the floor, and `Be_flg`'s for one a low shot
+/// can hit (`Be_flg >> 26`'s first).
+const TYPE_ON_FLOOR: u16 = 0x2000;
+use crate::zombie2::BE_LOW;
+/// The aim's stages (`Routine_2` of `Aida_mv05_w1`).
+const AIM_RAISE: u8 = 0;
+const AIM_HOLD: u8 = 1;
+const AIM_SHOOT: u8 = 2;
+const AIM_LOWER: u8 = 3;
+/// The weapon bank's clips: the raise (lowered backwards from its frame 1
+/// at 0xF and a step of 0x100), and by the tilt (`Status_flg >> 13`) the hold
+/// (`Aida_mv05_w1_t1`'s table) and the shot (`_t2`'s); and `_t4`'s.
+const AIM_RAISE_CLIP: u8 = 9;
+const AIM_LOWER_BLEND: u8 = 0xF;
+const AIM_LOWER_STEP: u16 = 0x100;
+const AIM_HOLD_CLIPS: [u8; 5] = [0, 0xF, 0xB, 0, 0xD];
+const AIM_SHOT_CLIPS: [u8; 5] = [0, 0xE, 0xA, 0, 0xC];
+const AIM_T4_CLIP: u8 = 0x10;
+/// The raise's and `_t5`'s turn to the enemy, and `_t5`'s stop.
+const AIM_TURN: i32 = 0xD8;
+const AIM_T5_FACED: i32 = 0x10;
+/// The hold's ticks before she lowers, and the ticks after the lower before
+/// she may aim again (`+0x22A`).
+const AIM_HOLD_TICKS: i16 = 0x1E;
+const AIM_WAIT: u8 = 0x1E;
+/// `Timer3`'s start at the raise, and where its count down past 0 wraps.
+const AIM_SHOTS: u8 = 6;
+const AIM_SHOTS_WRAP: u8 = 0xD;
+/// How far a zombie is aimed at from her walk (`Aida_em10_at01`), and the
+/// second listed one from her stand (`Aida_em10_at00_spl`); a spider is
+/// aimed at within 1500 of her stand or walk, or 2000 for the second, and
+/// between 5000 above and 2000 below.
+const AIM_WALK_REACH: u16 = 2500;
+const AIM_SECOND_REACH: u16 = 3000;
+const AIM_SPIDER_REACH: u16 = 0x5DC;
+const AIM_SPIDER_SECOND_REACH: u16 = 2000;
+/// The walk's and run's turn away from an enemy ahead within 1500 and 2000.
+const AWAY_WALK: u16 = 0x5DC;
+const AWAY_RUN: u16 = 2000;
+/// `BYTE_0053a520`: the record of `Em_0A_wp_tbl` (`0x539df8`) by her
+/// `Be_flg & 7`, which the shot reads where the player's `hit_scan_ck` level
+/// sits in the top bits: with her `Be_flg`'s 1 always up it is the first,
+/// the low shot's.
+const ADA_SHOT_LEVEL: [Option<usize>; 8] = [
+    None,
+    Some(0),
+    Some(1),
+    None,
+    Some(2),
+    Some(0),
+    Some(0),
+    Some(0),
+];
+/// `Em_0A_wp_tbl`'s sequence (`0x539b24`): `(record, ticks)` pairs, so the
+/// shot looks once, on its first tick.
+const ADA_SHOT_SEQ: [(u8, u8); 2] = [(0, 1), (0, 0xFF)];
+/// `Weapon_at_ck`'s `W_no >> 16` of her shot is 2: the rows of weapon 3,
+/// whose records (`Em_0A_wp_tbl`'s) are the handguns'.
+const ADA_WEAPON: u8 = 3;
+/// `hit_scan_ck` is called as Claire (`Id` 1) with weapon 3.
+const ADA_SCAN_ID: u8 = 1;
+/// The parts her shot reads: the hand `hit_scan_ck` measures and the one
+/// the flash is on, with the flash's point on it. The glow's slot is marked
+/// (`BYTE_00992cbb`, its `+0x1B`), which gives its sound the partner's.
+const SCAN_PART: usize = 14;
+const FLASH_PART: usize = 11;
+const FLASH_POINT: [i16; 3] = [0x8A, 0x267, 8];
+const FLASH_CALLS: [u32; 2] = [0x30A_0E00, 0x100_0E00];
+
+/// Which of `Aida_em_at00_pl`'s, `_at00_spl`'s, `_at01`'s and `_at05`'s
+/// rows a body takes (`0x53d080` by `Id`): the spider's (0x25) its own, the
+/// young spider's (0x26) none, everyone else the zombie's. `_at05`'s table
+/// has only the two real rows: the young spider's index runs on into
+/// `Sherry_Move_type00` (`0x4f4b60`), which the hold doesn't port (it holds
+/// on and lowers instead).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AtRow {
+    Zombie,
+    Spider,
+    None,
+}
+
+fn at_row(id: u8) -> AtRow {
+    match id {
+        crate::zombie2::SPIDER_ID => AtRow::Spider,
+        crate::zombie2::YOUNG_ID => AtRow::None,
+        _ => AtRow::Zombie,
+    }
+}
+
+/// The spider's tilt by how far it is below her (`Pos_y`'s low words):
+/// low above 500 up, up past 2000 up, otherwise level.
+fn spider_tilt(rise: i16) -> u16 {
+    if rise > -500 {
+        TILT_LOW
+    } else if rise < -2000 {
+        TILT_UP
+    } else {
+        TILT_LEVEL
+    }
+}
+
+/// Ada's aim: what starts it from her stand and walk, and `Aida_mv05`.
+impl Auto<'_, '_, '_, '_> {
+    fn target(&self, slot: usize) -> Option<Target> {
+        self.w
+            .targets
+            .iter()
+            .find(|target| target.slot == slot)
+            .copied()
+    }
+
+    /// `0x692fe0` to `0x692fe8`.
+    fn listed(&self, place: usize) -> Option<Target> {
+        self.target(self.w.listed[place]?)
+    }
+
+    /// `pEnemy_ptr`.
+    fn aimed(&self) -> Option<Target> {
+        self.target(self.p.enemy?)
+    }
+
+    /// How far the body is below her, in `Pos_y`'s low words.
+    fn rise_to(&self, target: &Target) -> i16 {
+        (target.pos[1] as i16).wrapping_sub(self.pos()[1] as i16)
+    }
+
+    /// `Routine = 0x501`, `pEnemy_ptr` and the tilt.
+    fn aim_at(&mut self, target: &Target, tilt: u16) {
+        self.p.enemy = Some(target.slot);
+        self.set(MV_AIM, 0);
+        self.p.status = self.p.status & 0x1FFF | tilt;
+    }
+
+    fn stage(&mut self, two: u8) {
+        self.m.work.routine[2] = two;
+        self.m.work.routine[3] = 0;
+    }
+
+    /// `Spl_em_cdir_ck` (`0x4f5f00`): the last listed enemy she faces
+    /// within 0x400, or the last she doesn't.
+    fn spl_em_cdir_ck(&self) -> Option<Target> {
+        let mut ahead = None;
+        let mut other = None;
+        for place in 0..3 {
+            if self.w.listed[place].is_none() {
+                break;
+            }
+            let Some(target) = self.listed(place) else {
+                continue;
+            };
+            if self.ahead(target.pos[0], target.pos[2], 0x400) {
+                ahead = Some(target);
+            } else {
+                other = Some(target);
+            }
+        }
+        ahead.or(other)
+    }
+
+    /// `Spl_pllock_get` (`0x4f5f90`): the last listed enemy that is neither
+    /// `not` nor the player's lock, or the player's lock if it is listed.
+    fn spl_pllock_get(&self, not: usize) -> Option<Target> {
+        let mut locked = false;
+        let mut other = None;
+        for &slot in self.w.listed.iter().flatten() {
+            if Some(slot) == self.w.player_target {
+                locked = true;
+            } else if slot != not {
+                other = Some(slot);
+            }
+        }
+        let slot = other.or(self.w.player_target.filter(|_| locked))?;
+        self.target(slot)
+    }
+
+    /// `Aida_em_at00_pl` (`0x53d0c0` by the first listed enemy's `Id`), from
+    /// `Ada_mv00_br` while the player's noise is up.
+    fn aida_em_at00_pl(&mut self) {
+        let Some(first) = self.listed(0) else {
+            return;
+        };
+        let answer_10 = *self.kind & 0xF == 10;
+        match at_row(first.id) {
+            // `Aida_em10_at00_pl` (`0x4f26f0`): with answer 10 the enemy she
+            // faces, or another when it is down or dead.
+            AtRow::Zombie => {
+                if self.p.wait != 0 {
+                    return;
+                }
+                let mut target = Some(first);
+                if answer_10 {
+                    let Some(ahead) = self.spl_em_cdir_ck() else {
+                        return;
+                    };
+                    target = Some(ahead);
+                    if ahead.life < 0 || ahead.kind & TYPE_ON_FLOOR != 0 {
+                        target = self.spl_pllock_get(ahead.slot);
+                    }
+                }
+                let Some(target) = target.filter(|target| target.life >= 0) else {
+                    return;
+                };
+                if target.kind & TYPE_ON_FLOOR == 0 {
+                    self.aim_at(&target, TILT_LEVEL);
+                } else if target.kind & 1 != 0 && target.be_flg & BE_LOW != 0 {
+                    self.aim_at(&target, TILT_LOW);
+                }
+            }
+            // `Aida_em25_at00_pl` (`0x4f2880`): a spider within 1500, which
+            // doesn't wait for `+0x22A`.
+            AtRow::Spider => {
+                let mut target = Some(first);
+                if answer_10 {
+                    let Some(ahead) = self.spl_em_cdir_ck() else {
+                        return;
+                    };
+                    target = Some(ahead);
+                    if ahead.life < 0 {
+                        target = self.spl_pllock_get(ahead.slot);
+                    }
+                }
+                let Some(target) = target else {
+                    return;
+                };
+                let rise = self.rise_to(&target);
+                if target.life >= 0
+                    && self.enemy_dist() < AIM_SPIDER_REACH
+                    && rise > -5000
+                    && rise < 2000
+                {
+                    self.aim_at(&target, spider_tilt(rise));
+                }
+            }
+            AtRow::None => {}
+        }
+    }
+
+    /// `Aida_em_at00_spl` (`0x53d0cc`), from `Aida_mv00_br_1` with an enemy
+    /// listed: the first, or the second when it is near enough.
+    fn aida_em_at00_spl(&mut self) {
+        let Some(first) = self.listed(0) else {
+            return;
+        };
+        match at_row(first.id) {
+            // `Aida_em10_at00_spl` (`0x4f27c0`): the first standing, or the
+            // first down with a low side; a standing second within 3000
+            // takes over from the second.
+            AtRow::Zombie => {
+                if self.p.wait != 0 {
+                    return;
+                }
+                if first.life >= 0 {
+                    if first.kind & TYPE_ON_FLOOR == 0 {
+                        self.aim_at(&first, TILT_LEVEL);
+                        return;
+                    }
+                    if first.kind & 1 != 0 && first.be_flg & BE_LOW != 0 {
+                        self.aim_at(&first, TILT_LOW);
+                    }
+                }
+                let Some(second) = self.listed(1) else {
+                    return;
+                };
+                if second.life < 0
+                    || second.kind & TYPE_ON_FLOOR != 0
+                    || self.w.nearest_dist[1] >= AIM_SECOND_REACH
+                {
+                    return;
+                }
+                self.aim_at(&second, TILT_LEVEL);
+            }
+            // `Aida_em25_at00_spl` (`0x4f2950`).
+            AtRow::Spider => {
+                let rise = self.rise_to(&first);
+                if first.life >= 0 && first.kind & TYPE_ON_FLOOR == 0 && rise > -5000 && rise < 2000
+                {
+                    self.aim_at(&first, spider_tilt(rise));
+                    return;
+                }
+                let Some(second) = self.listed(1) else {
+                    return;
+                };
+                let rise = self.rise_to(&second);
+                if second.life >= 0
+                    && second.kind & TYPE_ON_FLOOR == 0
+                    && self.w.nearest_dist[1] < AIM_SPIDER_SECOND_REACH
+                    && rise > -5000
+                    && rise < 2000
+                {
+                    self.aim_at(&second, spider_tilt(rise));
+                }
+            }
+            AtRow::None => {}
+        }
+    }
+
+    /// `Aida_em_at01` (`0x53d0d8`), from `Aida_mv01_br`: the first listed.
+    fn aida_em_at01(&mut self) {
+        let Some(first) = self.listed(0) else {
+            return;
+        };
+        match at_row(first.id) {
+            // `Aida_em10_at01` (`0x4f2dd0`): standing within 2500, or down
+            // with a low side.
+            AtRow::Zombie => {
+                if self.p.wait != 0 || first.life < 0 {
+                    return;
+                }
+                if first.kind & TYPE_ON_FLOOR == 0 && self.enemy_dist() < AIM_WALK_REACH {
+                    self.aim_at(&first, TILT_LEVEL);
+                } else if first.kind & 1 != 0 && first.be_flg & BE_LOW != 0 {
+                    self.aim_at(&first, TILT_LOW);
+                }
+            }
+            // `Aida_em25_at01` (`0x4f2e70`).
+            AtRow::Spider => {
+                let rise = self.rise_to(&first);
+                if first.life >= 0
+                    && first.kind & TYPE_ON_FLOOR == 0
+                    && self.enemy_dist() < AIM_WALK_REACH
+                    && rise > -5000
+                    && rise < 2000
+                {
+                    self.aim_at(&first, spider_tilt(rise));
+                }
+            }
+            AtRow::None => {}
+        }
+    }
+
+    /// `Aida_mv00_br_1` (`0x4f2c70`), the stand of the odd answers: an enemy
+    /// listed may start the aim, and over 3000 from the point she walks to
+    /// it, or turns round first.
+    fn aida_mv00_br_1(&mut self) {
+        if self.routine2() == 0 {
+            self.d_life_u();
+        }
+        if self.w.listed[0].is_some() {
+            self.aida_em_at00_spl();
+        }
+        let [x, z] = self.p.soba;
+        let ahead = self.ahead(i32::from(x), i32::from(z), 0x400);
+        if self.p.dist > FOUND {
+            self.set(if ahead { MV_WALK } else { MV_TURN_ROUND }, 0);
+        }
+    }
+
+    /// `D_life_u` from her life, as the stands set it.
+    fn d_life_u(&mut self) {
+        let fraction = life_fraction(self.p.life, self.p.max_life);
+        let mut d_life_u = u8::from(self.w.poisoned);
+        if fraction < 2000 {
+            d_life_u = 1;
+        }
+        if fraction < 800 {
+            d_life_u = 2;
+        }
+        self.m.work.d_life_u = d_life_u;
+    }
+
+    /// The enemy the walk and the run turn away from: the first listed,
+    /// within `within` and ahead within `rate`, while no wall pushes her.
+    fn away_from(&self, within: u16, rate: i32) -> Option<Target> {
+        let first = self.listed(0)?;
+        (self.enemy_dist() < within
+            && self.ahead(first.pos[0], first.pos[2], rate)
+            && !self.sca_hit())
+        .then_some(first)
+    }
+
+    /// `Aida_mv01_br` (`0x4f2f10`), the walk of the answers but 0: Ada's
+    /// wall turn, then hurt or with the first listed within 2000 and nearer
+    /// than the player she may aim (`Aida_em_at01`, which can run twice), and
+    /// `Ada_mv01_br`'s distances, turning away from an enemy ahead within
+    /// 1500.
+    fn aida_mv01_br(&mut self) {
+        if self.ada_wall_turn(ADA_WALK_WALL_TURN_TICKS, 0x28) {
+            return;
+        }
+        if self.w.listed[0].is_some() {
+            if self.m.work.d_life_u != 0 {
+                self.aida_em_at01();
+            }
+            let near = self.enemy_dist();
+            if near < 2000 && u32::from(near) < self.w.distance {
+                self.aida_em_at01();
+            }
+        }
+        let dist = self.p.dist;
+        if dist < ADA_ARRIVED {
+            self.set(MV_FACE_AHEAD, 0);
+            return;
+        }
+        if dist > ADA_RUN {
+            self.set(MV_RUN, 0);
+            return;
+        }
+        if dist < RUN && self.w.player_routine == 2 && !self.cdir_ck2() {
+            self.set(MV_DODGE, 0);
+            return;
+        }
+        match self.away_from(AWAY_WALK, 0x4B0) {
+            Some(enemy) => self.goto00(enemy.pos[0], enemy.pos[2], -0x28),
+            None => self.goto_dest(0x28),
+        }
+        self.updown_ck();
+    }
+
+    /// `Aida_mv02_br` (`0x4f33b0`): the run of the answers but 0, turning
+    /// away from an enemy ahead within 2000.
+    fn aida_mv02_br(&mut self) {
+        if self.ada_wall_turn(WALL_TURN_TICKS, 0x50) {
+            return;
+        }
+        if self.p.dist < FOUND {
+            self.set(MV_WALK, 0);
+            return;
+        }
+        match self.away_from(AWAY_RUN, 0x400) {
+            Some(enemy) => self.goto00(enemy.pos[0], enemy.pos[2], -0x38),
+            None => self.goto_dest(0x38),
+        }
+        self.updown_ck();
+    }
+
+    /// `Aida_mv0b_br_1` (`0x4f4880`): turn to Claire's back, then stand.
+    fn aida_mv0b_br_1(&mut self) {
+        let back = self.w.player_angle.wrapping_add(0x800) & 0xFFF;
+        if turn_within(self.m.player.angle, back, 0x50) == 0 {
+            self.set(MV_STAND, 0);
+        } else {
+            self.goto01(back, 0xA0);
+        }
+    }
+
+    /// `Aida_mv0c_br` (`0x4f48d0`): `Ada_mv0c_br`'s turn round, but with the
+    /// first listed within 1500 and no wall she turns toward the enemy's `x`
+    /// at her own `z`, as the original reads it.
+    fn aida_mv0c_br(&mut self) {
+        if self.routine2() == 0 {
+            self.p.timer0 = 0x3C;
+        }
+        if self.p.timer0 != 0 {
+            self.p.timer0 -= 1;
+        }
+        let dist = self.p.dist;
+        if dist < ADA_TURN_ROUND_ARRIVED {
+            self.set(MV_FACE_AHEAD, 0);
+            return;
+        }
+        if self.p.timer0 < 0x1E && dist > STOP_RUN {
+            self.set(MV_FACE_POINT, 0);
+            return;
+        }
+        if dist > ADA_TURN_ROUND_PLAYER_RUNS && self.w.player_spd_x > 100 {
+            self.set(MV_FACE_POINT, 0);
+        }
+        if self.p.timer0 == 0 {
+            self.set(MV_FACE_POINT, 0);
+        }
+        match self
+            .listed(0)
+            .filter(|_| self.enemy_dist() < AWAY_WALK && !self.sca_hit())
+        {
+            Some(enemy) => {
+                let z = self.pos()[2];
+                self.goto00(enemy.pos[0], z, 0x30);
+            }
+            None => self.goto_dest(-0x30),
+        }
+    }
+
+    /// `Aida_mv05_br` (`0x4f39a0`): only the hold decides
+    /// (`Aida_mv05_w1_t1_br`, `0x4f3b90`): with the aim's bit gone she
+    /// lowers; otherwise (once the blend is done when the tilt is low or up)
+    /// `Aida_em_at05` (`0x53d114` by the aimed body's `Id`).
+    fn aida_mv05_br(&mut self) {
+        if self.routine2() != AIM_HOLD {
+            return;
+        }
+        if self.p.state & STATE_AIM == 0 {
+            self.stage(AIM_LOWER);
+            return;
+        }
+        if self.p.status & (TILT_UP | TILT_LOW) != 0 && self.m.work.hokan != 0 {
+            return;
+        }
+        let row = self.aimed().map(|target| at_row(target.id));
+        if row != Some(AtRow::None) {
+            self.aida_em10_at05();
+        }
+    }
+
+    /// `Aida_em10_at05` (`0x4f3ae0`), the zombie's and the spider's: shoot
+    /// while the body is alive and not hurt this moment, and standing, or
+    /// down with her answer odd and her tilt low; otherwise lower.
+    fn aida_em10_at05(&mut self) {
+        if let Some(target) = self
+            .aimed()
+            .filter(|target| target.damage_cnt == 0 && target.life >= 0)
+        {
+            let low = *self.kind & 1 != 0 && self.p.status & TILT_LOW != 0;
+            if target.kind & TYPE_ON_FLOOR == 0 || low {
+                self.stage(AIM_SHOOT);
+                self.p.timer3 = self.p.timer3.wrapping_sub(1);
+                if (self.p.timer3 as i8) < 0 {
+                    self.p.timer3 = AIM_SHOTS_WRAP;
+                }
+                return;
+            }
+        }
+        self.stage(AIM_LOWER);
+    }
+
+    /// `Aida_mv05` (`0x4f39c0`): `Aida_mv05_w1`'s stage, then `Foot_set_pl`
+    /// on the second leg past the raise's blend.
+    fn aida_mv05(&mut self) {
+        let planted = self.m.foot_position();
+        match self.routine2() {
+            AIM_RAISE => self.aida_mv05_w1_t0(),
+            AIM_HOLD => self.aida_mv05_w1_t1(),
+            AIM_SHOOT => self.aida_mv05_w1_t2(),
+            AIM_LOWER => self.aida_mv05_w1_t3(),
+            4 => self.aida_mv05_w1_t4(),
+            5 => self.aida_mv05_w1_t5(),
+            _ => {}
+        }
+        if self.routine2() != AIM_RAISE || self.m.work.hokan == 0 {
+            self.m.foot_set(planted);
+        }
+    }
+
+    /// `Pl_water` while the water is above her floor, its `Rnd` drawn there.
+    fn aim_splash(&mut self) {
+        let water = self.m.work.water;
+        if water != 0 && water < self.w.ground {
+            self.m.pl_water_before_move();
+            self.m.work.water_draws(self.w.rnd);
+        }
+    }
+
+    fn tilt_clip(&self, clips: &[u8; 5]) -> u8 {
+        clips
+            .get(usize::from(self.p.status >> 13))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// `Aida_mv05_w1_t0` (`0x4f3a20`): the raise, turning to the enemy.
+    fn aida_mv05_w1_t0(&mut self) {
+        match self.m.work.routine[3] {
+            0 => {
+                self.p.state |= STATE_AIM;
+                self.m.work.routine[3] = 1;
+                self.m.work.neck.flags |= 0x12;
+                self.clip(Bank::Weapon, AIM_RAISE_CLIP);
+                self.p.timer3 = AIM_SHOTS;
+                self.aim_splash();
+            }
+            1 => {}
+            2 => {
+                self.stage(AIM_HOLD);
+                self.m.work.hokan = CLIP_BLEND;
+                return;
+            }
+            _ => return,
+        }
+        if let Some(target) = self.aimed() {
+            self.goto00(target.pos[0], target.pos[2], AIM_TURN);
+        }
+        let done = self.joint(Bank::Weapon);
+        self.m.work.routine[3] += u8::from(done);
+    }
+
+    /// `Aida_mv05_w1_t1` (`0x4f3be0`): the hold, 30 ticks before she lowers.
+    fn aida_mv05_w1_t1(&mut self) {
+        if self.m.work.routine[3] == 0 {
+            self.m.work.routine[3] = 1;
+            self.p.timer0 = AIM_HOLD_TICKS;
+            let clip = self.tilt_clip(&AIM_HOLD_CLIPS);
+            self.clip(Bank::Weapon, clip);
+        }
+        self.joint(Bank::Weapon);
+        self.p.timer0 = self.p.timer0.wrapping_sub(1);
+        if self.p.timer0 == 0 {
+            self.stage(AIM_LOWER);
+        }
+    }
+
+    /// `Aida_mv05_w1_t2` (`0x4f3c70`): the shot. Its first tick has
+    /// `hit_scan_ck`'s bits, the shot's table, the splash and the flash;
+    /// `Weapon_at_ck` follows on every tick, and a body found keeps the aim.
+    fn aida_mv05_w1_t2(&mut self) {
+        if self.m.work.routine[3] == 0 {
+            self.m.work.routine[3] = 1;
+            let clip = self.tilt_clip(&AIM_SHOT_CLIPS);
+            self.clip(Bank::Weapon, clip);
+            let pos = self.pos();
+            let hand = self.m.part_point(SCAN_PART, [0; 3]).unwrap_or(pos);
+            let level = crate::weapon2::hit_scan_ck(
+                ADA_SCAN_ID,
+                ADA_WEAPON,
+                pos[1],
+                self.m.work.parts0_y,
+                hand[1],
+            );
+            self.w.be_flg = self.w.be_flg & 0x1FFF_FFFF | 0x2000_0000 << level;
+            // `init_Weapon_at`.
+            if self.w.enemies != 0 {
+                self.p.attw_seq = 0;
+                self.p.attw_timer = ADA_SHOT_SEQ[0].1;
+            }
+            self.p.state &= !STATE_AIM;
+            self.aim_splash();
+            self.shot_flash();
+        }
+        if self.weapon_at_ck() {
+            self.p.state |= STATE_AIM;
+        }
+        if self.joint(Bank::Weapon) {
+            self.stage(AIM_HOLD);
+        }
+    }
+
+    /// The flash and its glow on the hand's matrix as the last draw left it.
+    fn shot_flash(&mut self) {
+        let Some(hand) = self.m.drawn_part_of(FLASH_PART) else {
+            return;
+        };
+        let at = crate::esp2::apply_matrix(&hand, FLASH_POINT);
+        for (word, generation) in FLASH_CALLS.into_iter().zip([None, Some(1)]) {
+            self.m.work.effects.push(EffectCall {
+                kind: (word >> 24) as u8,
+                row: (word >> 16) as u8,
+                size: word as u16,
+                dir: 0,
+                at,
+                motion: None,
+                on: Some((FLASH_PART as u8, hand, FLASH_POINT)),
+                turn: None,
+                generation,
+            });
+        }
+    }
+
+    /// `Weapon_at_ck(w, Be_flg & 7 | 0x20000, Em_0A_wp_tbl)`: true when its
+    /// look found a body, which goes to [`PartnerWorld::hit`] with its rolls
+    /// drawn.
+    fn weapon_at_ck(&mut self) -> bool {
+        if self.w.enemies == 0 {
+            return false;
+        }
+        let seq = |no: u8| ADA_SHOT_SEQ.get(usize::from(no)).copied();
+        if self.p.attw_timer == 0 {
+            self.p.attw_seq = self.p.attw_seq.wrapping_add(1);
+            self.p.attw_timer = seq(self.p.attw_seq).map_or(0xFF, |(_, ticks)| ticks);
+        }
+        let Some((record, _)) = seq(self.p.attw_seq) else {
+            return false;
+        };
+        if record == 0xFF {
+            self.p.attw_timer = self.p.attw_timer.wrapping_sub(1);
+            return false;
+        }
+        if self.p.attw_timer == 0xFF {
+            return false;
+        }
+        let Some(level) = ADA_SHOT_LEVEL[(self.w.be_flg & 7) as usize] else {
+            log_shot_level_once(self.w.be_flg & 7);
+            return false;
+        };
+        let pos = self.pos();
+        let shooter = crate::weapon2::Shooter {
+            pos,
+            neck: self.m.work.neck.position.unwrap_or(pos),
+            angle: self.m.player.angle,
+            weapon: ADA_WEAPON,
+            level,
+        };
+        let hit = crate::weapon2::weapon_at_ck(&shooter, self.w.targets, self.w.sca);
+        self.p.attw_timer = self.p.attw_timer.wrapping_sub(1);
+        let Some(mut hit) = hit else {
+            return false;
+        };
+        crate::weapon2::hit_rolls(&mut hit, self.w.rnd, self.w.hard, self.w.room_code);
+        self.w.hit = Some(hit);
+        true
+    }
+
+    /// `Aida_mv05_w1_t3` (`0x4f3e00`): the raise backwards, then the stand,
+    /// with 30 ticks before she may aim again.
+    fn aida_mv05_w1_t3(&mut self) {
+        if self.m.work.routine[3] == 0 {
+            self.m.work.routine[3] = 1;
+            self.clip(Bank::Weapon, AIM_RAISE_CLIP);
+            self.m.work.move_cnt = 1;
+            self.m.work.hokan = AIM_LOWER_BLEND;
+        }
+        self.m.work.bank = Bank::Weapon;
+        if self.m.joint_move_late_reversed(AIM_LOWER_STEP, true) {
+            self.set(MV_STAND, 0);
+            self.p.wait = AIM_WAIT;
+            self.m.work.neck.flags &= 0xED;
+        }
+    }
+
+    /// `Aida_mv05_w1_t4` (`0x4f3e60`): clip 0x10 through, then the hold.
+    /// Nothing of hers sends her here.
+    fn aida_mv05_w1_t4(&mut self) {
+        if self.m.work.routine[3] == 0 {
+            self.m.work.routine[3] = 1;
+            self.clip(Bank::Weapon, AIM_T4_CLIP);
+        }
+        if self.joint(Bank::Weapon) {
+            self.stage(AIM_HOLD);
+        }
+    }
+
+    /// `Aida_mv05_w1_t5` (`0x4f3ea0`): frame 3 of the raise, turning to the
+    /// enemy until she faces it, then the hold. Nothing of hers sends her
+    /// here either.
+    fn aida_mv05_w1_t5(&mut self) {
+        match self.m.work.routine[3] {
+            0 => {
+                self.m.work.routine[3] = 1;
+                self.m.work.move_no = AIM_RAISE_CLIP;
+                self.m.work.move_cnt = 3;
+                self.m.work.hokan = AIM_LOWER_BLEND;
+            }
+            1 => {}
+            _ => return,
+        }
+        let Some(target) = self.aimed() else {
+            return;
+        };
+        self.goto00(target.pos[0], target.pos[2], AIM_TURN);
+        if self.goto00_ck(target.pos[0], target.pos[2], AIM_T5_FACED) == 0 {
+            self.stage(AIM_HOLD);
+        }
+    }
+}
+
+fn log_shot_level_once(bits: u32) {
+    static LOGGED: std::sync::Once = std::sync::Once::new();
+    LOGGED.call_once(|| {
+        crate::logging::write(&format!(
+            "RE2 partner: a shot with Be_flg & 7 = {bits} reads past Em_0A_wp_tbl"
+        ))
+    });
+}
+
 /// `Life * 4096 / Max_life`, the stand's measure of her health.
 fn life_fraction(life: i16, max_life: i16) -> i32 {
     if max_life == 0 {
@@ -1776,18 +2566,6 @@ fn log_once(routine: u8) {
     LOGGED.call_once(|| {
         crate::logging::write(&format!(
             "RE2 partner: Routine_1 {routine:#x} is not ported"
-        ))
-    });
-}
-
-/// Ada's states with enemies about: the tables for `Spl_em_pos_ck`'s other
-/// answers (`what` 1 to 10), and her turn to a listed enemy when the player
-/// makes a noise (`what` 0x10).
-fn log_ada_kind_once(what: u16) {
-    static LOGGED: std::sync::Once = std::sync::Once::new();
-    LOGGED.call_once(|| {
-        crate::logging::write(&format!(
-            "RE2 partner: Ada's states with enemies about ({what:#x}) are not ported"
         ))
     });
 }
@@ -1852,6 +2630,13 @@ mod tests {
         player_spd_x: i16,
         /// The room's objects.
         objects: Vec<crate::objects::ObjectRecord>,
+        /// The enemy slots her aim sees, the listed ones, the player's lock
+        /// and what her shot found.
+        targets: Vec<Target>,
+        listed: [Option<usize>; 3],
+        player_target: Option<usize>,
+        hit: Option<Hit>,
+        player_noise: u8,
     }
 
     impl Rig {
@@ -1891,6 +2676,11 @@ mod tests {
                 scene: false,
                 player_spd_x: 0,
                 objects: Vec::new(),
+                targets: Vec::new(),
+                listed: [None; 3],
+                player_target: None,
+                hit: None,
+                player_noise: 0,
             }
         }
 
@@ -1948,9 +2738,17 @@ mod tests {
                 ground: self.ground,
                 be_flg: self.be_flg,
                 noise: 0,
-                player_noise: 0,
+                player_noise: self.player_noise,
                 player_spd_x: self.player_spd_x,
                 poisoned: self.poisoned,
+                targets: &self.targets,
+                listed: self.listed,
+                player_target: self.player_target,
+                sca: &[],
+                enemies: u8::from(!self.targets.is_empty()),
+                hard: false,
+                room_code: 0,
+                hit: None,
             };
             let mut mover = Mover::new(&mut self.work, &mut self.body, &tick);
             let mut auto = Auto {
@@ -1965,6 +2763,7 @@ mod tests {
             let answer = f(&mut auto);
             self.be_flg = world.be_flg;
             self.noise = world.noise;
+            self.hit = world.hit;
             answer
         }
 
@@ -3011,5 +3810,271 @@ mod tests {
         };
         assert_eq!(lost(0), (4, Bank::Pld, CALL_CLIP));
         assert_eq!(lost(-700), (1, Bank::Weapon, STAND_CLIPS[0]));
+    }
+
+    /// A zombie standing `x` along +x, in slot 3, with a low side.
+    fn zombie_at(x: i32) -> Target {
+        Target {
+            slot: 3,
+            id: 0x10,
+            be_flg: 1 | BE_LOW | 0x800_0000,
+            life: 100,
+            pos: [x, 0, 0],
+            at: [x, 0],
+            at_w: 500,
+            neck_y: -1500,
+            ..Target::default()
+        }
+    }
+
+    /// Ada with `Spl_em_pos_ck`'s `answer`, and clips up to 0x10.
+    fn ada_rig(answer: u16) -> Rig {
+        let mut rig = Rig::new();
+        rig.ada = true;
+        rig.kind = 0x400 | answer;
+        let clip = rig.clips[0].clone();
+        rig.clips = vec![clip; 0x11];
+        rig
+    }
+
+    /// `target` the only listed enemy, `dist` away.
+    fn listing(rig: &mut Rig, target: Target, dist: u16) {
+        rig.targets = vec![target];
+        rig.listed = [Some(target.slot), None, None];
+        rig.nearest = [Some(target.pos), None, None];
+        rig.enemy_dist = dist;
+    }
+
+    #[test]
+    fn adas_walk_aims_at_a_standing_zombie_within_2500() {
+        let aims = |answer: u16, dist: u16, hurt: bool, wait: u8| {
+            let mut rig = ada_rig(answer);
+            rig.work.routine = [1, MV_WALK, 1, 0];
+            rig.partner.dist = 1000;
+            rig.partner.wait = wait;
+            rig.distance = 3000;
+            rig.work.d_life_u = u8::from(hurt);
+            listing(&mut rig, zombie_at(2000), dist);
+            rig.tick();
+            let routine = rig.routine();
+            (
+                [routine[0], routine[1], routine[2]],
+                rig.partner.enemy,
+                rig.partner.status & 0xE000,
+                rig.partner.state & STATE_AIM,
+                rig.partner.timer3,
+            )
+        };
+        assert_eq!(
+            aims(3, 2499, true, 0),
+            (
+                [1, MV_AIM, AIM_RAISE],
+                Some(3),
+                TILT_LEVEL,
+                STATE_AIM,
+                AIM_SHOTS
+            )
+        );
+        assert_eq!(aims(3, 2500, true, 0).0, [1, MV_WALK, 1], "too far");
+        // Unhurt, she aims only at what is within 2000 and nearer than the
+        // player (3000 here).
+        assert_eq!(aims(3, 1999, false, 0).0, [1, MV_AIM, AIM_RAISE]);
+        assert_eq!(aims(3, 2000, false, 0).0, [1, MV_WALK, 1]);
+        // Answer 0's walk never aims; `+0x22A` holds it off (the tick's
+        // count takes it from 2 to 1).
+        assert_eq!(aims(0, 1000, true, 0).0, [1, MV_WALK, 1]);
+        assert_eq!(aims(3, 1000, true, 2).0, [1, MV_WALK, 1]);
+    }
+
+    #[test]
+    fn adas_stand_aims_on_the_players_noise_and_the_odd_answers_without() {
+        let aims = |answer: u16, noise: u8| {
+            let mut rig = ada_rig(answer);
+            rig.work.routine = [1, MV_STAND, 1, 0];
+            rig.partner.dist = 100;
+            rig.player_noise = noise;
+            listing(&mut rig, zombie_at(2000), 2000);
+            rig.with_auto(|auto| auto.ada_move_type());
+            rig.routine()[1]
+        };
+        assert_eq!(aims(2, 1), MV_AIM);
+        assert_eq!(aims(2, 0), MV_STAND);
+        assert_eq!(
+            aims(1, 0),
+            MV_AIM,
+            "Aida_mv00_br_1 doesn't wait for a noise"
+        );
+    }
+
+    #[test]
+    fn the_odd_answers_stand_takes_the_second_when_the_first_is_down() {
+        let aimed = |second_dist: u16| {
+            let mut rig = ada_rig(1);
+            rig.work.routine = [1, MV_STAND, 1, 0];
+            rig.partner.dist = 100;
+            let mut down = zombie_at(1000);
+            down.kind = TYPE_ON_FLOOR;
+            down.be_flg = 1;
+            let second = Target {
+                slot: 4,
+                ..zombie_at(2000)
+            };
+            rig.targets = vec![down, second];
+            rig.listed = [Some(3), Some(4), None];
+            rig.enemy_dist = 1000;
+            rig.with_auto(|auto| {
+                auto.w.nearest_dist[1] = second_dist;
+                auto.aida_mv00_br_1();
+            });
+            (rig.routine()[1], rig.partner.enemy)
+        };
+        assert_eq!(aimed(2999), (MV_AIM, Some(4)));
+        assert_eq!(aimed(3000), (MV_STAND, None));
+    }
+
+    #[test]
+    fn the_hold_shoots_a_standing_body_and_lowers_from_one_down() {
+        let decide = |kind: u16, damage_cnt: u8, answer: u16, tilt: u16, hokan: u8| {
+            let mut rig = ada_rig(answer);
+            let mut target = zombie_at(2000);
+            target.kind = kind;
+            target.damage_cnt = damage_cnt;
+            listing(&mut rig, target, 2000);
+            rig.partner.enemy = Some(3);
+            rig.partner.state |= STATE_AIM;
+            rig.partner.status = tilt;
+            rig.partner.timer3 = 1;
+            rig.work.routine = [1, MV_AIM, AIM_HOLD, 1];
+            rig.work.hokan = hokan;
+            rig.with_auto(|auto| auto.aida_mv05_br());
+            (rig.routine()[2..].to_vec(), rig.partner.timer3)
+        };
+        assert_eq!(decide(0, 0, 3, TILT_LEVEL, 7), (vec![AIM_SHOOT, 0], 0));
+        assert_eq!(
+            decide(TYPE_ON_FLOOR, 0, 3, TILT_LEVEL, 0),
+            (vec![AIM_LOWER, 0], 1)
+        );
+        // A body down is shot only with her answer odd and her tilt low,
+        // once the blend is done.
+        assert_eq!(
+            decide(TYPE_ON_FLOOR, 0, 3, TILT_LOW, 0),
+            (vec![AIM_SHOOT, 0], 0)
+        );
+        assert_eq!(
+            decide(TYPE_ON_FLOOR, 0, 3, TILT_LOW, 7),
+            (vec![AIM_HOLD, 1], 1)
+        );
+        assert_eq!(
+            decide(TYPE_ON_FLOOR, 0, 2, TILT_LOW, 0),
+            (vec![AIM_LOWER, 0], 1)
+        );
+        assert_eq!(
+            decide(0, 2, 3, TILT_LEVEL, 0),
+            (vec![AIM_LOWER, 0], 1),
+            "hurt"
+        );
+        // `Timer3` counts the shots down and wraps past 0 to 0xD.
+        let mut rig = ada_rig(3);
+        listing(&mut rig, zombie_at(2000), 2000);
+        rig.partner.enemy = Some(3);
+        rig.partner.state |= STATE_AIM;
+        rig.partner.status = TILT_LEVEL;
+        rig.partner.timer3 = 0;
+        rig.work.routine = [1, MV_AIM, AIM_HOLD, 0];
+        rig.with_auto(|auto| auto.aida_em10_at05());
+        assert_eq!(rig.partner.timer3, AIM_SHOTS_WRAP);
+        // Without the aim's bit she lowers.
+        rig.partner.state &= !STATE_AIM;
+        rig.work.routine = [1, MV_AIM, AIM_HOLD, 0];
+        rig.with_auto(|auto| auto.aida_mv05_br());
+        assert_eq!(rig.routine()[2], AIM_LOWER);
+    }
+
+    #[test]
+    fn a_shot_looks_once_on_its_first_tick() {
+        let mut rig = ada_rig(3);
+        listing(&mut rig, zombie_at(1500), 1500);
+        rig.partner.enemy = Some(3);
+        rig.partner.status = TILT_LEVEL;
+        rig.work.routine = [1, MV_AIM, AIM_SHOOT, 0];
+        rig.work.neck.position = Some([0, -1500, 0]);
+        rig.with_auto(|auto| auto.aida_mv05_w1_t2());
+        let hit = rig.hit.take().expect("the shot finds the zombie");
+        assert_eq!((hit.slot, hit.weapon), (3, ADA_WEAPON));
+        assert_ne!(rig.partner.state & STATE_AIM, 0, "a hit keeps the aim");
+        assert_eq!(rig.work.move_no, AIM_SHOT_CLIPS[2]);
+        assert_eq!(rig.be_flg & 7, 1, "the level bits are the top three");
+        assert_ne!(rig.be_flg & 0xE000_0000, 0);
+        for _ in 0..3 {
+            rig.with_auto(|auto| auto.aida_mv05_w1_t2());
+            assert!(rig.hit.is_none());
+        }
+        // Nothing in front: the aim's bit stays down.
+        let mut rig = ada_rig(3);
+        listing(&mut rig, zombie_at(-1500), 1500);
+        rig.partner.state |= STATE_AIM;
+        rig.work.routine = [1, MV_AIM, AIM_SHOOT, 0];
+        rig.with_auto(|auto| auto.aida_mv05_w1_t2());
+        assert!(rig.hit.is_none());
+        assert_eq!(rig.partner.state & STATE_AIM, 0);
+    }
+
+    #[test]
+    fn the_lower_stands_her_and_holds_the_aim_off_for_30_ticks() {
+        let mut rig = ada_rig(3);
+        rig.work.routine = [1, MV_AIM, AIM_LOWER, 0];
+        rig.work.neck.flags = 0x13;
+        for _ in 0..8 {
+            if rig.routine()[1] != MV_AIM {
+                break;
+            }
+            rig.with_auto(|auto| auto.aida_mv05());
+        }
+        assert_eq!(rig.routine(), [1, MV_STAND, 0, 0]);
+        assert_eq!(rig.partner.wait, AIM_WAIT);
+        assert_eq!(rig.work.neck.flags, 1);
+    }
+
+    #[test]
+    fn spiders_are_aimed_at_by_their_height() {
+        assert_eq!(spider_tilt(-499), TILT_LOW);
+        assert_eq!(spider_tilt(-500), TILT_LEVEL);
+        assert_eq!(spider_tilt(-2000), TILT_LEVEL);
+        assert_eq!(spider_tilt(-2001), TILT_UP);
+        let aim = |y: i32| {
+            let mut rig = ada_rig(3);
+            rig.work.routine = [1, MV_WALK, 1, 0];
+            rig.work.d_life_u = 1;
+            let spider = Target {
+                id: crate::zombie2::SPIDER_ID,
+                pos: [2000, y, 0],
+                ..zombie_at(2000)
+            };
+            listing(&mut rig, spider, 1000);
+            // A spider doesn't wait for `+0x22A`.
+            rig.partner.wait = 5;
+            rig.with_auto(|auto| auto.aida_em_at01());
+            (rig.routine()[1], rig.partner.status & 0xE000)
+        };
+        assert_eq!(aim(-3000), (MV_AIM, TILT_UP));
+        assert_eq!(aim(0), (MV_AIM, TILT_LOW));
+        assert_eq!(aim(-5000).0, MV_WALK);
+        assert_eq!(aim(2000).0, MV_WALK);
+    }
+
+    #[test]
+    fn the_later_answers_turn_her_to_claires_back() {
+        let turned = |answer: u16, angle: u16| {
+            let mut rig = ada_rig(answer);
+            rig.player_angle = 0;
+            rig.body.angle = angle;
+            rig.work.routine = [1, MV_FACE_AHEAD, 1, 0];
+            rig.with_auto(|auto| auto.ada_move_type());
+            (rig.routine()[1], rig.body.angle)
+        };
+        assert_eq!(turned(3, 0x800).0, MV_STAND);
+        assert_eq!(turned(3, 0x700), (MV_FACE_AHEAD, 0x7A0));
+        // Answer 1 turns her to Claire's facing.
+        assert_eq!(turned(1, 0).0, MV_STAND);
     }
 }

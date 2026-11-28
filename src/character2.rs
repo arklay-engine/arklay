@@ -561,16 +561,14 @@ fn shoot_camera(game: &mut GameState, cut: Option<&crate::state::Cut>) {
     }
 }
 
-/// A move's `Esp_call`s, in the order it made them.
-fn esp_calls(game: &mut GameState, calls: Vec<player2::EffectCall>) {
+/// A move's `Esp_call`s, in the order it made them, those on a part on
+/// `body`'s.
+fn esp_calls(game: &mut GameState, calls: Vec<player2::EffectCall>, body: crate::esp2::Body) {
     for call in calls {
         let effects = &mut game.re2.effects;
         let index = match call.on {
             Some((part, matrix, point)) => {
-                let anchor = crate::esp2::Anchor {
-                    body: crate::esp2::Body::Player,
-                    part,
-                };
+                let anchor = crate::esp2::Anchor { body, part };
                 effects.call_on_part(
                     call.kind, call.row, call.size, call.dir, anchor, matrix, point,
                 )
@@ -582,6 +580,9 @@ fn esp_calls(game: &mut GameState, calls: Vec<player2::EffectCall>) {
         }
         if let (Some(index), Some(turn)) = (index, call.turn) {
             game.re2.effects.turn(index, turn);
+        }
+        if let (Some(index), Some(generation)) = (index, call.generation) {
+            game.re2.effects.set_generation(index, generation);
         }
     }
 }
@@ -598,7 +599,7 @@ pub fn take_hit(game: &mut GameState) {
         }
     }
     let calls = std::mem::take(&mut game.re2.player.effects);
-    esp_calls(game, calls);
+    esp_calls(game, calls, crate::esp2::Body::Player);
     let Some(hit) = game.re2.player.hit.take() else {
         return;
     };
@@ -614,6 +615,25 @@ pub fn take_hit(game: &mut GameState) {
     };
     if let Some(mut zombie) = character.zombie.take() {
         crate::zombie2::take_hit(character, &mut zombie, &hit, from);
+        character.zombie = Some(zombie);
+    }
+}
+
+/// What the partner's shot (`Aida_mv05_w1_t2`'s `Weapon_at_ck`) does to
+/// the body it found, there and then, before the enemy slots run. `from`
+/// is where she stands.
+fn partner_hit(game: &mut GameState, hit: &crate::weapon2::Hit, from: [i32; 3]) {
+    let Some(character) = game
+        .re2
+        .characters
+        .0
+        .get_mut(hit.slot)
+        .and_then(Option::as_mut)
+    else {
+        return;
+    };
+    if let Some(mut zombie) = character.zombie.take() {
+        crate::zombie2::take_hit(character, &mut zombie, hit, from);
         character.zombie = Some(zombie);
     }
 }
@@ -2053,6 +2073,14 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
                     player_noise: game.re2.player.noise,
                     player_spd_x: game.re2.player.spd[0],
                     poisoned: game.re2.partner_poisoned,
+                    targets: &[],
+                    listed: [None; 3],
+                    player_target: None,
+                    sca: &[],
+                    enemies: 0,
+                    hard: false,
+                    room_code: 0,
+                    hit: None,
                 };
                 let mut climb = crate::partner2::SceneClimb {
                     partner: words,
@@ -2086,6 +2114,15 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
             .first()
             .map_or(([0; 3], 0), |p| (p.pos, p.angle));
         let nearest = spl_enemy_ck(game, tick, character.body.pos, character.work.neck.position);
+        let targets = targets_of(&game.re2);
+        let sca = tick
+            .room
+            .sca
+            .as_ref()
+            .map_or(&[][..], |sca| sca.records.as_slice());
+        let origin = game.origin();
+        let room_code = u16::from(origin.stage) << 8 | u16::from(origin.room);
+        let hard = game.re2.difficulty().hard;
         let mut timer = game.re2.spl_pos_ck_timer;
         let mut world = crate::partner2::PartnerWorld {
             player,
@@ -2102,14 +2139,26 @@ fn spl(game: &mut GameState, character: &mut Character, tick: &Tick<'_>) -> Opti
             player_noise: game.re2.player.noise,
             player_spd_x: game.re2.player.spd[0],
             poisoned: game.re2.partner_poisoned,
+            targets: &targets,
+            listed: game.re2.nearest_slots,
+            player_target: game.re2.player.aim_target,
+            sca,
+            enemies: game.re2.enemies,
+            hard,
+            room_code,
+            hit: None,
         };
         let kind = &mut character.kind;
         player2::spl_auto(&mut character.work, &mut character.body, tick, |mover| {
             crate::partner2::spl_auto(mover, words, kind, &mut world, ada);
         });
         character.be_flg = world.be_flg;
+        let hit = world.hit.take();
         game.re2.player.noise |= world.noise;
         game.re2.spl_pos_ck_timer = timer;
+        if let Some(hit) = hit {
+            partner_hit(game, &hit, character.body.pos);
+        }
         None
     } else if player2::in_damage(&character.work) && (sherry || ada) && character.partner.is_some()
     {
@@ -2387,7 +2436,7 @@ fn root_ck_sys(game: &GameState, room: &RoomState, character: &mut Character, lo
 /// bodies ([`spl_oba_ck_em`]) and the scene's blood.
 fn spl_after_routine(game: &mut GameState, character: &mut Character, old: [i32; 3]) {
     let calls = std::mem::take(&mut character.work.effects);
-    esp_calls(game, calls);
+    esp_calls(game, calls, crate::esp2::Body::Partner);
     spl_oba_ck_em(game, character, old);
     sce_blood(game, character);
 }

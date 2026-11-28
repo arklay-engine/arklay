@@ -462,6 +462,8 @@ pub struct Anchor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Body {
     Player,
+    /// `splayer_work`, whoever is in it.
+    Partner,
     /// An enemy slot of `Em_work`.
     Enemy(u8),
     /// A room object, on its `Work_m` (`Get_matrix`'s case 4); the part is 0.
@@ -512,6 +514,13 @@ impl Slot {
                 part,
             }) => MatrixKey::Work(WorkMatrix {
                 slot: Some(usize::from(slot)),
+                part: Some(usize::from(part)),
+            }),
+            Some(Anchor {
+                body: Body::Partner,
+                part,
+            }) => MatrixKey::Work(WorkMatrix {
+                slot: Some(crate::scd2::host::SPLAYER_SLOT),
                 part: Some(usize::from(part)),
             }),
             None => MatrixKey::Identity,
@@ -788,6 +797,13 @@ impl Effects {
         self.each_made(first, |slot| {
             slot.rotation = rotation;
         });
+    }
+
+    /// A caller's write of the slot's `+0x1B` once `Esp_call` made it.
+    pub fn set_generation(&mut self, index: usize, generation: u8) {
+        if let Some(slot) = self.slots.get_mut(index) {
+            slot.generation = generation;
+        }
     }
 
     /// What `FUN_004d6150` writes over a grenade's first block once

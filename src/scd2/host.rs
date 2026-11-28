@@ -2007,6 +2007,12 @@ impl Re2State {
                 let part = usize::from(anchor.part);
                 let matrix = match anchor.body {
                     Body::Player => self.player.parts.get(part).copied().flatten(),
+                    Body::Partner => self
+                        .characters
+                        .0
+                        .get(SPLAYER_SLOT)
+                        .and_then(Option::as_deref)
+                        .and_then(|character| character.work.workm(part)),
                     Body::Enemy(slot) => self
                         .characters
                         .0
