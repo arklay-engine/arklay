@@ -1,4 +1,4 @@
--- arklay start for leon_a_40a_405: where --warp 40A:-9093:-1800:-857:2064:8 leaves the player: Leon as leon_a_404_40a leaves him at 40A's door from 408, with 111 life, the handgun with 10 rounds, the knife, the Club Key, the magnum with 1 round, 30 handgun rounds and the Valve Handle, three ink ribbons in the box, and the flags of leon_a_404_40a's last tick
+-- arklay start for leon_a_40a_40e: where --warp 40A:-9093:-1800:-857:2064:8 leaves the player: Leon as leon_a_404_40a leaves him at 40A's door from 408, with 111 life, the handgun with 10 rounds, the knife, the Club Key, the magnum with 1 round, 30 handgun rounds and the Valve Handle, three ink ribbons in the box, and the flags of leon_a_404_40a's last tick; and 405's zombies' speeds and Dest as the original's works held them from before the warp
 local api = ...
 api:set_health(111)
 api:set_re2_rnd(6114)
@@ -160,3 +160,9 @@ api:set_re2_flag(31, 23)
 api:set_re2_flag(31, 27)
 api:set_re2_flag(31, 28)
 api:set_re2_flag(31, 29)
+api:set_re2_enemy_speed("405:0", -2258, 129, -451)
+api:set_re2_enemy_speed("405:1", -11692, 0, -18350)
+api:set_re2_enemy_speed("405:2", 19387, 4126, 5555)
+api:set_re2_enemy_dest("405:0", -22482, 128)
+api:set_re2_enemy_dest("405:1", -8634, 30784)
+api:set_re2_enemy_dest("405:2", -29064, -441)

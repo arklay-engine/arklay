@@ -1,5 +1,4 @@
-# leon_a_40a_405: Leon from 40A, where leon_a_404_40a leaves him, through the alligator, 410's scene, 408's west panel, 409's Eagle Medal and 40B into 405, ending on 13509, before Ada starts to aim at its first crawling zombie on 13517 (her attack, Aida_mv05_br, isn't ported)
-# 40A: east along the corridor into the alligator's scene, back to the gas tank's button (the action key, facing east), aimed south and firing until the tank's blast kills it; east to the lock panel (yes) and north through door 0 (410 on 2373)
+# leon_a_40a_40e: Leon from 40A, where leon_a_404_40a leaves him, through the alligator, 410's scene, 408's west panel, 409's Eagle Medal, 40B, 405's crawling zombies (shot with Ada), 407's drain, 40D and into 40E, ending on 16619
 344
 348 up run right
 350 up run
@@ -76,7 +75,6 @@
 2331
 2337 action
 2339
-# 410: up box 10's ledge into the room's scene (events 10 and 11), whose `sce_heal` gives Leon 200 life; he (player id 4) and Ada are put in 409 (3610)
 2504 up run left
 2513 up run
 2516 up run left
@@ -95,7 +93,6 @@
 2610 action
 2612
 3244
-# 409: west to door 0's ladder (yes) back up to 410 (4415), the bridge being up (4:30)
 3741 up run right
 3788 up run
 3789 up run left
@@ -324,7 +321,6 @@
 4349
 4379 action
 4381
-# 410: off the ledge, south to door 1, pressed facing south (40A on 4712)
 4422 up run left
 4511 up run
 4514 up run right
@@ -354,7 +350,6 @@
 4673
 4677 action
 4679
-# 40A: west along the south leg and up the west leg to door 1 into 408, pressed facing east (6305)
 4719 up run right
 5336 up run
 5415 up run right
@@ -749,7 +744,6 @@
 6266
 6270 action
 6272
-# 408: to the west panel, the Valve Handle from the status screen (down, down, right, action, action), which raises 408's bridge and lowers 409's (4:30 clear); START closes the screen the scene reopens; west to door 1 (40A on 8317)
 6312 up run right
 6401 up run
 6419 up run left
@@ -788,7 +782,6 @@
 8278
 8282 action
 8284
-# 40A: west, down the west leg and east along the south leg to door 0 (410 on 8836)
 8324 up run left
 8413 up run
 8447 up run right
@@ -812,7 +805,6 @@
 8797
 8801 action
 8803
-# 410: north up box 10's ledge and west to door 0 (409 on 9812)
 8843 up run left
 8933 up run
 8936 up run left
@@ -953,7 +945,6 @@
 9686
 9776 action
 9778
-# 409: east, north over the bridge and west, down the ramp to the Eagle Medal (the action key, yes), up the ledge again, east and south to the lift's valve (the Valve Handle again), and north to door 1's ladder (yes; 40B on 11907)
 9819 up run left
 9909 up run
 9925 up run left
@@ -1072,7 +1063,6 @@
 11811
 11871 action
 11873
-# 40B: walking east, so that Ada keeps up, to area 2's ladder down (yes; 405 on 12655)
 11939 up
 12448 up right
 12449 up
@@ -1086,7 +1076,6 @@
 12559
 12619 action
 12621
-# 405: north up the channel to the first crawling zombie, aimed at it low
 12687 up run left
 12774 up run
 12998 up run left
@@ -1132,3 +1121,128 @@
 13483 up run right
 13484 up run
 13499 right
+13512
+13514 aim
+13543 aim fire
+13545 aim
+13573 aim fire
+13575 aim
+13603 aim fire
+13605 aim
+13633 aim fire
+13635 aim
+13663 aim fire
+13665 aim
+13693 aim fire
+13695 aim
+13723 aim fire
+13725 aim
+13753 aim fire
+13755 aim
+13783 aim fire
+13785 aim
+13813 aim fire
+13815 aim
+13843 aim fire
+13845
+13846 up run left
+14200 up run left
+14234 up run
+14236 up run right
+14261 up run
+14285 up run right
+14286 up run left
+14293 up run
+14298 up run right
+14299 up run
+14306 left
+14308
+14312 action
+14314
+14354 up run
+14461 up run left
+14462 up run
+14492 up run right
+14494 up run
+14515 up run right
+14516 up run
+14537 up run right
+14538 up run
+14566 up run left
+14567 up run
+14576 up run right
+14577 up run
+14584 up run left
+14590 right
+14606
+14610 start
+14612
+14652 down
+14654
+14672 down
+14674
+14692 down
+14694
+14712 action
+14714
+14732 action
+14734
+15334 cancel
+15336
+15376 cancel
+15378
+15418 cancel
+15420
+15460 up run
+15463 up run right
+15464 up run
+15466 up run left
+15480 up run
+15481 up run right
+15482 right
+15493
+15497 action
+15499
+15549 up run right
+15552 left
+15554
+15558 action
+15560
+15600 up run
+15756 up run right
+15757 up run
+15763 up run right
+15764 up run
+15767 up run left
+15768 up run
+15769 up run left
+15770 up run
+15772 up run left
+15773 right
+15781
+15785 action
+15787
+15887 up run right
+16087 up run
+16088 up run left
+16090 up run right
+16122 up run
+16128 up run right
+16129 up run
+16164
+16168 action
+16170
+16210 up
+16212
+16260 up
+16262
+16310 up
+16312
+16360 up
+16362
+16410 up
+16412
+16460 up
+16462
+16510 up
+16512
