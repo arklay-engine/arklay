@@ -2469,7 +2469,7 @@ fn spl_sca_ck_em(room: &RoomState, character: &mut Character) {
         partner.sca_hit = resolved.hit;
         // `Sca_hit_slope` (`0x4E24C0`) writes the checked work's `nFloor`:
         // a partner walking a slope steps hers with the height, as room
-        // 409's ramp shows (`leon_a_40a_40e`'s `spc`).
+        // 409's ramp shows (the trace's `spc`).
         if let Some(floor) = resolved.floor {
             character.work.floor = floor;
         }
