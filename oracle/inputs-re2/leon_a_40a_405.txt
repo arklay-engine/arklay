@@ -1,4 +1,4 @@
-# leon_a_40a_405: Leon from 40A, where leon_a_404_40a leaves him, through the alligator, 410's scene, 408's west panel, 409's Eagle Medal and 40B into 405, up to the tick before Ada's first shot at its crawling zombies (her attack, Aida_mv05, isn't ported)
+# leon_a_40a_405: Leon from 40A, where leon_a_404_40a leaves him, through the alligator, 410's scene, 408's west panel, 409's Eagle Medal and 40B into 405, ending on 13509, before Ada starts to aim at its first crawling zombie on 13517 (her attack, Aida_mv05_br, isn't ported)
 # 40A: east along the corridor into the alligator's scene, back to the gas tank's button (the action key, facing east), aimed south and firing until the tank's blast kills it; east to the lock panel (yes) and north through door 0 (410 on 2373)
 344
 348 up run right
