@@ -1,0 +1,323 @@
+# claire_a_409_40e: Claire A from 409 through 40B, 405, 407 and 40D to 40E (#896): in 409 the Grenade Launcher
+# equipped, its acid round fired, and the grenade round combined into it, which frees a slot; north over the bridge
+# and west, down the ramp to the Eagle Medal, up the ledge again, east and south to the lift's valve (the Valve
+# Handle), and up door 1's ladder (yes); walking east through 40B, so that Sherry keeps up, to area 2's ladder down
+# (yes); in 405 walking north up the channel, then west to door 0 (two zombie bites, 140 to 90); in 407 straight west
+# to the panel (a spider's bite, 70), the Wolf Medal then the Eagle Medal, which drains the channel (4:118), up box
+# 9's ledge and door 0; in 40D west along the corridor, down box 5 and north to door 1; a step shows control.
+354 right
+366 start
+367
+406 down
+409
+436 confirm
+439
+466 confirm
+469
+526 start
+527
+566 aim
+596 aim fire
+599 aim
+659
+699 start
+700
+739 down
+742
+769 down
+772
+799 right
+802
+829 confirm
+832
+859 down
+862
+889 down
+892
+919 confirm
+922
+949 up
+952
+979 left
+982
+1009 confirm
+1012
+1069 start
+1070
+1109 left
+1115 left up run
+1128 up run
+1135 left up run
+1136 up run
+1144 left up run
+1145 left
+1147 left up run
+1159 up run
+1170 left up run
+1171 up run
+1200 right up run
+1201 up run
+1246 left up run
+1247 up run
+1259 right up run
+1260 up run
+1262 right up run
+1263 left
+1267 left up run
+1281 up run
+1302 right up run
+1303 left up run
+1304 up run
+1310 left up run
+1311 up run
+1317 left
+1322 left up run
+1333 up run
+1357 right up run
+1358 up run
+1366 right up run
+1367 up run
+1369 right up run
+1375 left up
+1387 up
+1414 left up
+1415 up
+1419 right up
+1420 up
+1421 right up
+1430 up
+1431 right up
+1432 right
+1440 action
+1441
+1470 confirm
+1472
+1490 confirm
+1492
+1510 confirm
+1512
+1530 confirm
+1532
+1550 confirm
+1551
+1651 confirm
+1654
+1711 right
+1717 right up run
+1737 left
+1744 action
+1745
+1834 up run
+1877 left up run
+1878 up run
+1888 left up run
+1889 up run
+1890 right up run
+1891 up run
+1925 right
+1931 right up run
+1942 up run
+1962 right up run
+1963 up run
+1968 right up run
+1969 up run
+1970 left up run
+1971 up run
+2009 left up run
+2014 right
+2018 right up run
+2034 right
+2037 right up run
+2038 right
+2041 right up run
+2042 right
+2045 right up run
+2046 left up run
+2063 up run
+2066 right up
+2072 up
+2079 right up
+2080 up
+2085 left
+2097
+2105 start
+2106
+2141 down
+2142
+2161 down
+2162
+2181 right
+2182
+2201 confirm
+2202
+2221 confirm
+2222
+2581 start
+2582
+2621 down
+2622 right
+2627 right up
+2643 up
+2679 action
+2680
+2799 confirm
+2802
+2889 confirm
+2892
+2949 confirm
+2952
+2987 up
+3323
+3343 up
+3569 right up
+3570 up
+3580 left up
+3581 up
+3589 action
+3590
+3709 confirm
+3712
+3769 confirm
+3772
+3829 confirm
+3832
+3867 up
+4203
+4223 left
+4231 left up
+4247 up
+4536 right up
+4537 up
+4560 right up
+4561 up
+4580 left up
+4582 up
+4618 left up
+4619 up
+4652 left
+4655 left up
+4675 up
+4686 left up run
+4694 up run
+4701 right up run
+4702 up run
+4705 right up run
+4713 up run
+4861 left up run
+4862 up run
+4864 left up run
+4865 up run
+4883 left up run
+4884 action
+4886
+4896 action
+4898
+4908 action
+4910
+4920 action
+4922
+4932 action
+4933 up
+4952 up run
+4978 left up run
+4979 up run
+5013 right up run
+5014 up run
+5027 right up
+5032 up
+5177 right up
+5178 up
+5244 right up
+5245 up
+5265 right up
+5266 up
+5312 right up
+5313 up
+5329 right up
+5330 up
+5336 right up
+5337 right
+5353 start
+5354
+5389 down
+5390
+5409 down
+5410
+5429 down
+5430
+5449 confirm
+5450
+5469 confirm
+5470
+5529 down
+5544 start
+5545
+5580 down
+5581
+5600 down
+5601
+5620 down
+5621
+5640 confirm
+5641
+5660 confirm
+5661
+5764 down
+5965 left up run
+5978 up run
+5982 right up
+5989 right
+5991 right up
+5993 right
+5995 right up
+5997 right
+6000 right up
+6002 right
+6005 right up
+6006 right
+6008 right up
+6009 right
+6011 right up
+6016 left
+6025 action
+6026
+6115 right up
+6120 up
+6121 right up
+6122 up
+6124 left
+6127 action
+6129
+6139 action
+6141
+6151 action
+6153
+6163 action
+6164 up
+6363 right up
+6364 up
+6465 left up
+6466 up
+6469 right
+6491 action
+6492
+6581 up
+6675 right up
+6676 up
+6734 right up
+6735 up
+6754 right up
+6755 up
+6757 left up
+6758 up
+6765 action
+6767
+6777 action
+6779
+6789 action
+6791
+6801 action
+6803
+6813 action
+6814 up
+6833
