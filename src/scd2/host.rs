@@ -126,6 +126,9 @@ pub struct Re2State {
     /// A door's load is under way: the speed the last room left, which the
     /// load's `Pl_init` keeps.
     pub door_spd: Option<[i16; 3]>,
+    /// A door's load is under way: the `nFloor` its data gives the player
+    /// (`Set_door`'s `+0xB`).
+    pub door_floor: Option<u8>,
     /// `St_exit`'s stash (`0x692D64`, marked by `0x692D63`) of the equipped
     /// item and its slot, which a used Valve Handle (0x32) or item 0x43 or
     /// 0x4B puts down until the status screen's next start.
@@ -771,6 +774,9 @@ pub const STATUS_SCENE: u8 = 27;
 /// raise it, and `Swap_Cbuff` with a load; `Psx_main` clears it (with
 /// `0x200000`) after the tasks. Room 409's events wait on it for the next cut.
 pub const STATUS_CUT_CHANGED: u8 = 11;
+/// `fg_status`'s `0x100`: the camera's lock. `Cut_chg` sets it, `Cut_old_0`
+/// clears it and `Cut_auto` clears it for operand 1, else sets it.
+pub const STATUS_CUT_LOCK: u8 = 23;
 /// `fg_status`'s `0x300000`, which `Psx_main` clears after the tasks.
 pub const STATUS_TICK_BITS: u32 = 0x0030_0000;
 /// `fg_status`'s `0x40`, under which `Game_loop` takes no START: the bit as
@@ -1080,6 +1086,7 @@ impl Default for Re2State {
             objects_key_stop: false,
             script_door: false,
             door_spd: None,
+            door_floor: None,
             equip_stash: None,
             work: [Work::Player; TASK_SLOTS],
             speeds: [[0; 12]; TASK_SLOTS],
@@ -2437,6 +2444,9 @@ pub struct Re2Door {
     pub room: u8,
     /// The camera the player arrives under.
     pub cut: u8,
+    /// The `nFloor` the player arrives on (`Set_door` takes it from the
+    /// door's data, not from the height).
+    pub floor: u8,
 }
 
 /// The probe flags an RE2 `sat` byte means to [`GameState`]'s area scan: its
@@ -2794,11 +2804,19 @@ impl GameHost<'_> {
         // `cut_old` keeps the `scd_var_cut` it replaces.
         self.game.re2.cut_old = self.game.re2.scd_var_cut();
         self.game.re2.var_cut = Some(cut & 0x7F);
-        self.game.camera.locked = true;
+        self.lock_cut(true);
         self.game.set_camera_cut(usize::from(cut & 0x7F));
         self.game.re2.bg_load = cut & 0x80 == 0;
         self.game.re2.cut_no_load = cut & 0x80 != 0;
         self.game.re2.set_flag(STATUS_BANK, STATUS_CUT_CHANGED, 1);
+    }
+
+    /// `fg_status`'s `0x100`, which `Cut_check` obeys.
+    fn lock_cut(&mut self, on: bool) {
+        self.game.camera.locked = on;
+        self.game
+            .re2
+            .set_flag(STATUS_BANK, STATUS_CUT_LOCK, u8::from(on));
     }
 
     fn character_mut(&mut self, slot: u8) -> Option<&mut Character> {
@@ -3394,6 +3412,7 @@ impl GameHost<'_> {
                 stage: next(4) as u8 + 1,
                 room: next(5) as u8,
                 cut: next(6) as u8,
+                floor: next(7) as u8,
             }),
             target: None,
         });
@@ -3512,13 +3531,13 @@ impl Host for GameHost<'_> {
                 // the cut it replaces and raises the load.
                 self.game.re2.cut_old = self.game.re2.scd_var_cut();
                 self.game.re2.var_cut = Some(cut);
-                self.game.camera.locked = false;
+                self.lock_cut(false);
                 self.game.set_camera_cut(usize::from(cut));
                 self.game.re2.bg_load = true;
                 self.game.re2.cut_no_load = false;
                 self.game.re2.set_flag(STATUS_BANK, STATUS_CUT_CHANGED, 1);
             }
-            "cut_auto" => self.game.camera.locked = at(0) == 0,
+            "cut_auto" => self.lock_cut(at(0) != 1),
             "sce_scr_move" => self.game.re2.scroll = at(1) as i16,
             // `Mirror_set` (0x4E8DB0).
             "mirror_set" => {
@@ -3562,11 +3581,20 @@ impl Host for GameHost<'_> {
             "sca_id_set" => self.game.re2.pending_sca.push((at(0) as u8, at(1) as u16)),
             "flr_set" => self.game.re2.pending_flr.push((at(0) as u8, at(1) as u8)),
             "work_set" => {
-                let work = if at(0) == WK_PLAYER {
+                // `Work_set` (`0x4e5e90`) indexes `enemy_work` with a signed
+                // byte, and the words before it are `splayer_work` and
+                // `player_work`: 501's `work_set(3, 255)` is the partner.
+                let enemy = at(1) as i8;
+                let work = if at(0) == WK_PLAYER || (at(0) == WK_ENEMY && enemy == -2) {
                     Work::Player
-                } else if at(0) == WK_SPLAYER && self.character_mut(SPLAYER_SLOT as u8).is_some() {
+                } else if (at(0) == WK_SPLAYER || (at(0) == WK_ENEMY && enemy == -1))
+                    && self.character_mut(SPLAYER_SLOT as u8).is_some()
+                {
                     Work::Character(SPLAYER_SLOT as u8)
-                } else if at(0) == WK_ENEMY && self.character_mut(at(1) as u8).is_some() {
+                } else if at(0) == WK_ENEMY
+                    && enemy >= 0
+                    && self.character_mut(at(1) as u8).is_some()
+                {
                     Work::Character(at(1) as u8)
                 } else if at(0) == WK_OBJECT && self.game.objects.record(at(1) as usize).is_some() {
                     Work::Object(at(1) as u8)
@@ -4587,8 +4615,25 @@ mod tests {
                 game.re2.flag(STATUS_BANK, STATUS_CUT_CHANGED),
                 "{op} {ops:?}"
             );
-            assert_eq!(game.re2.banks[1][0], 0x0010_0000, "{op} {ops:?}");
+            // `Cut_chg` locks the camera (`0x100`); `Cut_old_0` lets it go.
+            let lock = if op == "cut_chg" { 0x100 } else { 0 };
+            assert_eq!(game.re2.banks[1][0], 0x0010_0000 | lock, "{op} {ops:?}");
         }
+    }
+
+    /// `Cut_auto` clears `fg_status`'s `0x100` for operand 1 and sets it for
+    /// anything else, as room 501's `main_04` does with `cut_auto(0)`.
+    #[test]
+    fn cut_auto_writes_the_camera_lock_into_fg_status() {
+        let mut game = GameState::default();
+        for (op, lock) in [(0, true), (1, false), (2, true), (1, false)] {
+            exec(&mut game, "cut_auto", &[op]);
+            assert_eq!(game.re2.flag(STATUS_BANK, STATUS_CUT_LOCK), lock, "{op}");
+            assert_eq!(game.camera.locked, lock, "{op}");
+        }
+        exec(&mut game, "cut_chg", &[3]);
+        game.re2.enter_room_status();
+        assert!(!game.re2.flag(STATUS_BANK, STATUS_CUT_LOCK));
     }
 
     /// `Esp_move` reads a following effect's matrix through its pointer each
@@ -6317,9 +6362,9 @@ mod tests {
         let mut game = GameState::default();
         let mut host = GameHost { game: &mut game };
         // Room 1000's first door: the action key at the reach point, to room
-        // 1010's cut 0 through DO2 file 1.
+        // 1010's cut 0 through DO2 file 1, onto `nFloor` 3.
         let ops = [
-            0, 1, 49, 0, 0, -22155, -20156, 1770, 2280, -15332, 0, -11799, 1832, 0, 1, 0, 0, 1, 2,
+            0, 1, 49, 0, 0, -22155, -20156, 1770, 2280, -15332, 0, -11799, 1832, 0, 1, 0, 3, 1, 2,
             3, 4, 5, 6,
         ];
         host.exec(0, crate::scd2::opcode::lookup(0x3B).unwrap(), &ops);
@@ -6339,7 +6384,8 @@ mod tests {
             Some(Re2Door {
                 stage: 1,
                 room: 1,
-                cut: 0
+                cut: 0,
+                floor: 3,
             })
         );
     }
@@ -8050,6 +8096,23 @@ mod tests {
 
     fn splayer(game: &GameState) -> &Character {
         game.re2.characters.0[SPLAYER_SLOT].as_deref().unwrap()
+    }
+
+    /// `Work_set` indexes `enemy_work` with a signed byte: room 501's
+    /// `work_set(3, 255)` is `enemy_work[-1]`, `splayer_work`, and `-2` is
+    /// `player_work`.
+    #[test]
+    fn work_set_reaches_the_partner_and_the_player_below_enemy_work() {
+        let mut game = GameState::default();
+        exec(&mut game, "work_set", &[WK_ENEMY, 255]);
+        assert!(matches!(game.re2.work[0], Work::Other), "no partner");
+        place_sherry(&mut game, 0);
+        exec(&mut game, "work_set", &[WK_ENEMY, 255]);
+        assert!(matches!(game.re2.work[0], Work::Character(c) if usize::from(c) == SPLAYER_SLOT));
+        exec(&mut game, "work_set", &[WK_ENEMY, 254]);
+        assert!(matches!(game.re2.work[0], Work::Player));
+        exec(&mut game, "work_set", &[WK_ENEMY, 200]);
+        assert!(matches!(game.re2.work[0], Work::Other));
     }
 
     #[test]
