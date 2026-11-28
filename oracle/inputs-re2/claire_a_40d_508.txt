@@ -1,0 +1,162 @@
+# claire_a_40d_508: Claire A from 40D through 40E, the cable car, 501 and 502 to 508 (#896): in 40D through the door
+# to 40E; in 40E walking east along the platform to the power panel (yes), which powers the cable car, then back west,
+# north and east round to the car's door, which 40E's main_02 now leads to 501; in 501, after the ride, east to door 1
+# up to 502; in 502 east and south round the corner, where the handgun drops zombie 3 in the south corridor, then east
+# to door 1; a step in 508 shows control.
+354 action
+356
+366 action
+368
+378 action
+380
+390 action
+391 up
+445 right up
+446 up
+553 right up
+554 up
+575 right up
+576 up
+582 right
+588 right up
+612 up
+623 right up
+624 up
+660 left up
+663 up
+700 left up
+701 up
+710 right
+717 right up
+755 left
+773 left up
+793 up
+846 left up
+854 up
+855 left up
+856 up
+874 left up
+875 left
+890 action
+891
+950 confirm
+953
+993 confirm
+996
+1056 down
+1057 left
+1072 left up
+1107 up
+1108 left up
+1109 up
+1110 left up
+1111 up
+1112 left up
+1113 up
+1116 left up
+1117 up
+1123 right
+1127 right up
+1148 up
+1202 right
+1209 right up
+1239 up
+1240 right up
+1241 up
+1246 left up
+1253 up
+1334 left up
+1335 up
+1357 right
+1365 right up
+1387 up
+1499 right up
+1500 up
+1521 right
+1525 right up
+1535 right
+1537 right up
+1541 right
+1543 right up
+1546 right
+1548 right up
+1550 right
+1552 right up
+1554 right
+1556 right up
+1564 left
+1573 action
+1575
+1585 action
+1587
+1597 action
+1599
+1609 action
+1611
+1612 up
+1785 right
+1810 right up
+1832 up
+1920 right up
+1921 up
+1935 right up
+1936 up
+1938 right up
+1950 up
+2013 right up
+2014 up
+2025 left
+2037 up
+2067 action
+2069
+2079 action
+2081
+2091 action
+2093
+2103 action
+2105
+2115 action
+2116 up
+2135 up run
+2171 right up run
+2172 up run
+2188 left up run
+2189 up run
+2191 right up run
+2192 right
+2199 right up run
+2214 up run
+2232 right up run
+2233 up run
+2257 left up run
+2258 left
+2280 aim
+2296 aim fire
+2310 aim
+2325 aim fire
+2340 aim
+2355 aim fire
+2370 aim
+2385 aim fire
+2387
+2407 left up run
+2411 up run
+2442 right up run
+2443 up run
+2454 left up run
+2455 up run
+2459 up
+2464 right up
+2465 up
+2466 action
+2468
+2478 action
+2480
+2490 action
+2492
+2502 action
+2504
+2514 action
+2515
+2575 up
+2576
