@@ -119,8 +119,9 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # inventory, the status screen with its map, the save screen, the item box,
 # the special menu's gallery (pictures, movies and 3D models) and its extra
 # modes' titles (the 4th Survivor's, To-fu's and Extreme Battle's, with Extreme
-# Battle's character choice, its opening, its play into room F14 and RESULT's
-# records), and the results
+# Battle's character choice, its opening, its play into room F14, its end (which
+# play can't reach yet) with the records page after it, and RESULT's records),
+# and the results
 # after a cleared game (with the next scenario's save) are drawn from the original's art. Leon A's route from
 # the new game through Marvin's room 202, the Blue Card Key, the darkroom (208),
 # the S.T.A.R.S. office (115), the Spade Key and its doors, the Diamond Key in
@@ -144,8 +145,11 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # up to 10A's wall and on to the Heart Key, then through the sewer with Sherry to
 # her door into 305, and from the Club Key through 212, 211, 20F, 20B and 20A to
 # 20C, with detours to 201's item box and 10F's Lighter, on to the cog in 20D,
-# through 111's clock and 21B's stones down Irons's lift, armed from 113, and
-# past 309's G adult to 30A. Both characters fire the knife and weapons 2
+# through 111's clock and 21B's stones down Irons's lift, armed from 113, past
+# 309's G adult to 30A, back up for Sherry and down past G1 to 400, with Sherry
+# as the player through 401, 40F's cockroaches and 40C, then as Claire through
+# the sewer to 40A's alligator, which the gas tank kills, on through 410 and 409,
+# and back for 405's and 407's medals to 40E. Both characters fire the knife and weapons 2
 # to 8 and the grenade launcher, bowgun, Colt S.A.A., spark shot, Beretta,
 # sub-machine gun, flamethrower, rocket launcher and gatling gun (weapons 9 to
 # 0x13). Zombies,
