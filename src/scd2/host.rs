@@ -8104,6 +8104,8 @@ mod tests {
     #[test]
     fn work_set_reaches_the_partner_and_the_player_below_enemy_work() {
         let mut game = GameState::default();
+        exec(&mut game, "work_set", &[WK_ENEMY, 255]);
+        assert!(matches!(game.re2.work[0], Work::Other), "no partner");
         place_sherry(&mut game, 0);
         exec(&mut game, "work_set", &[WK_ENEMY, 255]);
         assert!(matches!(game.re2.work[0], Work::Character(c) if usize::from(c) == SPLAYER_SLOT));
