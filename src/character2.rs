@@ -2467,6 +2467,12 @@ fn spl_sca_ck_em(room: &RoomState, character: &mut Character) {
     body.collision_mirror = [body.pos[0], body.pos[2]];
     if let Some(partner) = character.partner.as_deref_mut() {
         partner.sca_hit = resolved.hit;
+        // `Sca_hit_slope` (`0x4E24C0`) writes the checked work's `nFloor`:
+        // a partner walking a slope steps hers with the height, as room
+        // 409's ramp shows (the trace's `spc`).
+        if let Some(floor) = resolved.floor {
+            character.work.floor = floor;
+        }
     }
 }
 
@@ -4208,6 +4214,35 @@ mod tests {
         player2::latch_drawn(&mut character.work, &mut character.body, &tick);
         let part0 = character.work.parts[0].unwrap();
         assert_eq!([part0.t[0], part0.t[2]], [pushed[0], pushed[2]]);
+    }
+
+    /// `Sca_hit_slope` steps a partner's `nFloor` as she walks a slope: on
+    /// its top end she is on the upper floor.
+    #[test]
+    fn a_partner_on_a_slope_takes_its_floor() {
+        let slope = crate::state::ScaRect {
+            x: 1000,
+            z: 1000,
+            width: 1000,
+            depth: 1000,
+            id: crate::sca::CHARACTER_MASK | 11,
+            kind: 0xF | (3 << 4) | (1 << 6),
+            floor: 0b11,
+        };
+        let room = RoomState {
+            sca: Some(crate::state::Sca {
+                records: vec![slope],
+                ..Default::default()
+            }),
+            ..RoomState::default()
+        };
+        let mut character = ada(0);
+        character.work.floor = 0;
+        character.body.pos = [1500, -1710, 1000];
+        character.body.collision_mirror = [1500, 1100];
+        spl_sca_ck_em(&room, &mut character);
+        assert_eq!(character.body.pos[1], -1800);
+        assert_eq!(character.work.floor, 1);
     }
 
     #[test]
