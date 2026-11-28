@@ -139,7 +139,9 @@ cargo run -- pack convert game /path/to/steam/4249100_Biohazard --out re1.akpak
 # cockroaches and Annette's scene in 409 into 410, whose scene hands the
 # player back to Leon, who takes the Valve Handle from 403's box and the
 # Wolf Medal from 405 to 407's panel, past their spiders, and lowers 408's
-# bridge on into 40A;
+# bridge on into 40A; then past the alligator and 410's scene, back to 408's
+# west panel for 409's bridge, the Eagle Medal and 40B, into 405 up to Ada's
+# first aim;
 # Claire A is one continuous run from the new game to the Diamond Key, and goes on
 # in warp runs from the Diamond Key down 110's ladder to 209 and 202's bomb half,
 # up to 10A's wall and on to the Heart Key, then through the sewer with Sherry to
