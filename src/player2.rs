@@ -579,7 +579,7 @@ pub struct Work {
     /// `Pos` that `Sa_parts_allmv` blends for a morphing part's children.
     pub joint_offsets: Vec<(u8, [i16; 3])>,
     /// `Parts0_pos_y`: the scale of the first part's height, `0x1000` being 1.
-    parts0_y: i32,
+    pub(crate) parts0_y: i32,
     /// The first part's `Pos_y` as a routine wrote it over the pose, until the
     /// next `J_seq` writes it again: `Spl_in4b`'s 0.
     pub part0_y: Option<i16>,
@@ -724,6 +724,10 @@ pub struct EffectCall {
     /// `Esp_call3D`'s turn of what's drawn (`+0x44`), for the slot and those
     /// that die with it.
     pub turn: Option<[i16; 3]>,
+    /// What the caller writes over the first slot's `+0x1B` once it's made
+    /// (the partner's shot marks its flash's glow, whose sound is then
+    /// `0x31F0001`).
+    pub generation: Option<u8>,
 }
 
 /// `Type & 0xFFF` of the grenade launcher with each of its rounds.
@@ -4617,6 +4621,7 @@ impl Mover<'_, '_> {
                 motion: None,
                 on: Some((SHOT_PART as u8, hand, point)),
                 turn,
+                generation: None,
             });
         };
         if frame % 3 == 1 {
@@ -4747,6 +4752,7 @@ impl Mover<'_, '_> {
             motion: None,
             on: Some((SHOT_PART as u8, hand, point)),
             turn: None,
+            generation: None,
         });
     }
 
@@ -4836,6 +4842,7 @@ impl Mover<'_, '_> {
                 motion: None,
                 on: Some((SHOT_PART as u8, hand, point)),
                 turn: None,
+                generation: None,
             });
         }
     }
@@ -4963,6 +4970,18 @@ impl Mover<'_, '_> {
         self.hand_splashes(hand14, drawn);
     }
 
+    /// [`Self::pl_water`] on part 0 as the pose before the move has it, for
+    /// the partner's aim.
+    pub(crate) fn pl_water_before_move(&mut self) {
+        let root = self.part_matrix(0);
+        self.pl_water(root);
+    }
+
+    /// [`Self::drawn_part`], for the partner's shot.
+    pub(crate) fn drawn_part_of(&self, part: usize) -> Option<Matrix> {
+        self.drawn_part(part)
+    }
+
     /// `Pl_water` (`0x4d49c0`): four rings (`Esp_call` kind 0x1a) a quarter
     /// turn apart on part 0's `Workm`, at the water's level. Their `Rnd`
     /// waits for [`Work::water_draws`].
@@ -4984,6 +5003,7 @@ impl Mover<'_, '_> {
                 motion: None,
                 on: None,
                 turn: None,
+                generation: None,
             });
         }
     }
@@ -5021,6 +5041,7 @@ impl Mover<'_, '_> {
                     motion: None,
                     on: None,
                     turn: None,
+                    generation: None,
                 });
             }
         }
@@ -5053,6 +5074,7 @@ impl Mover<'_, '_> {
                     motion: None,
                     on: Some((SHOT_PART as u8, hand, point)),
                     turn: None,
+                    generation: None,
                 });
             }
         }
@@ -5071,6 +5093,7 @@ impl Mover<'_, '_> {
                 motion: None,
                 on: Some((SHOT_PART as u8, hand, point)),
                 turn: Some(turn),
+                generation: None,
             });
         }
     }
@@ -5102,6 +5125,7 @@ impl Mover<'_, '_> {
             motion,
             on: None,
             turn: None,
+            generation: None,
         };
         self.work.effects.push(EffectCall {
             on: Some((
@@ -5186,6 +5210,7 @@ impl Mover<'_, '_> {
             motion: None,
             on: Some((MAGAZINE_HAND as u8, hand, point)),
             turn: None,
+            generation: None,
         });
     }
 
@@ -6207,6 +6232,7 @@ impl Mover<'_, '_> {
                 motion: None,
                 on: None,
                 turn: None,
+                generation: None,
             });
         }
         if dying {
@@ -7009,6 +7035,7 @@ impl Mover<'_, '_> {
                 motion: None,
                 on: Some((part as u8, matrix, point)),
                 turn: None,
+                generation: None,
             },
             None => EffectCall {
                 kind,
@@ -7019,6 +7046,7 @@ impl Mover<'_, '_> {
                 motion: None,
                 on: None,
                 turn: None,
+                generation: None,
             },
         };
         self.work.effects.push(call);
@@ -7183,6 +7211,7 @@ impl Mover<'_, '_> {
                             motion: None,
                             on: None,
                             turn: None,
+                            generation: None,
                         });
                     }
                 }
@@ -10056,6 +10085,7 @@ mod tests {
                 motion: None,
                 on: None,
                 turn: None,
+                generation: None,
             }],
             water_draws: vec![WaterDraw {
                 effect: 0,
@@ -10982,6 +11012,7 @@ mod tests {
                             motion: None,
                             on: None,
                             turn: None,
+                            generation: None,
                         }
                     })
                     .collect();
@@ -13088,6 +13119,7 @@ mod tests {
                             motion: None,
                             on: Some((0, part, point)),
                             turn: None,
+                            generation: None,
                         }],
                         "water {water}, tick {tick}"
                     );

@@ -1992,6 +1992,13 @@ impl Em<'_, '_, '_> {
         if self.kind() & 1 != 0 || self.z.flags & FLAG_DOWN != 0 {
             *self.be_flg |= BE_LOW;
         }
+        *self.be_flg = low_side_in_sight(
+            *self.be_flg,
+            self.world.weapon,
+            self.world.pl.status_flg,
+            self.world.player[1],
+            self.mover.player.pos[1],
+        );
         if self.z.damage_cnt & 0x7F != 0 {
             self.z.damage_cnt -= 1;
         }
@@ -3159,9 +3166,49 @@ pub(crate) fn life_down(
     (left, near_death, 2)
 }
 
+/// `Em_Zombie` (`0x4517f0`) after the low side is raised: a body with its
+/// low side but not its high one loses the low one for the tick while the
+/// player's tilt (`status`, `Status_flg`'s top bits) is up and the body is
+/// less than 1500 above the player, or level and less than 1000 above,
+/// unless the player holds weapon 0xE or 0x12. Ada's aim at a body down
+/// reads it (`Aida_em10_at00_spl`).
+fn low_side_in_sight(be_flg: u32, weapon: u8, status: u16, player_y: i32, y: i32) -> u32 {
+    if be_flg & BE_LOW == 0 || be_flg & BE_HIGH != 0 || matches!(weapon, 0xE | 0x12) {
+        return be_flg;
+    }
+    let up = status & 0x8000 != 0 && player_y - 0x5DC < y;
+    let level = status & 0x4000 != 0 && player_y - 1000 < y;
+    if up || level {
+        be_flg & !BE_LOW
+    } else {
+        be_flg
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_players_tilt_takes_a_bodys_low_side_down() {
+        let low = 1 | BE_LOW;
+        assert_eq!(low_side_in_sight(low, 2, 0x4000, 0, 0), 1, "level");
+        assert_eq!(low_side_in_sight(low, 2, 0x8000, 0, 0), 1, "up");
+        assert_eq!(low_side_in_sight(low, 2, 0x2000, 0, 0), low, "low");
+        assert_eq!(
+            low_side_in_sight(low, 2, 0x4000, 0, -1000),
+            low,
+            "1000 above"
+        );
+        assert_eq!(low_side_in_sight(low, 2, 0x8000, 0, -1000), 1);
+        assert_eq!(low_side_in_sight(low, 2, 0x8000, 0, -1500), low);
+        assert_eq!(
+            low_side_in_sight(low | BE_HIGH, 2, 0x4000, 0, 0),
+            low | BE_HIGH
+        );
+        assert_eq!(low_side_in_sight(low, 0xE, 0x4000, 0, 0), low);
+        assert_eq!(low_side_in_sight(low, 0x12, 0x4000, 0, 0), low);
+    }
 
     /// A pulled arm's tick moves only `M` (the hold, then the shake); the
     /// draw composes `Workm` from the player's part 0 and that `M`, and the
